@@ -1,28 +1,19 @@
 # SkiftPro
 
-SkiftPro is a shift, staffing, and payroll app exported from [Base44](https://base44.com). This repository is the unmodified export (React 18 + Vite, `@base44/sdk`). A later migration to Supabase (EU) and Vercel is planned; the Base44 client and backend code are still in place.
+Shift, staffing, and payroll app for multiple organizations. The UI is the Base44 export (React 18 + Vite). Data, auth, files, and backend jobs run on Supabase, and the static build is ready for Vercel.
+
+See [MIGRATION.md](MIGRATION.md) for applying migrations, deploying Edge Functions, environment variables, and moving data out of Base44. The hosted database is not modified just by cloning this repo.
 
 ## Run locally
 
-Requires Node.js 18 or newer.
+Node.js 18 or newer.
 
-1. Install dependencies:
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-   ```bash
-   npm install
-   ```
+`.env.local` needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Sign-in is `/login`.
 
-2. Create a `.env.local` file in the project root (it is gitignored) and set your Base44 app values:
-
-   ```bash
-   VITE_BASE44_APP_ID=your_app_id
-   VITE_BASE44_APP_BASE_URL=your_backend_url
-   ```
-
-3. Start the dev server:
-
-   ```bash
-   npm run dev
-   ```
-
-Other scripts: `npm run build`, `npm run preview`, `npm run lint`.
+`npm run build` produces `dist/` for Vercel. `vercel.json` rewrites client routes to `index.html`.

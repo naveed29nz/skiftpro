@@ -1,0 +1,37 @@
+# Local CLI config. The hosted project is iobsolszrmigdmdydfbe (eu-central-1).
+project_id = "iobsolszrmigdmdydfbe"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/login", "http://localhost:5173/**"]
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
+
+[functions.generate-contract-pdf]
+verify_jwt = true
+
+[functions.update-contract-status]
+verify_jwt = true
+
+[functions.generate-recurring-tasks]
+verify_jwt = true
+
+[functions.check-overtime-and-generate-contract]
+verify_jwt = true
+
+[functions.invite-user]
+verify_jwt = true
