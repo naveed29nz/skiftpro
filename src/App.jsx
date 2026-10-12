@@ -23,9 +23,15 @@ import SuperAdminAnalytics from '@/pages/SuperAdminAnalytics';
 import SuperAdminBilling from '@/pages/SuperAdminBilling';
 import SuperAdminAuditLog from '@/pages/SuperAdminAuditLog';
 import Contracts from '@/pages/Contracts';
+import Login from '@/pages/Login';
+import ResetPassword from '@/pages/ResetPassword';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, needsNewPassword, passwordLinkError } = useAuth();
+
+  if (needsNewPassword || passwordLinkError) {
+    return <ResetPassword />;
+  }
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -75,7 +81,11 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
-          <AuthenticatedApp />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/*" element={<AuthenticatedApp />} />
+          </Routes>
         </Router>
         <Toaster />
       </QueryClientProvider>

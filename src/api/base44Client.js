@@ -1,14 +1,327 @@
-import { createClient } from '@base44/sdk';
-import { appParams } from '@/lib/app-params';
+import { supabase } from '@/api/supabaseClient';
+import { applyClauses, compileFilter, parseSort } from '@/api/entityQuery';
 
-const { appId, token, functionsVersion, appBaseUrl } = appParams;
+/**
+ * Drop-in replacement for the Base44 client used across the app.
+ * Pages keep calling base44.entities.X.list/filter/get/create/update/delete.
+ */
 
-//Create a client with authentication required
-export const base44 = createClient({
-  appId,
-  token,
-  functionsVersion,
-  serverUrl: '',
-  requiresAuth: false,
-  appBaseUrl
-});
+export const ENTITY_TABLES = {
+  User: 'profiles',
+  Organization: 'organizations',
+  Worker: 'workers',
+  Shift: 'shifts',
+  WorkplaceSetting: 'workplace_settings',
+  Contract: 'contracts',
+  Task: 'tasks',
+  RecurringTask: 'recurring_tasks',
+  Holiday: 'holidays',
+  Stamp: 'stamps',
+  ShiftSwap: 'shift_swaps',
+  Dagsoppgjor: 'dagsoppgjor',
+  Loddtelling: 'loddtelling',
+  Availability: 'availability',
+  MonthlyResult: 'monthly_results',
+  StaffingBudget: 'staffing_budgets',
+};
+
+const FUNCTION_NAMES = {
+  updateContractStatus: 'update-contract-status',
+  generateContractPDF: 'generate-contract-pdf',
+  generateRecurringTasks: 'generate-recurring-tasks',
+  checkOvertimeAndGenerateContract: 'check-overtime-and-generate-contract',
+};
+
+const DATE_FIELDS = new Set([
+  'date',
+  'start_date',
+  'end_date',
+  'due_date',
+  'dato',
+  'requester_shift_date',
+  'target_shift_date',
+]);
+
+const TIMESTAMP_FIELDS = new Set([
+  'stamp_in',
+  'stamp_out',
+  'approved_at',
+  'completed_at',
+  'created_date',
+  'updated_date',
+]);
+
+const PAGE_SIZE = 1000;
+
+function apiError(message, status = 400) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+function toError(error, status = 400) {
+  if (!error) return apiError('Request failed', status);
+  if (error instanceof Error && error.status) return error;
+  const err = apiError(error.message || 'Request failed', error.code === 'PGRST116' ? 404 : status);
+  err.details = error;
+  return err;
+}
+
+export function normalizeRow(row) {
+  if (!row || typeof row !== 'object') return row;
+  return {
+    ...row,
+    _id: row.id,
+    created_by_id: row.created_by ?? null,
+  };
+}
+
+function withImpersonatedOrg(table, payload) {
+  if (table === 'profiles' || table === 'organizations') return payload;
+  if (payload.org_id) return payload;
+  if (typeof localStorage === 'undefined') return payload;
+  const orgId = localStorage.getItem('impersonate_org_id');
+  if (!orgId) return payload;
+  return { ...payload, org_id: orgId };
+}
+
+export function sanitizeWrite(data, { isUpdate = false } = {}) {
+  const out = {};
+  for (const [key, value] of Object.entries(data || {})) {
+    if (value === undefined) continue;
+    if (key === '_id' || key === 'created_by_id') continue;
+    if (isUpdate && ['id', 'created_by', 'created_date', 'updated_date'].includes(key)) continue;
+    if (!isUpdate && key === 'updated_date') continue;
+    if (!isUpdate && key === 'id' && (value === '' || value == null)) continue;
+    let next = value;
+    if ((DATE_FIELDS.has(key) || TIMESTAMP_FIELDS.has(key)) && next === '') next = null;
+    out[key] = next;
+  }
+  return out;
+}
+
+async function selectRows(table, { sort, limit, filters } = {}) {
+  const compiled = compileFilter(filters);
+  if (compiled.empty) return [];
+  const cap = Number.isFinite(limit) && limit > 0 ? limit : 1000;
+  const ordering = parseSort(sort);
+  const rows = [];
+
+  for (let from = 0; rows.length < cap; from += PAGE_SIZE) {
+    const end = Math.min(from + PAGE_SIZE, cap) - 1;
+    let query = supabase.from(table).select('*');
+    query = applyClauses(query, compiled.clauses);
+    query = query.order(ordering.column, { ascending: ordering.ascending });
+    const { data, error } = await query.range(from, end);
+    if (error) throw toError(error);
+    const batch = data || [];
+    rows.push(...batch);
+    if (batch.length < end - from + 1) break;
+  }
+
+  return rows.slice(0, cap).map(normalizeRow);
+}
+
+function entityApi(table) {
+  return {
+    list(sort, limit) {
+      return selectRows(table, { sort, limit });
+    },
+    filter(filters, sort, limit) {
+      return selectRows(table, { sort, limit, filters });
+    },
+    async get(id) {
+      const { data, error } = await supabase.from(table).select('*').eq('id', id).maybeSingle();
+      if (error) throw toError(error);
+      if (!data) throw apiError(`${table} ${id} not found`, 404);
+      return normalizeRow(data);
+    },
+    async create(data) {
+      const payload = withImpersonatedOrg(table, sanitizeWrite(data, { isUpdate: false }));
+      const { data: row, error } = await supabase.from(table).insert(payload).select('*').single();
+      if (error) throw toError(error);
+      return normalizeRow(row);
+    },
+    async update(id, data) {
+      const payload = sanitizeWrite(data, { isUpdate: true });
+      const { data: row, error } = await supabase
+        .from(table)
+        .update(payload)
+        .eq('id', id)
+        .select('*')
+        .maybeSingle();
+      if (error) throw toError(error);
+      if (!row) throw apiError(`${table} ${id} not found`, 404);
+      return normalizeRow(row);
+    },
+    async delete(id) {
+      const { data, error } = await supabase.from(table).delete().eq('id', id).select('id').maybeSingle();
+      if (error) throw toError(error);
+      if (!data) throw apiError(`${table} ${id} not found`, 404);
+      return { id: data.id };
+    },
+    async bulkCreate(rows) {
+      const payload = (rows || []).map((row) => withImpersonatedOrg(table, sanitizeWrite(row, { isUpdate: false })));
+      if (payload.length === 0) return [];
+      const created = [];
+      for (let i = 0; i < payload.length; i += 200) {
+        const chunk = payload.slice(i, i + 200);
+        const { data, error } = await supabase.from(table).insert(chunk).select('*');
+        if (error) throw toError(error);
+        created.push(...(data || []).map(normalizeRow));
+      }
+      return created;
+    },
+    async bulkUpdate(rows) {
+      const updated = [];
+      for (const row of rows || []) {
+        const id = row.id || row._id;
+        if (!id) throw apiError('bulkUpdate row is missing id');
+        updated.push(await this.update(id, row));
+      }
+      return updated;
+    },
+    async updateMany(filters, data) {
+      const compiled = compileFilter(filters);
+      if (compiled.empty) return [];
+      if (compiled.clauses.length === 0) {
+        throw apiError('updateMany requires a filter');
+      }
+      const patch = sanitizeWrite(data?.$set ?? data, { isUpdate: true });
+      let query = supabase.from(table).update(patch);
+      query = applyClauses(query, compiled.clauses);
+      const { data: rows, error } = await query.select('*');
+      if (error) throw toError(error);
+      return (rows || []).map(normalizeRow);
+    },
+    async deleteMany(filters) {
+      const compiled = compileFilter(filters);
+      if (compiled.empty) return { deleted: 0 };
+      if (compiled.clauses.length === 0) {
+        throw apiError('deleteMany requires a filter');
+      }
+      let query = supabase.from(table).delete();
+      query = applyClauses(query, compiled.clauses);
+      const { data, error } = await query.select('id');
+      if (error) throw toError(error);
+      return { deleted: (data || []).length };
+    },
+  };
+}
+
+let pendingMe = null;
+
+function clearPendingMe() {
+  pendingMe = null;
+}
+
+async function me() {
+  const request = pendingMe ?? (async () => {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getUser();
+    if (sessionError || !sessionData?.user) {
+      throw apiError('Authentication required', 401);
+    }
+    const user = sessionData.user;
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    if (error) throw toError(error, 401);
+    if (!data) throw apiError('User not registered', 403);
+    return normalizeRow({ ...data, email: data.email || user.email || null });
+  })().finally(() => {
+    if (pendingMe === request) pendingMe = null;
+  });
+  pendingMe = request;
+  return request;
+}
+
+export const base44 = {
+  entities: new Proxy({}, {
+    get(_target, entityName) {
+      if (typeof entityName !== 'string' || entityName === 'then' || entityName.startsWith('_')) {
+        return undefined;
+      }
+      const table = ENTITY_TABLES[entityName];
+      if (!table) {
+        throw apiError(`Unknown entity ${entityName}`);
+      }
+      return entityApi(table);
+    },
+  }),
+  auth: {
+    me,
+    async isAuthenticated() {
+      try {
+        await me();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    async updateMe(data) {
+      const current = await me();
+      return entityApi('profiles').update(current.id, data);
+    },
+    redirectToLogin(nextUrl) {
+      if (typeof window === 'undefined') {
+        throw new Error('Login method can only be used in a browser environment');
+      }
+      const from = nextUrl || window.location.href;
+      const url = new URL('/login', window.location.origin);
+      url.searchParams.set('from', from);
+      window.location.assign(url.toString());
+    },
+    logout() {
+      clearPendingMe();
+      return supabase.auth.signOut().finally(() => {
+        if (typeof window !== 'undefined') {
+          window.location.assign('/login');
+        }
+      });
+    },
+  },
+  users: {
+    async inviteUser(email, role) {
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: { email, role },
+      });
+      if (error) throw toError({ message: error.message || 'Invite failed' }, 400);
+      if (data?.error) throw apiError(data.error, 400);
+      return data;
+    },
+  },
+  functions: {
+    async invoke(functionName, payload) {
+      if (typeof payload === 'string') {
+        throw apiError(`Function ${functionName} must receive an object`);
+      }
+      const name = FUNCTION_NAMES[functionName] || functionName;
+      const { data, error } = await supabase.functions.invoke(name, { body: payload ?? {} });
+      if (error) {
+        const err = apiError(error.message || `Function ${functionName} failed`, 500);
+        if (error.context && typeof error.context.status === 'number') {
+          err.status = error.context.status;
+        }
+        throw err;
+      }
+      return { data };
+    },
+  },
+  integrations: {
+    Core: {
+      async UploadFile({ file }) {
+        if (!file) throw apiError('Missing file');
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData?.user) throw apiError('Authentication required', 401);
+        const safeName = String(file.name || 'upload').replace(/[^\w.\-]+/g, '_');
+        const path = `${userData.user.id}/${Date.now()}-${safeName}`;
+        const { error } = await supabase.storage.from('uploads').upload(path, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type || undefined,
+        });
+        if (error) throw toError(error);
+        const { data } = supabase.storage.from('uploads').getPublicUrl(path);
+        return { file_url: data.publicUrl };
+      },
+    },
+  },
+};

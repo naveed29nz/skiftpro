@@ -1,6 +1,11 @@
 #env
 .env
 .env.*
+!.env.example
+
+# Supabase CLI local cache
+supabase/.temp
+supabase/.branches
 
 # Logs
 /logs
@@ -13,6 +18,9 @@ lerna-debug.log*
 
 node_modules
 dist
+
+# Base44 export dumps and generated recovery links (may contain personal data)
+/data
 dist-ssr
 *.local
 
