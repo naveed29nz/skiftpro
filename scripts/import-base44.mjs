@@ -19,7 +19,7 @@
  * Auth users cannot keep Base44 ids. The script creates a Supabase auth user per
  * email, then rewrites admin_user_id and created_by to the new id. Worker, shift,
  * and other entity ids are preserved. Imported users must set a password with
- * "Glemt passord" on /login unless you pass --invite.
+ * "Glemt passord" on /login (the link opens /reset-password) unless you pass --invite.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -206,7 +206,7 @@ async function ensureAuthUser(admin, record, { invite, siteUrl, byEmail }) {
   if (invite) {
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       data: { role, full_name: fullName },
-      redirectTo: siteUrl ? `${siteUrl.replace(/\/$/, '')}/login` : undefined,
+      redirectTo: siteUrl ? `${siteUrl.replace(/\/$/, '')}/reset-password` : undefined,
     });
     if (error) throw new Error(`Invite ${email} failed: ${error.message}`);
     byEmail.set(email, data.user);
@@ -309,7 +309,7 @@ async function main() {
 
   console.log(dryRun ? 'dry run complete' : 'import complete');
   if (!invite && !dryRun && users.length) {
-    console.log('Imported users have no password. Ask them to use "Glemt passord" on /login, or rerun with --invite.');
+    console.log('Imported users have no password. Ask them to use "Glemt passord" on /login, which opens /reset-password, or rerun with --invite.');
   }
 }
 

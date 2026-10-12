@@ -15,7 +15,7 @@ major_version = 15
 [auth]
 enabled = true
 site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5173/login", "http://localhost:5173/**"]
+additional_redirect_urls = ["http://localhost:5173/login", "http://localhost:5173/reset-password", "http://localhost:5173/**"]
 
 [storage]
 enabled = true

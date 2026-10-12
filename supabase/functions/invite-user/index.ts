@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     const site = (Deno.env.get("SITE_URL") || "").replace(/\/$/, "");
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       data: { role, full_name: body.full_name || "" },
-      redirectTo: site ? `${site}/login` : undefined,
+      redirectTo: site ? `${site}/reset-password` : undefined,
     });
 
     if (!error && data?.user) {

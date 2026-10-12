@@ -44,6 +44,8 @@ supabase db push
 
 You can paste the same files into the Supabase SQL editor if you prefer not to use the CLI. Run them in that order, once.
 
+`20261012180100_rls.sql` aliases `user_org_ids()` and `my_worker_ids()` as `ids(user_org_ids)` and `ids(my_worker_ids)`. A bare `ids` alias names the column `ids`, and `supabase db reset` then fails with `column ids.user_org_ids does not exist`. The live project already has these migrations applied, so this file change is for the next fresh reset only. Do not re-apply it to the live database.
+
 ### If the cron job was not scheduled
 
 `pg_cron` has to be enabled for the project (Database → Extensions → `pg_cron`). The migration catches a missing extension and prints a notice instead of failing the schema. After enabling it, run:
@@ -99,9 +101,11 @@ The browser client maps the old function names, so `Contracts.jsx` and `WorkerCo
 In Authentication → URL configuration:
 
 - Site URL: the Vercel URL (and `http://localhost:5173` while developing)
-- Redirect URLs: `http://localhost:5173/login`, `https://your-production-domain/login`
+- Redirect URLs: `http://localhost:5173/login`, `http://localhost:5173/reset-password`, and the same two paths on the production domain (`https://your-production-domain/login` and `https://your-production-domain/reset-password`)
 
-Leave public sign-up off if accounts should only be created by invite or by the import script. The login screen at `/login` is email and password, plus a reset link. There is no public registration form.
+Leave public sign-up off if accounts should only be created by invite or by the import script. The login screen at `/login` is email and password, plus **Glemt passord**. There is no public registration form.
+
+**Glemt passord** and invite emails return to `/reset-password`. That screen (`Sett nytt passord`) calls `supabase.auth.updateUser({ password })` and then opens the app with the same session. Add `/reset-password` in Authentication → URL configuration or Supabase rejects the link. This repository does not change the live Auth settings; add the URL in the dashboard. Redeploy the `invite-user` function so new invites use that redirect.
 
 Create the first super-admin in Authentication → Users, then:
 
@@ -168,7 +172,7 @@ node scripts/import-base44.mjs --from-dir ./data/base44
 
 What the script does:
 
-1. Creates a Supabase Auth user for each Base44 user email (`email_confirm` on, random password that is not stored). Use **Glemt passord** on `/login` so each person sets a password. Pass `--invite` instead if you want Supabase to email an invite link.
+1. Creates a Supabase Auth user for each Base44 user email (`email_confirm` on, random password that is not stored). Use **Glemt passord** on `/login` so each person sets a password on `/reset-password`. Pass `--invite` instead if you want Supabase to email an invite link to the same screen.
 2. Copies `role` and `full_name` onto `profiles`.
 3. Remembers old user id → new auth id.
 4. Upserts every other entity. `id` is kept. `created_by` and `organizations.admin_user_id` are rewritten when they point at an old user id. Worker and shift ids are not rewritten; workers are matched to logins by email.

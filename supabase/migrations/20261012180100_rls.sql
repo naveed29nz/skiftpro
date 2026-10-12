@@ -106,7 +106,7 @@ as $$
         and btrim(org) <> ''
         and exists (
           select 1
-          from public.user_org_ids() ids
+          from public.user_org_ids() as ids(user_org_ids)
           where ids.user_org_ids = org
         )
       );
@@ -137,7 +137,7 @@ as $$
   select worker is not null
      and exists (
        select 1
-       from public.my_worker_ids() ids
+       from public.my_worker_ids() as ids(my_worker_ids)
        where ids.my_worker_ids = worker
      );
 $$;
@@ -227,7 +227,7 @@ begin
         select count(*) into org_count from public.user_org_ids();
         if org_count = 1 then
           select ids.user_org_ids into resolved
-          from public.user_org_ids() ids
+          from public.user_org_ids() as ids(user_org_ids)
           limit 1;
         end if;
       end if;

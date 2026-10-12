@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/api/supabaseClient';
+import { supabase, isPasswordSetupRequired } from '@/api/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
+import ResetPassword from '@/pages/ResetPassword';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +12,7 @@ function safeNextPath(raw) {
   try {
     const url = new URL(raw, window.location.origin);
     if (url.origin !== window.location.origin) return '/Dashboard';
-    if (url.pathname === '/login') return '/Dashboard';
+    if (url.pathname === '/login' || url.pathname === '/reset-password') return '/Dashboard';
     return `${url.pathname}${url.search}${url.hash}` || '/Dashboard';
   } catch {
     return '/Dashboard';
@@ -18,6 +20,7 @@ function safeNextPath(raw) {
 }
 
 export default function Login() {
+  const { needsNewPassword, passwordLinkError } = useAuth();
   const params = new URLSearchParams(window.location.search);
   const nextPath = safeNextPath(params.get('from'));
   const [email, setEmail] = useState('');
@@ -28,10 +31,18 @@ export default function Login() {
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
+    if (needsNewPassword || passwordLinkError) return undefined;
+    let cancelled = false;
     supabase.auth.getSession().then(({ data }) => {
+      if (cancelled || isPasswordSetupRequired()) return;
       if (data.session) window.location.assign(nextPath);
     });
-  }, [nextPath]);
+    return () => {
+      cancelled = true;
+    };
+  }, [nextPath, needsNewPassword, passwordLinkError]);
+
+  if (needsNewPassword || passwordLinkError) return <ResetPassword />;
 
   const handlePassword = async (event) => {
     event.preventDefault();
@@ -52,7 +63,7 @@ export default function Login() {
     setPending(true);
     setError('');
     setMessage('');
-    const redirectTo = `${window.location.origin}/login`;
+    const redirectTo = `${window.location.origin}/reset-password`;
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     setPending(false);
     if (resetError) {

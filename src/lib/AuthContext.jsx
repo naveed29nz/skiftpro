@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
-import { supabase } from '@/api/supabaseClient';
+import { supabase, consumeAuthCallback, subscribePasswordSetup, isPasswordSetupRequired, clearPasswordSetup } from '@/api/supabaseClient';
 
 const AuthContext = createContext();
 
@@ -12,6 +12,8 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [appPublicSettings, setAppPublicSettings] = useState(null);
+  const [needsNewPassword, setNeedsNewPassword] = useState(isPasswordSetupRequired);
+  const [passwordLinkError, setPasswordLinkError] = useState(null);
 
   const checkUserAuth = useCallback(async () => {
     setIsLoadingAuth(true);
@@ -70,18 +72,41 @@ export const AuthProvider = ({ children }) => {
   }, [checkUserAuth]);
 
   useEffect(() => {
-    checkAppState();
+    let cancelled = false;
+    const unsubscribeSetup = subscribePasswordSetup(() => {
+      if (!cancelled) setNeedsNewPassword(true);
+    });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setNeedsNewPassword(true);
+      }
       if (event === 'SIGNED_OUT') {
+        clearPasswordSetup();
         setUser(null);
         setIsAuthenticated(false);
+        setNeedsNewPassword(false);
         setAuthError({ type: 'auth_required', message: 'Authentication required' });
       }
     });
-    return () => subscription.unsubscribe();
+
+    (async () => {
+      const result = await consumeAuthCallback();
+      if (cancelled) return;
+      setNeedsNewPassword(result.needsPassword);
+      setPasswordLinkError(result.error);
+      await checkAppState();
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribeSetup();
+      subscription.unsubscribe();
+    };
   }, [checkAppState]);
 
   const logout = (shouldRedirect = true) => {
+    clearPasswordSetup();
+    setNeedsNewPassword(false);
     setUser(null);
     setIsAuthenticated(false);
     if (shouldRedirect) {
@@ -108,6 +133,8 @@ export const AuthProvider = ({ children }) => {
       navigateToLogin,
       checkAppState,
       checkUserAuth,
+      needsNewPassword,
+      passwordLinkError,
     }}>
       {children}
     </AuthContext.Provider>
