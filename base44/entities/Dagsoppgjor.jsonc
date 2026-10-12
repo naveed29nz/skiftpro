@@ -1,0 +1,212 @@
+{
+  "name": "Dagsoppgjor",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID"
+    },
+    "butikk": {
+      "type": "string",
+      "description": "Store / location name"
+    },
+    "butikk_nr": {
+      "type": "string",
+      "description": "Butikk nummer"
+    },
+    "dato": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of drop"
+    },
+    "month": {
+      "type": "number"
+    },
+    "year": {
+      "type": "number"
+    },
+    "pose_nummer": {
+      "type": "string",
+      "description": "Bag number"
+    },
+    "skannet_pose_nummer": {
+      "type": "string",
+      "description": "Scanned bag number"
+    },
+    "ansatt_navn": {
+      "type": "string"
+    },
+    "ansatt_id": {
+      "type": "string"
+    },
+    "seddel_1000_antall": {
+      "type": "number",
+      "default": 0
+    },
+    "seddel_1000_sum": {
+      "type": "number",
+      "default": 0
+    },
+    "seddel_500_antall": {
+      "type": "number",
+      "default": 0
+    },
+    "seddel_500_sum": {
+      "type": "number",
+      "default": 0
+    },
+    "seddel_200_antall": {
+      "type": "number",
+      "default": 0
+    },
+    "seddel_200_sum": {
+      "type": "number",
+      "default": 0
+    },
+    "seddel_100_antall": {
+      "type": "number",
+      "default": 0
+    },
+    "seddel_100_sum": {
+      "type": "number",
+      "default": 0
+    },
+    "seddel_50_antall": {
+      "type": "number",
+      "default": 0
+    },
+    "seddel_50_sum": {
+      "type": "number",
+      "default": 0
+    },
+    "mynt_antall": {
+      "type": "number",
+      "default": 0
+    },
+    "mynt_sum": {
+      "type": "number",
+      "default": 0
+    },
+    "kontantsalg_kasse": {
+      "type": "number",
+      "default": 0
+    },
+    "droppet_belop": {
+      "type": "number",
+      "default": 0
+    },
+    "kontrollert_belop": {
+      "type": "number",
+      "default": 0
+    },
+    "bank_mottatt_belop": {
+      "type": "number",
+      "default": 0
+    },
+    "differanse_mot_kontroll": {
+      "type": "number",
+      "default": 0
+    },
+    "differanse_mot_bank": {
+      "type": "number",
+      "default": 0
+    },
+    "total_dagsdifferanse": {
+      "type": "number",
+      "default": 0
+    },
+    "kommentar": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Registrert",
+        "Kontrollert",
+        "Bankf\u00f8rt",
+        "Avvik"
+      ],
+      "default": "Registrert"
+    },
+    "updated_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "butikk",
+    "dato",
+    "pose_nummer",
+    "ansatt_navn"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    }
+  }
+}

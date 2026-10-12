@@ -1,0 +1,159 @@
+{
+  "name": "Worker",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID this worker belongs to"
+    },
+    "name": {
+      "type": "string",
+      "description": "Full name of the worker"
+    },
+    "email": {
+      "type": "string",
+      "description": "Email address"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Phone number"
+    },
+    "hourly_rate": {
+      "type": "number",
+      "description": "Hourly pay rate"
+    },
+    "position": {
+      "type": "string",
+      "description": "Job position/role"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active",
+      "description": "Employment status"
+    },
+    "color": {
+      "type": "string",
+      "description": "Color for calendar display"
+    },
+    "teams": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "team1"
+      ],
+      "description": "Teams the worker belongs to"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "sub_admin",
+        "butikksjef",
+        "user"
+      ],
+      "default": "user",
+      "description": "Global access level (fallback if no team_roles set)"
+    },
+    "team_roles": {
+      "type": "object",
+      "description": "Per-team roles: e.g. { 'team1': 'sub_admin', 'team2': 'user' }. Overrides global role for each team."
+    },
+    "employment_type": {
+      "type": "string",
+      "enum": [
+        "timel\u00f8nn",
+        "fastl\u00f8nn"
+      ],
+      "default": "timel\u00f8nn",
+      "description": "Employment type"
+    },
+    "employment_percentage": {
+      "type": "number",
+      "default": 100,
+      "description": "Stillingsprosent (e.g. 100 = 100%, 50 = 50%)"
+    },
+    "disabled_extras": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "List of extras that do NOT apply: 'sunday', 'holiday'"
+    },
+    "can_see_resultat": {
+      "type": "boolean",
+      "default": false,
+      "description": "Can this worker see the Resultat page"
+    }
+  },
+  "required": [
+    "name",
+    "hourly_rate"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "read": null,
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    }
+  }
+}

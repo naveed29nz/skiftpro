@@ -1,0 +1,17 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "sub_admin",
+        "butikksjef",
+        "user"
+      ],
+      "default": "user"
+    }
+  },
+  "required": []
+}

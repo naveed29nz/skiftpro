@@ -1,0 +1,484 @@
+{
+  "name": "WorkplaceSetting",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID"
+    },
+    "workplace_name": {
+      "type": "string",
+      "default": "Main Workplace"
+    },
+    "latitude": {
+      "type": "number"
+    },
+    "longitude": {
+      "type": "number"
+    },
+    "radius_meters": {
+      "type": "number",
+      "default": 100
+    },
+    "full_time_hours_per_week": {
+      "type": "number",
+      "default": 37.5
+    },
+    "active_teams_count": {
+      "type": "number",
+      "default": 1,
+      "description": "Number of active teams/departments"
+    },
+    "team1_name": {
+      "type": "string",
+      "default": "Team 1"
+    },
+    "team2_name": {
+      "type": "string",
+      "default": "Team 2"
+    },
+    "team3_name": {
+      "type": "string",
+      "default": "Team 3"
+    },
+    "team4_name": {
+      "type": "string",
+      "default": "Team 4"
+    },
+    "team5_name": {
+      "type": "string",
+      "default": "Team 5"
+    },
+    "team6_name": {
+      "type": "string",
+      "default": "Team 6"
+    },
+    "team7_name": {
+      "type": "string",
+      "default": "Team 7"
+    },
+    "team8_name": {
+      "type": "string",
+      "default": "Team 8"
+    },
+    "team9_name": {
+      "type": "string",
+      "default": "Team 9"
+    },
+    "team10_name": {
+      "type": "string",
+      "default": "Team 10"
+    },
+    "team1_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team1_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team1_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team1_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team2_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team2_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team2_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team2_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team3_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team3_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team3_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team3_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team4_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team4_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team4_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team4_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team5_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team5_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team5_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team5_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team6_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team6_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team6_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team6_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team7_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team7_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team7_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team7_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team8_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team8_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team8_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team8_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team9_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team9_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team9_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team9_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team10_sunday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team10_sunday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team10_holiday_extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed"
+      ],
+      "default": "none"
+    },
+    "team10_holiday_extra_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "team1_latitude": {
+      "type": "number"
+    },
+    "team1_longitude": {
+      "type": "number"
+    },
+    "team1_radius_meters": {
+      "type": "number"
+    },
+    "team2_latitude": {
+      "type": "number"
+    },
+    "team2_longitude": {
+      "type": "number"
+    },
+    "team2_radius_meters": {
+      "type": "number"
+    },
+    "team3_latitude": {
+      "type": "number"
+    },
+    "team3_longitude": {
+      "type": "number"
+    },
+    "team3_radius_meters": {
+      "type": "number"
+    },
+    "team4_latitude": {
+      "type": "number"
+    },
+    "team4_longitude": {
+      "type": "number"
+    },
+    "team4_radius_meters": {
+      "type": "number"
+    },
+    "team5_latitude": {
+      "type": "number"
+    },
+    "team5_longitude": {
+      "type": "number"
+    },
+    "team5_radius_meters": {
+      "type": "number"
+    },
+    "team6_latitude": {
+      "type": "number"
+    },
+    "team6_longitude": {
+      "type": "number"
+    },
+    "team6_radius_meters": {
+      "type": "number"
+    },
+    "team7_latitude": {
+      "type": "number"
+    },
+    "team7_longitude": {
+      "type": "number"
+    },
+    "team7_radius_meters": {
+      "type": "number"
+    },
+    "team8_latitude": {
+      "type": "number"
+    },
+    "team8_longitude": {
+      "type": "number"
+    },
+    "team8_radius_meters": {
+      "type": "number"
+    },
+    "team9_latitude": {
+      "type": "number"
+    },
+    "team9_longitude": {
+      "type": "number"
+    },
+    "team9_radius_meters": {
+      "type": "number"
+    },
+    "team10_latitude": {
+      "type": "number"
+    },
+    "team10_longitude": {
+      "type": "number"
+    },
+    "team10_radius_meters": {
+      "type": "number"
+    }
+  },
+  "required": [],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "read": null,
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    }
+  }
+}

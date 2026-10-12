@@ -1,0 +1,80 @@
+{
+  "name": "Organization",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Organization/customer name"
+    },
+    "org_number": {
+      "type": "string",
+      "description": "Business org number"
+    },
+    "customer_number": {
+      "type": "string",
+      "description": "Sequential customer number assigned by SuperAdmin (e.g. 00777)"
+    },
+    "contact_name": {
+      "type": "string",
+      "description": "Contact person full name at the customer"
+    },
+    "contact_email": {
+      "type": "string",
+      "description": "Primary contact email"
+    },
+    "contact_phone": {
+      "type": "string"
+    },
+    "admin_user_id": {
+      "type": "string",
+      "description": "User ID of the primary admin for this org"
+    },
+    "admin_email": {
+      "type": "string",
+      "description": "Email of the primary admin"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "trial"
+      ],
+      "default": "active"
+    },
+    "plan": {
+      "type": "string",
+      "enum": [
+        "basic",
+        "pro",
+        "enterprise",
+        "ultimate"
+      ],
+      "default": "basic"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": null,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

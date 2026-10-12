@@ -1,0 +1,162 @@
+{
+  "name": "Contract",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID"
+    },
+    "worker_id": {
+      "type": "string",
+      "description": "Worker ID"
+    },
+    "worker_name": {
+      "type": "string",
+      "description": "Worker full name"
+    },
+    "contract_type": {
+      "type": "string",
+      "enum": [
+        "fast",
+        "ekstrahjelp"
+      ],
+      "default": "ekstrahjelp",
+      "description": "Type of contract"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "utkast",
+        "sendt",
+        "godkjent",
+        "avvist"
+      ],
+      "default": "utkast",
+      "description": "Contract status"
+    },
+    "org_name": {
+      "type": "string",
+      "description": "Company/org name"
+    },
+    "worker_position": {
+      "type": "string",
+      "description": "Worker position"
+    },
+    "hourly_rate": {
+      "type": "number",
+      "description": "Hourly rate"
+    },
+    "employment_percentage": {
+      "type": "number",
+      "description": "Stillingsprosent"
+    },
+    "weekly_hours": {
+      "type": "number",
+      "description": "Contract weekly hours"
+    },
+    "overtime_hours": {
+      "type": "number",
+      "default": 0,
+      "description": "Extra hours beyond employment percentage"
+    },
+    "full_time_hours_per_week": {
+      "type": "number",
+      "default": 37.5,
+      "description": "Full time hours per week for the org"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Contract start date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Contract end date"
+    },
+    "week_number": {
+      "type": "number",
+      "description": "ISO week number"
+    },
+    "year": {
+      "type": "number",
+      "description": "Year"
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "vikar",
+        "sesong",
+        "ferieavvikling"
+      ],
+      "default": "sesong",
+      "description": "Reason for temporary contract"
+    },
+    "notice_period_months": {
+      "type": "number",
+      "default": 1,
+      "description": "Oppsigelsesfrist in months"
+    },
+    "pdf_url": {
+      "type": "string",
+      "description": "Generated PDF URL"
+    },
+    "approved_by_worker_id": {
+      "type": "string",
+      "description": "Worker ID who approved"
+    },
+    "approved_at": {
+      "type": "string",
+      "description": "Approval timestamp"
+    },
+    "generated_automatically": {
+      "type": "boolean",
+      "default": false,
+      "description": "Was this auto-generated"
+    }
+  },
+  "required": [
+    "worker_id",
+    "worker_name",
+    "contract_type"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

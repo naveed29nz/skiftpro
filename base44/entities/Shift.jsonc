@@ -1,0 +1,137 @@
+{
+  "name": "Shift",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID"
+    },
+    "worker_id": {
+      "type": "string",
+      "description": "Reference to the worker"
+    },
+    "worker_name": {
+      "type": "string",
+      "description": "Cached worker name for display"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of the shift"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "Shift start time (HH:mm)"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "Shift end time (HH:mm)"
+    },
+    "break_minutes": {
+      "type": "number",
+      "default": 0,
+      "description": "Break duration in minutes"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional notes about the shift"
+    },
+    "shift_label": {
+      "type": "string",
+      "enum": [
+        "morning",
+        "evening",
+        "middle",
+        "sick",
+        ""
+      ],
+      "description": "Shift type label"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "completed",
+        "cancelled"
+      ],
+      "default": "scheduled",
+      "description": "Shift status"
+    },
+    "team": {
+      "type": "string",
+      "description": "Team/department key this shift was created for (e.g. team1)"
+    },
+    "published": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this shift has been published and is visible to workers"
+    }
+  },
+  "required": [
+    "worker_id",
+    "worker_name",
+    "date",
+    "start_time",
+    "end_time"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "read": null,
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    }
+  }
+}

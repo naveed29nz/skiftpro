@@ -1,0 +1,142 @@
+{
+  "name": "MonthlyResult",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID"
+    },
+    "year": {
+      "type": "number",
+      "description": "Year"
+    },
+    "month": {
+      "type": "number",
+      "description": "Month (1-12)"
+    },
+    "team": {
+      "type": "string",
+      "default": "all",
+      "description": "Team key: all, team1, team2, team3"
+    },
+    "db1": {
+      "type": "number",
+      "default": 0
+    },
+    "svinn": {
+      "type": "number",
+      "default": 0
+    },
+    "svinn_pct": {
+      "type": "number",
+      "default": 0
+    },
+    "vareavskrivning": {
+      "type": "number",
+      "default": 0
+    },
+    "vareavskrivning_pct": {
+      "type": "number",
+      "default": 0
+    },
+    "franchiseavgift": {
+      "type": "number",
+      "default": 0
+    },
+    "franchiseavgift_pct": {
+      "type": "number",
+      "default": 0
+    },
+    "driftskostnader": {
+      "type": "number",
+      "default": 0
+    },
+    "driftskostnader_pct": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "year",
+    "month",
+    "team"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    }
+  }
+}

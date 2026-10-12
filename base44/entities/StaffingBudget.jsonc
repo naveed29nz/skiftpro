@@ -1,0 +1,118 @@
+{
+  "name": "StaffingBudget",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID"
+    },
+    "team": {
+      "type": "string",
+      "description": "Team key: team1, team2, team3"
+    },
+    "week_override": {
+      "type": "number",
+      "description": "ISO week number if this is a week-specific override. Null = default plan."
+    },
+    "year_override": {
+      "type": "number",
+      "description": "Year for week override. Null = default plan."
+    },
+    "hour": {
+      "type": "number",
+      "description": "Hour of day (0-23)"
+    },
+    "mon": {
+      "type": "number",
+      "default": 0
+    },
+    "tue": {
+      "type": "number",
+      "default": 0
+    },
+    "wed": {
+      "type": "number",
+      "default": 0
+    },
+    "thu": {
+      "type": "number",
+      "default": 0
+    },
+    "fri": {
+      "type": "number",
+      "default": 0
+    },
+    "sat": {
+      "type": "number",
+      "default": 0
+    },
+    "sun": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "team",
+    "hour"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "read": null,
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    }
+  }
+}

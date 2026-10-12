@@ -1,0 +1,120 @@
+{
+  "name": "ShiftSwap",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID"
+    },
+    "requester_worker_id": {
+      "type": "string"
+    },
+    "requester_worker_name": {
+      "type": "string"
+    },
+    "requester_shift_id": {
+      "type": "string"
+    },
+    "requester_shift_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "requester_shift_start": {
+      "type": "string"
+    },
+    "requester_shift_end": {
+      "type": "string"
+    },
+    "target_worker_id": {
+      "type": "string",
+      "description": "Empty = open to anyone"
+    },
+    "target_worker_name": {
+      "type": "string"
+    },
+    "target_shift_id": {
+      "type": "string"
+    },
+    "target_shift_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "target_shift_start": {
+      "type": "string"
+    },
+    "target_shift_end": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "team": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "requester_worker_id",
+    "requester_shift_id",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": null,
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    }
+  }
+}

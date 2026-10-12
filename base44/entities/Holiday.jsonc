@@ -1,0 +1,63 @@
+{
+  "name": "Holiday",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID"
+    },
+    "name": {
+      "type": "string",
+      "description": "Holiday name"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Holiday date"
+    },
+    "pay_multiplier": {
+      "type": "number",
+      "default": 2.0,
+      "description": "Pay multiplier (e.g. 2.0 = double pay)"
+    },
+    "extra_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "percentage",
+        "fixed_per_shift",
+        "fixed_per_day"
+      ],
+      "default": "none",
+      "description": "Type of additional compensation"
+    },
+    "extra_amount": {
+      "type": "number",
+      "default": 0,
+      "description": "Amount for extra compensation (% or fixed kr)"
+    }
+  },
+  "required": [
+    "name",
+    "date",
+    "pay_multiplier"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": null,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

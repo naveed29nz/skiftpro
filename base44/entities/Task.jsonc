@@ -1,0 +1,140 @@
+{
+  "name": "Task",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "description": "Organization ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "Task title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Task description"
+    },
+    "assigned_worker_id": {
+      "type": "string",
+      "description": "Single worker ID (legacy) or 'all'"
+    },
+    "assigned_worker_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Multiple worker IDs assigned to this task"
+    },
+    "assigned_worker_name": {
+      "type": "string",
+      "description": "Cached worker name (legacy single)"
+    },
+    "assigned_worker_names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Cached worker names for display"
+    },
+    "team": {
+      "type": "string",
+      "description": "Team/department key, e.g. team1"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Due date"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "normal",
+        "high"
+      ],
+      "default": "normal"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "completed"
+      ],
+      "default": "open"
+    },
+    "completed_by_id": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string"
+    },
+    "image_url": {
+      "type": "string",
+      "description": "Admin-attached image URL"
+    },
+    "completion_image_url": {
+      "type": "string",
+      "description": "Image uploaded by worker upon completion"
+    }
+  },
+  "required": [
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": null,
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "sub_admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "butikksjef"
+          }
+        }
+      ]
+    }
+  }
+}
