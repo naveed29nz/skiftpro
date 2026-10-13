@@ -14,6 +14,17 @@ export function isIosSafari() {
   return iOS && safari
 }
 
+/** Login always. Dashboard only once it has loaded for an authenticated user, and only the first time. */
+export function iosInstallHintOnThisPage(pathname, {
+  dashboardSeen = false,
+  holdDashboard = false,
+  dashboardReady = true,
+} = {}) {
+  if (pathname === '/login') return true
+  if (pathname === '/Dashboard') return dashboardReady && (holdDashboard || !dashboardSeen)
+  return false
+}
+
 export function installStandaloneClass() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
   const query = window.matchMedia('(display-mode: standalone)')

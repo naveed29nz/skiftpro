@@ -87,9 +87,9 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/*" element={<AuthenticatedApp />} />
           </Routes>
+          <InstallPrompt />
         </Router>
         <Toaster />
-        <InstallPrompt />
       </QueryClientProvider>
     </AuthProvider>
   )
