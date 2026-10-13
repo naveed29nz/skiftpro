@@ -13,6 +13,7 @@ import CopyWeekModal from '@/components/timesheet/CopyWeekModal';
 import { useStaffingBudget, getHourlyStaffing } from '@/hooks/useStaffingBudget';
 import { getActiveTeams } from '@/utils/teams';
 import { useOrg } from '@/hooks/useOrg';
+import { useIsMobile } from '@/hooks/use-mobile';
 import DayGantt from '@/components/timesheet/DayGantt';
 import { LEDIG_WORKER_ID, LEDIG_WORKER_NAME } from '@/utils/workerLifecycle';
 
@@ -47,6 +48,33 @@ const LABEL_LEGEND = [
 
 const LABEL_SORT_ORDER = { morning: 0, middle: 1, evening: 2, sick: 3 };
 const PAYROLL_TAX = 0.243;
+
+// Display-only. Desktop keeps the full "HH:mm–HH:mm" string.
+function compactClock(time) {
+  if (!time || typeof time !== 'string') return time || '';
+  const [h, m = ''] = time.split(':');
+  if (m === '00') return String(Number(h));
+  return `${h}:${m}`;
+}
+
+function compactShiftRange(start, end) {
+  return `${compactClock(start)}–${compactClock(end)}`;
+}
+
+function shortWorkerLabel(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return parts[0] || '';
+  return `${parts.slice(0, -1).join(' ')} ${parts[parts.length - 1].charAt(0)}`;
+}
+
+function ShiftTimeText({ start, end, className, onClick }) {
+  return (
+    <div className={className} onClick={onClick}>
+      <span className="md:hidden">{compactShiftRange(start, end)}</span>
+      <span className="hidden md:inline">{start}–{end}</span>
+    </div>
+  );
+}
 
 // --- Norwegian Holiday Logic ---
 function getEaster(year) {
@@ -107,6 +135,16 @@ export default function Timesheet() {
   const [sortByLabel, setSortByLabel] = useState(false);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [selectedCols, setSelectedCols] = useState(new Set());
+  const [mobileSelectMode, setMobileSelectMode] = useState(false);
+  const isMobile = useIsMobile();
+  const attachDragHandle = !isMobile || mobileSelectMode;
+  const mobileControlsClass = mobileSelectMode ? '' : 'max-md:hidden';
+  const nameColClass = mobileSelectMode
+    ? 'w-[148px] min-w-[148px] md:w-[120px] md:min-w-[120px]'
+    : 'w-[80px] min-w-[80px] md:w-[120px] md:min-w-[120px]';
+  const nameCellClass = mobileSelectMode
+    ? 'max-md:w-[148px] max-md:max-w-[148px] max-md:min-w-0 max-md:overflow-hidden'
+    : 'max-md:w-[80px] max-md:max-w-[80px] max-md:min-w-0 max-md:overflow-hidden';
   const [inlineEditId, setInlineEditId] = useState(null);
   const [inlineEditData, setInlineEditData] = useState({});
   const queryClient = useQueryClient();
@@ -824,6 +862,16 @@ export default function Timesheet() {
       ) : (
         /* ===== NORMAL WORKER-PER-ROW VIEW ===== */
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="md:hidden flex items-center justify-end px-2 py-1.5 border-b border-slate-100">
+            <button
+              type="button"
+              aria-pressed={mobileSelectMode}
+              className={`text-[11px] font-medium px-2.5 py-1 rounded-md border ${mobileSelectMode ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}
+              onClick={() => setMobileSelectMode(v => !v)}
+            >
+              Rediger/Velg
+            </button>
+          </div>
           {/* Selection action bar */}
           {(selectedRows.size > 0 || selectedCols.size > 0) && (
             <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border-b border-blue-100">
@@ -840,46 +888,46 @@ export default function Timesheet() {
           )}
           <div className="overflow-x-auto">
             <DragDropContext onDragEnd={handleDragEnd}>
-              <table className="w-full text-xs border-collapse">
+              <table className={`text-xs border-collapse md:w-full max-md:table-fixed ${mobileSelectMode ? 'max-md:w-[582px]' : 'max-md:w-[514px]'}`}>
                 <colgroup>
-                  <col style={{ width: '120px', minWidth: '120px' }} />
-                  {days.map(d => <col key={d.toISOString()} style={{ width: '88px', minWidth: '88px' }} />)}
-                  <col style={{ width: '64px', minWidth: '64px' }} />
+                  <col className={nameColClass} />
+                  {days.map(d => <col key={d.toISOString()} className="w-[54px] min-w-[54px] md:w-[88px] md:min-w-[88px]" />)}
+                  <col className="w-[56px] min-w-[56px] md:w-[64px] md:min-w-[64px]" />
                 </colgroup>
                 <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                    <th className="px-4 py-3 text-left font-medium sticky left-0 bg-blue-50 z-10">
-                      <div className="flex items-center gap-2">
+                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider max-md:text-[10px] max-md:tracking-normal">
+                    <th className={`px-4 py-3 max-md:px-1.5 max-md:py-1 text-left font-medium sticky left-0 bg-blue-50 z-10 max-md:border-r max-md:border-slate-200 ${nameCellClass}`}>
+                      <div className="flex items-center gap-2 max-md:gap-1 min-w-0">
                         <input type="checkbox"
-                          className="rounded border-slate-300 cursor-pointer"
+                          className={`rounded border-slate-300 cursor-pointer shrink-0 ${mobileControlsClass}`}
                           checked={displayWorkers.length > 0 && displayWorkers.filter(w => !w.isVirtual).every(w => selectedRows.has(w.id))}
                           onChange={e => {
                             if (e.target.checked) setSelectedRows(new Set(displayWorkers.filter(w => !w.isVirtual).map(w => w.id)));
                             else setSelectedRows(new Set());
                           }}
                         />
-                        <span>Ansatt</span>
+                        <span className="truncate">Ansatt</span>
                       </div>
                     </th>
                     {days.map(day => {
                     const dayStr = format(day, 'yyyy-MM-dd');
                     const holiday = getHoliday(day);
                     return (
-                      <th key={day.toISOString()} className={`px-3 py-3 text-center font-medium ${holiday ? holiday.color : isSameDay(day, new Date()) ? 'bg-blue-50 text-blue-700' : ''}`}>
-                         <div className="flex flex-col items-center gap-1">
+                      <th key={day.toISOString()} className={`px-3 py-3 max-md:px-0.5 max-md:py-1 text-center font-medium max-md:w-[54px] max-md:max-w-[54px] ${holiday ? holiday.color : isSameDay(day, new Date()) ? 'bg-blue-50 text-blue-700' : ''}`}>
+                         <div className="flex flex-col items-center gap-1 max-md:gap-0">
                            <input type="checkbox"
-                             className="rounded border-slate-300 cursor-pointer"
+                             className={`rounded border-slate-300 cursor-pointer ${mobileControlsClass}`}
                              checked={selectedCols.has(dayStr)}
                              onChange={() => toggleCol(dayStr)}
                            />
-                           <div>{format(day, 'EEE')}</div>
-                           <div className="text-xs font-normal mt-0.5">{format(day, 'MMM d')}</div>
-                           {holiday && <div className="text-xs mt-0.5 font-normal truncate max-w-[100px] mx-auto">{holiday.icon} {holiday.name}</div>}
+                           <div className="max-md:text-[10px] max-md:leading-none">{format(day, 'EEE')}</div>
+                           <div className="text-xs font-normal mt-0.5 max-md:text-[9px] max-md:mt-0 max-md:leading-none">{format(day, 'MMM d')}</div>
+                           {holiday && <div className="text-xs max-md:text-[8px] mt-0.5 font-normal truncate max-w-[100px] max-md:max-w-[50px] mx-auto">{holiday.icon} {holiday.name}</div>}
                          </div>
                        </th>
                      );
                     })}
-                    <th className="px-4 py-3 text-center font-medium min-w-[80px]">Total</th>
+                    <th className="px-4 py-3 max-md:px-1 max-md:py-1 text-center font-medium min-w-[80px] max-md:min-w-0 max-md:w-[56px]">Total</th>
                   </tr>
                 </thead>
                 <Droppable droppableId="rows" type="ROW">
@@ -894,31 +942,35 @@ export default function Timesheet() {
                        const isReadOnly = worker.isInactive || worker.isFormer;
                        const isLedigRow = worker.isLedig;
                        return (
-                         <Draggable key={worker.id} draggableId={worker.id} index={index} isDragDisabled={!!worker.isVirtual}>
+                         <Draggable key={worker.id} draggableId={worker.id} index={index} isDragDisabled={!!worker.isVirtual || (isMobile && !mobileSelectMode)}>
                            {(rowDrag, rowSnapshot) => (
                              <tr ref={rowDrag.innerRef} {...rowDrag.draggableProps}
                                style={{ ...rowDrag.draggableProps.style, display: 'table-row' }}
                                className={`hover:bg-slate-50/50 ${rowSnapshot.isDragging ? 'bg-blue-50 shadow-md opacity-80' : ''} ${selectedRows.has(worker.id) ? 'bg-blue-50/30' : ''} ${isOverHours ? 'bg-red-50/30' : ''} ${worker.isInactive ? 'bg-slate-50/40' : ''} ${isLedigRow ? 'bg-emerald-50/40' : ''}`}>
-                              <td className={`px-4 py-3 sticky left-0 z-10 ${isLedigRow ? 'bg-emerald-100' : worker.isInactive ? 'bg-slate-100' : 'bg-blue-50'}`}>
-                                <div className="flex items-center gap-2">
+                              <td className={`px-4 py-3 max-md:px-1.5 max-md:py-1 sticky left-0 z-10 max-md:border-r max-md:border-slate-200 ${nameCellClass} ${isLedigRow ? 'bg-emerald-100' : worker.isInactive ? 'bg-slate-100' : 'bg-blue-50'}`}>
+                                <div className="flex items-center gap-2 max-md:gap-1 min-w-0">
                                   {!worker.isVirtual && (
                                     <input type="checkbox"
-                                      className="rounded border-slate-300 cursor-pointer"
+                                      className={`rounded border-slate-300 cursor-pointer shrink-0 ${mobileControlsClass}`}
                                       checked={selectedRows.has(worker.id)}
                                       onChange={() => toggleRow(worker.id)}
                                     />
                                   )}
                                   {!worker.isVirtual && (
-                                    <span {...rowDrag.dragHandleProps} className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing">
+                                    <span
+                                      {...(attachDragHandle ? rowDrag.dragHandleProps : {})}
+                                      className={`text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing shrink-0 ${mobileControlsClass}`}
+                                    >
                                       <GripVertical className="w-3.5 h-3.5" />
                                     </span>
                                   )}
-                                  <div className="w-5 h-5 rounded-full text-white text-[10px] flex items-center justify-center font-medium"
+                                  <div className="w-4 h-4 md:w-5 md:h-5 shrink-0 rounded-full text-white text-[10px] flex items-center justify-center font-medium"
                                     style={{ backgroundColor: worker.color || '#3B82F6' }}>
                                     {worker.name?.charAt(0)}
                                   </div>
-                                  <span className={`font-medium text-xs px-1.5 py-0.5 rounded-md ${isLedigRow ? 'text-emerald-700 bg-emerald-100' : worker.isInactive ? 'text-slate-500 bg-slate-200' : 'text-blue-800 bg-blue-50'}`}>
-                                    {worker.name}{worker.isFormer && <span className="ml-1 text-[10px] text-slate-400">(tidligere)</span>}
+                                  <span title={worker.isFormer ? `${worker.name} (tidligere)` : worker.name} className={`min-w-0 max-md:truncate font-medium text-xs max-md:text-[11px] px-1.5 py-0.5 max-md:px-1 max-md:py-0 rounded-md ${isLedigRow ? 'text-emerald-700 bg-emerald-100' : worker.isInactive ? 'text-slate-500 bg-slate-200' : 'text-blue-800 bg-blue-50'}`}>
+                                    <span className="md:hidden">{shortWorkerLabel(worker.name)}</span>
+                                    <span className="hidden md:inline">{worker.name}{worker.isFormer && <span className="ml-1 text-[10px] text-slate-400">(tidligere)</span>}</span>
                                   </span>
                                 </div>
                               </td>
@@ -930,11 +982,11 @@ export default function Timesheet() {
                                   // Ghost: worker has shifts on other teams but none on this team today
                                   const isGhostCell = otherShifts.length > 0 && cellShifts.length === 0;
                                   return (
-                                     <td key={day.toISOString()} className={`px-1 py-1 align-top ${getHoliday(day) ? 'bg-amber-50/40' : isSameDay(day, new Date()) ? 'bg-blue-50/20' : ''}`}>
+                                     <td key={day.toISOString()} className={`px-1 py-1 max-md:px-0.5 max-md:py-0.5 align-top max-md:w-[54px] max-md:max-w-[54px] max-md:overflow-hidden ${getHoliday(day) ? 'bg-amber-50/40' : isSameDay(day, new Date()) ? 'bg-blue-50/20' : ''}`}>
                                        <Droppable droppableId={cellId} type="SHIFT" isDropDisabled={worker.isInactive || worker.isFormer}>
                                          {(cellProvided, cellSnapshot) => (
                                            <div ref={cellProvided.innerRef} {...cellProvided.droppableProps}
-                                             className={`relative min-h-[40px] rounded transition-colors ${cellSnapshot.isDraggingOver ? 'bg-blue-100 ring-2 ring-blue-300 ring-inset' : ''}`}>
+                                             className={`relative min-h-[40px] max-md:min-h-[28px] rounded transition-colors ${cellSnapshot.isDraggingOver ? 'bg-blue-100 ring-2 ring-blue-300 ring-inset' : ''}`}>
                                              {cellShifts.length > 0 ? (
                                                <div className="space-y-0.5">
                                                  {cellShifts.map((s, si) => {
@@ -945,7 +997,7 @@ export default function Timesheet() {
                                                          const card = (
                                                          <div ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...shiftDrag.dragHandleProps}
                                                            onClick={() => !isReadOnly && !shiftSnapshot.isDragging && inlineEditId !== s.id && setModalCell({ worker, day })}
-                                                           className={`flex flex-col items-center gap-0.5 rounded px-1 py-1 text-center transition-shadow ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}
+                                                           className={`flex flex-col items-center gap-0.5 max-md:gap-0 rounded px-1 py-1 max-md:px-0.5 max-md:py-0.5 text-center transition-shadow ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}
                                                              ${labelStyle?.cell || 'bg-slate-50'}
                                                              ${shiftSnapshot.isDragging ? 'shadow-2xl ring-2 ring-blue-400' : 'hover:shadow-sm'}`}
                                                            style={shiftSnapshot.isDragging ? { ...shiftDrag.draggableProps.style, zIndex: 9999, pointerEvents: 'auto' } : shiftDrag.draggableProps.style}>
@@ -963,25 +1015,29 @@ export default function Timesheet() {
                                                            </div>
                                                          ) : (
                                                            <>
-                                                             <div
-                                                               className="text-xs text-slate-700 font-medium leading-tight hover:text-blue-600 hover:underline"
+                                                             <ShiftTimeText
+                                                               start={s.start_time}
+                                                               end={s.end_time}
+                                                               className="text-xs max-md:text-[10px] text-slate-700 font-medium leading-tight max-md:leading-none max-md:whitespace-nowrap hover:text-blue-600 hover:underline"
                                                                onClick={e => { if (!worker.isVirtual) startInlineEdit(e, s); }}
-                                                             >{s.start_time}–{s.end_time}</div>
-                                                             {s.shift_label && <span className={`text-[10px] px-1 rounded font-medium capitalize leading-none ${labelStyle?.badge || 'bg-slate-100 text-slate-600'}`}>{s.shift_label}</span>}
+                                                             />
+                                                             {s.shift_label && <span className={`text-[10px] max-md:text-[8px] px-1 max-md:px-0.5 rounded font-medium capitalize leading-none ${labelStyle?.badge || 'bg-slate-100 text-slate-600'}`}>{s.shift_label}</span>}
                                                              {(() => {
                                                                const st = stampByWorkerDate.get(`${worker.id}__${dayStr}`);
                                                                const si = fmtStamp(st?.stamp_in);
                                                                const so = fmtStamp(st?.stamp_out);
                                                                if (!si && !so) return null;
                                                                return (
-                                                                 <span className="flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
-                                                                   <Clock className="w-2.5 h-2.5" /> {si || '--:--'}–{so || '--:--'}
+                                                                 <span className="flex items-center gap-0.5 text-[10px] max-md:text-[8px] px-1 max-md:px-0.5 py-0.5 max-md:py-0 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium max-md:whitespace-nowrap">
+                                                                   <Clock className="w-2.5 h-2.5 max-md:hidden" />
+                                                                   <span className="md:hidden">{compactShiftRange(si || '--:--', so || '--:--')}</span>
+                                                                   <span className="hidden md:inline">{si || '--:--'}–{so || '--:--'}</span>
                                                                  </span>
                                                                );
                                                              })()}
                                                              {!s.published && (
-                                                               <span className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium">
-                                                                 <EyeOff className="w-2.5 h-2.5" /> Utkast
+                                                               <span className="flex items-center gap-0.5 text-xs max-md:text-[8px] px-1.5 py-0.5 max-md:px-0.5 max-md:py-0 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium max-md:whitespace-nowrap">
+                                                                 <EyeOff className="w-2.5 h-2.5 max-md:hidden" /> Utkast
                                                                </span>
                                                              )}
                                                            </>
@@ -1000,34 +1056,34 @@ export default function Timesheet() {
                                                  {otherShifts.map(os => {
                                                    const ghostTeamKey = os.team || (workers.find(w => w.id === os.worker_id)?.teams || ['team1'])[0];
                                                    return (
-                                                     <div key={os.id} className="rounded px-1 py-0.5 bg-red-50 border border-red-200 text-center">
-                                                       <div className="text-xs text-red-500 font-semibold leading-tight">{teamNames[ghostTeamKey] || ghostTeamKey}</div>
-                                                       <div className="text-xs text-red-400">{os.start_time}–{os.end_time}</div>
+                                                     <div key={os.id} className="rounded px-1 py-0.5 max-md:px-0.5 max-md:py-0 bg-red-50 border border-red-200 text-center overflow-hidden">
+                                                       <div className="text-xs max-md:text-[9px] text-red-500 font-semibold leading-tight truncate">{teamNames[ghostTeamKey] || ghostTeamKey}</div>
+                                                       <ShiftTimeText start={os.start_time} end={os.end_time} className="text-xs max-md:text-[10px] max-md:leading-none text-red-400 max-md:whitespace-nowrap" />
                                                      </div>
                                                    );
                                                  })}
                                                </div>
                                              ) : isGhostCell ? (
                                                // Worker has shifts in another team — show red ghost with dept name + times
-                                               <div className="flex flex-col gap-0.5 min-h-[40px] cursor-pointer" onClick={() => setModalCell({ worker, day })}>
+                                               <div className="flex flex-col gap-0.5 min-h-[40px] max-md:min-h-[28px] cursor-pointer" onClick={() => setModalCell({ worker, day })}>
                                                  {otherShifts.map(os => {
                                                    const ghostTeamKey = os.team || (workers.find(w => w.id === os.worker_id)?.teams || ['team1'])[0];
                                                    return (
-                                                     <div key={os.id} className="flex flex-col items-center justify-center rounded bg-red-50 border border-red-200 px-1 py-1 gap-0.5">
-                                                       <div className="text-xs text-red-500 font-semibold leading-tight">{teamNames[ghostTeamKey] || ghostTeamKey}</div>
-                                                       <div className="text-xs text-red-400 font-medium">{os.start_time}–{os.end_time}</div>
+                                                     <div key={os.id} className="flex flex-col items-center justify-center rounded bg-red-50 border border-red-200 px-1 py-1 max-md:px-0.5 max-md:py-0.5 gap-0.5 max-md:gap-0 overflow-hidden">
+                                                       <div className="text-xs max-md:text-[9px] text-red-500 font-semibold leading-tight truncate max-w-full">{teamNames[ghostTeamKey] || ghostTeamKey}</div>
+                                                       <ShiftTimeText start={os.start_time} end={os.end_time} className="text-xs max-md:text-[10px] max-md:leading-none text-red-400 font-medium max-md:whitespace-nowrap" />
                                                      </div>
                                                    );
                                                  })}
                                                </div>
                                              ) : isUnavailableOn(worker.id, day) ? (
-                                               <div className="flex flex-col items-center justify-center min-h-[40px] rounded bg-red-50 border border-red-200 px-1 py-1 gap-0.5" title="Ansatt er markert utilgjengelig denne dagen">
-                                                 <span className="text-[11px] text-red-600 font-semibold leading-tight">Utilgjengelig</span>
+                                               <div className="flex flex-col items-center justify-center min-h-[40px] max-md:min-h-[28px] rounded bg-red-50 border border-red-200 px-1 py-1 max-md:px-0.5 max-md:py-0.5 gap-0.5" title="Ansatt er markert utilgjengelig denne dagen">
+                                                 <span className="text-[11px] max-md:text-[8px] text-red-600 font-semibold leading-tight">Utilgjengelig</span>
                                                </div>
                                              ) : worker.isVirtual ? (
-                                               <div className="min-h-[40px]" />
+                                               <div className="min-h-[40px] max-md:min-h-[28px]" />
                                              ) : (
-                                               <div className="flex items-center justify-center min-h-[40px] cursor-pointer group" onClick={() => setModalCell({ worker, day })}>
+                                               <div className="flex items-center justify-center min-h-[40px] max-md:min-h-[28px] cursor-pointer group" onClick={() => setModalCell({ worker, day })}>
                                                  <Plus className="w-3.5 h-3.5 text-slate-200 group-hover:text-blue-300 transition-colors" />
                                                </div>
                                              )}
@@ -1038,7 +1094,7 @@ export default function Timesheet() {
                                      </td>
                                   );
                                 })}
-                                <td className="px-4 py-3 text-center">
+                                <td className="px-4 py-3 max-md:px-1 max-md:py-1 text-center max-md:text-[10px]">
                                   <div className="flex flex-col items-center gap-0.5">
                                     <span className={`font-bold ${isOverHours ? 'text-red-600' : 'text-slate-800'}`}>{fmtHours(weekTotal)}</span>
                                     {isOverHours && <span className="text-xs text-red-500 font-medium">maks {fmtHours(maxWeekHours)}</span>}
@@ -1056,44 +1112,52 @@ export default function Timesheet() {
                 {displayWorkers.length > 0 && (
                   <tfoot>
                     <tr className="border-t-2 border-slate-300 bg-slate-100">
-                      <td className="px-4 py-3 sticky left-0 bg-blue-100 z-10 text-xs font-bold text-slate-700">Total timer</td>
+                      <td className={`px-4 py-3 max-md:px-1.5 max-md:py-1 sticky left-0 bg-blue-100 z-10 text-xs max-md:text-[10px] font-bold text-slate-700 max-md:border-r max-md:border-slate-200 ${nameCellClass}`}>
+                        <span className="max-md:block max-md:truncate">Total timer</span>
+                      </td>
                       {days.map(day => {
                         const dayHours = getDayHours(day);
                         return (
-                          <td key={day.toISOString()} className={`px-3 py-3 text-center text-xs font-bold text-slate-800 ${isSameDay(day, new Date()) ? 'bg-blue-50/50' : ''}`}>
+                          <td key={day.toISOString()} className={`px-3 py-3 max-md:px-0.5 max-md:py-1 text-center text-xs max-md:text-[10px] font-bold text-slate-800 ${isSameDay(day, new Date()) ? 'bg-blue-50/50' : ''}`}>
                             {dayHours > 0 ? fmtHours(dayHours) : <span className="text-slate-300">—</span>}
                           </td>
                         );
                       })}
-                      <td className="px-4 py-3 text-center text-xs font-bold text-slate-900">{fmtHours(weekTotalHours)}</td>
+                      <td className="px-4 py-3 max-md:px-0.5 max-md:py-1 text-center text-xs max-md:text-[10px] font-bold text-slate-900">{fmtHours(weekTotalHours)}</td>
                     </tr>
                     <tr className="border-t border-slate-200 bg-slate-50">
-                      <td className="px-4 py-3 sticky left-0 bg-blue-50 z-10 text-xs font-semibold text-slate-600">Kostnad (eks. skatt)</td>
+                      <td className={`px-4 py-3 max-md:px-1.5 max-md:py-1 sticky left-0 bg-blue-50 z-10 text-xs max-md:text-[10px] font-semibold text-slate-600 max-md:border-r max-md:border-slate-200 ${nameCellClass}`}>
+                        <span className="max-md:block max-md:truncate">Kostnad (eks. skatt)</span>
+                      </td>
                       {days.map(day => {
                         const cost = getDayCost(day);
                         return (
-                          <td key={day.toISOString()} className={`px-3 py-3 text-center text-xs font-medium text-slate-700 ${isSameDay(day, new Date()) ? 'bg-blue-50/30' : ''}`}>
+                          <td key={day.toISOString()} className={`px-3 py-3 max-md:px-0.5 max-md:py-1 text-center text-xs max-md:text-[10px] font-medium text-slate-700 max-md:whitespace-nowrap ${isSameDay(day, new Date()) ? 'bg-blue-50/30' : ''}`}>
                             {cost > 0 ? `${cost.toFixed(0)} kr` : <span className="text-slate-300">—</span>}
                           </td>
                         );
                       })}
-                      <td className="px-4 py-3 text-center text-xs font-bold text-slate-800">{weekTotalCost.toFixed(0)} kr</td>
+                      <td className="px-4 py-3 max-md:px-0.5 max-md:py-1 text-center text-xs max-md:text-[10px] font-bold text-slate-800 max-md:whitespace-nowrap">{weekTotalCost.toFixed(0)} kr</td>
                     </tr>
                     <tr className="border-t border-orange-100 bg-orange-50">
-                      <td className="px-4 py-3 sticky left-0 bg-blue-50 z-10 text-xs font-semibold text-orange-700">Kostnad (inkl. 24,3% skatt)</td>
+                      <td className={`px-4 py-3 max-md:px-1.5 max-md:py-1 sticky left-0 bg-blue-50 z-10 text-xs max-md:text-[10px] font-semibold text-orange-700 max-md:border-r max-md:border-slate-200 ${nameCellClass}`}>
+                        <span className="max-md:block max-md:truncate">Kostnad (inkl. 24,3% skatt)</span>
+                      </td>
                       {days.map(day => {
                         const cost = getDayCost(day) * (1 + PAYROLL_TAX);
                         return (
-                          <td key={day.toISOString()} className={`px-3 py-3 text-center text-xs font-medium text-orange-700 ${isSameDay(day, new Date()) ? 'bg-blue-50/30' : ''}`}>
+                          <td key={day.toISOString()} className={`px-3 py-3 max-md:px-0.5 max-md:py-1 text-center text-xs max-md:text-[10px] font-medium text-orange-700 max-md:whitespace-nowrap ${isSameDay(day, new Date()) ? 'bg-blue-50/30' : ''}`}>
                             {cost > 0 ? `${cost.toFixed(0)} kr` : <span className="text-orange-200">—</span>}
                           </td>
                         );
                       })}
-                      <td className="px-4 py-3 text-center text-xs font-bold text-orange-800">{(weekTotalCost * (1 + PAYROLL_TAX)).toFixed(0)} kr</td>
+                      <td className="px-4 py-3 max-md:px-0.5 max-md:py-1 text-center text-xs max-md:text-[10px] font-bold text-orange-800 max-md:whitespace-nowrap">{(weekTotalCost * (1 + PAYROLL_TAX)).toFixed(0)} kr</td>
                     </tr>
                     {Object.keys(budgetByHourDay).length > 0 && (
                       <tr className="border-t border-slate-200 bg-white">
-                        <td className="px-4 py-3 sticky left-0 bg-blue-50 z-10 text-xs font-semibold text-slate-600">Bemanning vs budsjett</td>
+                        <td className={`px-4 py-3 max-md:px-1.5 max-md:py-1 sticky left-0 bg-blue-50 z-10 text-xs max-md:text-[10px] font-semibold text-slate-600 max-md:border-r max-md:border-slate-200 ${nameCellClass}`}>
+                          <span className="max-md:block max-md:truncate">Bemanning vs budsjett</span>
+                        </td>
                         {days.map(day => {
                           const st = getDayStaffingStatus(day);
                           return (
