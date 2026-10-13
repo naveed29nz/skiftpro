@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useOrg } from '@/hooks/useOrg';
+import { useCurrentWorker } from '@/hooks/useCurrentWorker';
+import { canSeeWageCosts } from '@/utils/wageAccess';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Download, Send, Trash2, Eye, Search, Filter, ChevronDown } from 'lucide-react';
@@ -23,6 +25,8 @@ const TYPE_MAP = {
 export default function Contracts() {
   const queryClient = useQueryClient();
   const { orgId } = useOrg();
+  const { user, worker } = useCurrentWorker();
+  const showWages = canSeeWageCosts(user, worker);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -180,7 +184,7 @@ export default function Contracts() {
                           {' – '}
                           {contract.end_date && format(new Date(contract.end_date + 'T00:00:00'), 'd. MMM', { locale: nb })}
                         </p>
-                        <p className="text-sm font-medium text-slate-600">{contract.weekly_hours?.toFixed(1)}t · {contract.hourly_rate} kr/t</p>
+                        <p className="text-sm font-medium text-slate-600">{contract.weekly_hours?.toFixed(1)}t{showWages ? ` · ${contract.hourly_rate} kr/t` : ''}</p>
                       </div>
                       <div className="flex items-center gap-1">
                         {contract.status === 'utkast' && (
@@ -188,7 +192,7 @@ export default function Contracts() {
                             <Send className="w-4 h-4" />
                           </Button>
                         )}
-                        <Button
+                        {showWages && <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDownloadPdf(contract)}
@@ -201,7 +205,7 @@ export default function Contracts() {
                           ) : (
                             <Download className="w-4 h-4" />
                           )}
-                        </Button>
+                        </Button>}
                         <Button variant="ghost" size="sm" onClick={() => setViewingContract(contract)} className="text-slate-500 hover:text-slate-700" title="Vis detaljer">
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -271,10 +275,12 @@ export default function Contracts() {
                       +{viewingContract.overtime_hours?.toFixed(1)}t
                     </p>
                   </div>
+                  {showWages && (
                   <div>
                     <p className="text-xs text-slate-400">Timelønn</p>
                     <p className="font-semibold text-slate-800">{viewingContract.hourly_rate} kr/t</p>
                   </div>
+                  )}
                   <div>
                     <p className="text-xs text-slate-400">Stillingsprosent</p>
                     <p className="font-semibold text-slate-800">{viewingContract.employment_percentage}%</p>
@@ -298,14 +304,14 @@ export default function Contracts() {
                 )}
               </div>
               <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
-                <Button onClick={() => handleDownloadPdf(viewingContract)} disabled={pdfLoading === viewingContract.id} className="flex-1 gap-2">
+                {showWages && <Button onClick={() => handleDownloadPdf(viewingContract)} disabled={pdfLoading === viewingContract.id} className="flex-1 gap-2">
                   {pdfLoading === viewingContract.id ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <Download className="w-4 h-4" />
                   )}
                   Last ned PDF
-                </Button>
+                </Button>}
                 {viewingContract.status === 'utkast' && (
                   <Button variant="outline" onClick={() => { handleSend(viewingContract.id); setViewingContract(null); }} className="gap-2">
                     <Send className="w-4 h-4" /> Send til ansatt

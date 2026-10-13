@@ -8,8 +8,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
+import { useCurrentWorker } from '@/hooks/useCurrentWorker';
+import { canSeeWageCosts } from '@/utils/wageAccess';
 
 export default function Holidays() {
+  const { user, worker } = useCurrentWorker();
+  const showWages = canSeeWageCosts(user, worker);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', date: '', pay_multiplier: 2.0, extra_type: 'none', extra_amount: 0 });
   const queryClient = useQueryClient();
@@ -31,7 +35,13 @@ export default function Holidays() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    createMut.mutate({ ...form, pay_multiplier: parseFloat(form.pay_multiplier), extra_amount: parseFloat(form.extra_amount) || 0 });
+    const payload = { name: form.name, date: form.date };
+    if (showWages) {
+      payload.pay_multiplier = parseFloat(form.pay_multiplier);
+      payload.extra_type = form.extra_type;
+      payload.extra_amount = parseFloat(form.extra_amount) || 0;
+    }
+    createMut.mutate(payload);
   };
 
   return (
@@ -65,8 +75,8 @@ export default function Holidays() {
                   <th className="px-5 py-3 text-left font-medium">Holiday</th>
                   <th className="px-5 py-3 text-left font-medium">Date</th>
                   <th className="px-5 py-3 text-left font-medium">Day</th>
-                  <th className="px-5 py-3 text-right font-medium">Pay Multiplier</th>
-                  <th className="px-5 py-3 text-right font-medium">Extra Comp.</th>
+                  {showWages && <th className="px-5 py-3 text-right font-medium">Pay Multiplier</th>}
+                  {showWages && <th className="px-5 py-3 text-right font-medium">Extra Comp.</th>}
                   <th className="px-5 py-3 text-right font-medium"></th>
                 </tr>
               </thead>
@@ -78,11 +88,14 @@ export default function Holidays() {
                       <td className="px-5 py-3 font-medium text-slate-800">{h.name}</td>
                       <td className="px-5 py-3 text-slate-600">{format(d, 'MMM d, yyyy')}</td>
                       <td className="px-5 py-3 text-slate-500">{format(d, 'EEEE')}</td>
+                      {showWages && (
                       <td className="px-5 py-3 text-right">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold text-xs">
                           ×{h.pay_multiplier}
                         </span>
                       </td>
+                      )}
+                      {showWages && (
                       <td className="px-5 py-3 text-right">
                         {h.extra_type && h.extra_type !== 'none' && h.extra_amount > 0 ? (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-semibold text-xs">
@@ -90,6 +103,7 @@ export default function Holidays() {
                           </span>
                         ) : <span className="text-slate-300 text-xs">—</span>}
                       </td>
+                      )}
                       <td className="px-5 py-3 text-right">
                         <Button variant="ghost" size="icon" className="h-8 w-8"
                           onClick={() => { if (confirm('Delete holiday?')) deleteMut.mutate(h.id); }}>
@@ -117,11 +131,15 @@ export default function Holidays() {
               <Label>Date *</Label>
               <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required />
             </div>
+            {showWages && (
             <div className="space-y-1.5">
               <Label>Pay Multiplier *</Label>
               <Input type="number" step="0.1" min="1" value={form.pay_multiplier} onChange={e => setForm({ ...form, pay_multiplier: e.target.value })} placeholder="2.0" required />
               <p className="text-xs text-slate-400">e.g. 2.0 = double pay, 1.5 = 50% extra</p>
             </div>
+            )}
+            {showWages && (
+            <>
             <div className="space-y-1.5">
               <Label>Ekstra tillegg (valgfritt)</Label>
               <Select value={form.extra_type} onValueChange={v => setForm({ ...form, extra_type: v })}>
@@ -140,6 +158,8 @@ export default function Holidays() {
                 <Input type="number" step="0.01" min="0" value={form.extra_amount} onChange={e => setForm({ ...form, extra_amount: e.target.value })} placeholder={form.extra_type === 'percentage' ? '10' : '200'} />
                 <p className="text-xs text-slate-400">{form.extra_type === 'percentage' ? 'f.eks. 10 = 10% tillegg på totallønn' : 'Fast ekstrabeløp i kr'}</p>
               </div>
+            )}
+            </>
             )}
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>

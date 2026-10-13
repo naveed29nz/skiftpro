@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Download, ChevronDown, ChevronUp, FileText }
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { getActiveTeams } from '@/utils/teams';
+import { canSeeWageCosts } from '@/utils/wageAccess';
 import { useOrg } from '@/hooks/useOrg';
 
 const escHtml = (str) => String(str ?? '').replace(/[&<>"']/g, (c) => {
@@ -25,7 +26,7 @@ export default function Salary() {
   useEffect(() => { base44.auth.me().then(setCurrentUser).catch(() => {}); }, []);
 
   const { orgId } = useOrg();
-  const { data: workers = [] } = useQuery({ queryKey: ['workers', orgId], queryFn: () => orgId ? base44.entities.Worker.filter({ org_id: orgId }) : base44.entities.Worker.list(), enabled: !!orgId });
+  const { data: workers = [], isPending: workersPending } = useQuery({ queryKey: ['workers', orgId], queryFn: () => orgId ? base44.entities.Worker.filter({ org_id: orgId }) : base44.entities.Worker.list(), enabled: !!orgId });
   const { data: shifts = [] } = useQuery({ queryKey: ['shifts', orgId], queryFn: () => orgId ? base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000) : base44.entities.Shift.list('-date', 1000), enabled: !!orgId });
   const { data: holidays = [] } = useQuery({ queryKey: ['holidays', orgId], queryFn: () => orgId ? base44.entities.Holiday.filter({ org_id: orgId }) : base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings', orgId], queryFn: () => orgId ? base44.entities.WorkplaceSetting.filter({ org_id: orgId }) : base44.entities.WorkplaceSetting.list(), staleTime: 0 });
@@ -296,6 +297,20 @@ export default function Salary() {
     win.focus();
     setTimeout(() => { win.print(); }, 500);
   };
+
+  const waitingForWorkerRole = !!currentUser
+    && currentUser.role !== 'admin'
+    && currentUser.role !== 'sub_admin'
+    && !!orgId
+    && workersPending;
+  if (!currentUser || waitingForWorkerRole) return null;
+  if (!canSeeWageCosts(currentUser, myWorker)) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+        <p className="text-sm text-slate-600">Lønnstall er bare synlige for administratorer.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

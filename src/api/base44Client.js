@@ -100,6 +100,107 @@ export function sanitizeWrite(data, { isUpdate = false } = {}) {
   return out;
 }
 
+function workplaceColumns() {
+  const cols = ['id', 'org_id', 'workplace_name', 'latitude', 'longitude', 'radius_meters', 'full_time_hours_per_week', 'active_teams_count'];
+  for (let i = 1; i <= 10; i += 1) {
+    cols.push(
+      `team${i}_name`,
+      `team${i}_sunday_extra_type`,
+      `team${i}_sunday_extra_amount`,
+      `team${i}_holiday_extra_type`,
+      `team${i}_holiday_extra_amount`,
+      `team${i}_latitude`,
+      `team${i}_longitude`,
+      `team${i}_radius_meters`,
+    );
+  }
+  cols.push('created_date', 'updated_date', 'created_by');
+  return cols;
+}
+
+const workplaceWageFields = workplaceColumns().filter((col) => /_(sunday|holiday)_extra_/.test(col));
+
+// Columns the wage migration stops butikksjef and employees from selecting.
+const WAGE_FIELDS = {
+  workers: ['hourly_rate'],
+  contracts: ['hourly_rate'],
+  holidays: ['pay_multiplier', 'extra_type', 'extra_amount'],
+  workplace_settings: workplaceWageFields,
+};
+
+const SAFE_COLUMNS = {
+  workers: ['id', 'org_id', 'name', 'email', 'phone', 'position', 'status', 'color', 'teams', 'role', 'team_roles', 'employment_type', 'employment_percentage', 'disabled_extras', 'can_see_resultat', 'created_date', 'updated_date', 'created_by'],
+  contracts: ['id', 'org_id', 'worker_id', 'worker_name', 'contract_type', 'status', 'org_name', 'worker_position', 'employment_percentage', 'weekly_hours', 'overtime_hours', 'full_time_hours_per_week', 'start_date', 'end_date', 'week_number', 'year', 'reason', 'notice_period_months', 'pdf_url', 'approved_by_worker_id', 'approved_at', 'generated_automatically', 'created_date', 'updated_date', 'created_by'],
+  holidays: ['id', 'org_id', 'name', 'date', 'created_date', 'updated_date', 'created_by'],
+  workplace_settings: workplaceColumns().filter((col) => !workplaceWageFields.includes(col)),
+};
+
+const WAGE_RPC = {
+  workers: 'worker_hourly_rates',
+  contracts: 'contract_hourly_rates',
+  holidays: 'holiday_wage_rules',
+  workplace_settings: 'workplace_wage_rules',
+};
+
+const rpcState = new Map();
+
+function isColumnPrivilegeError(error) {
+  const message = error?.message || '';
+  return error?.code === '42501' || /permission denied for column/i.test(message);
+}
+
+function isMissingRpc(error) {
+  const message = error?.message || '';
+  return error?.code === 'PGRST202'
+    || /schema cache/i.test(message)
+    || /could not find the function/i.test(message)
+    || /does not exist/i.test(message);
+}
+
+async function loadWageOverlay(table) {
+  const rpc = WAGE_RPC[table];
+  if (!rpc || rpcState.get(rpc) === 'no') return null;
+  const { data, error } = await supabase.rpc(rpc);
+  if (error) {
+    if (isMissingRpc(error)) {
+      rpcState.set(rpc, 'no');
+      return null;
+    }
+    throw toError(error);
+  }
+  rpcState.set(rpc, 'yes');
+  return data || [];
+}
+
+function applyOverlay(table, data, overlay) {
+  if (!overlay || data == null) return data;
+  const fields = WAGE_FIELDS[table];
+  const rows = Array.isArray(data) ? data : [data];
+  const byId = new Map(overlay.map((row) => [row.id, row]));
+  const merged = rows.map((row) => {
+    if (!row) return row;
+    const extra = byId.get(row.id);
+    const next = { ...row };
+    for (const field of fields) next[field] = extra ? extra[field] ?? null : null;
+    return next;
+  });
+  return Array.isArray(data) ? merged : merged[0];
+}
+
+async function runRead(table, build) {
+  let result = await build('*');
+  if (result.error && WAGE_FIELDS[table] && isColumnPrivilegeError(result.error)) {
+    rpcState.set(WAGE_RPC[table], 'yes');
+    result = await build(SAFE_COLUMNS[table].join(','));
+    if (result.error) throw toError(result.error);
+    const overlay = await loadWageOverlay(table);
+    return applyOverlay(table, result.data, overlay || []);
+  }
+  if (result.error) throw toError(result.error);
+  const overlay = await loadWageOverlay(table);
+  return applyOverlay(table, result.data, overlay);
+}
+
 async function selectRows(table, { sort, limit, filters } = {}) {
   const compiled = compileFilter(filters);
   if (compiled.empty) return [];
@@ -109,12 +210,12 @@ async function selectRows(table, { sort, limit, filters } = {}) {
 
   for (let from = 0; rows.length < cap; from += PAGE_SIZE) {
     const end = Math.min(from + PAGE_SIZE, cap) - 1;
-    let query = supabase.from(table).select('*');
-    query = applyClauses(query, compiled.clauses);
-    query = query.order(ordering.column, { ascending: ordering.ascending });
-    const { data, error } = await query.range(from, end);
-    if (error) throw toError(error);
-    const batch = data || [];
+    const batch = await runRead(table, (columns) => {
+      let query = supabase.from(table).select(columns);
+      query = applyClauses(query, compiled.clauses);
+      query = query.order(ordering.column, { ascending: ordering.ascending });
+      return query.range(from, end);
+    }) || [];
     rows.push(...batch);
     if (batch.length < end - from + 1) break;
   }
@@ -131,26 +232,20 @@ function entityApi(table) {
       return selectRows(table, { sort, limit, filters });
     },
     async get(id) {
-      const { data, error } = await supabase.from(table).select('*').eq('id', id).maybeSingle();
-      if (error) throw toError(error);
+      const data = await runRead(table, (columns) => supabase.from(table).select(columns).eq('id', id).maybeSingle());
       if (!data) throw apiError(`${table} ${id} not found`, 404);
       return normalizeRow(data);
     },
     async create(data) {
       const payload = withImpersonatedOrg(table, sanitizeWrite(data, { isUpdate: false }));
-      const { data: row, error } = await supabase.from(table).insert(payload).select('*').single();
-      if (error) throw toError(error);
+      const row = await runRead(table, (columns) => supabase.from(table).insert(payload).select(columns).single());
       return normalizeRow(row);
     },
     async update(id, data) {
       const payload = sanitizeWrite(data, { isUpdate: true });
-      const { data: row, error } = await supabase
-        .from(table)
-        .update(payload)
-        .eq('id', id)
-        .select('*')
-        .maybeSingle();
-      if (error) throw toError(error);
+      const row = await runRead(table, (columns) => (
+        supabase.from(table).update(payload).eq('id', id).select(columns).maybeSingle()
+      ));
       if (!row) throw apiError(`${table} ${id} not found`, 404);
       return normalizeRow(row);
     },
@@ -166,8 +261,7 @@ function entityApi(table) {
       const created = [];
       for (let i = 0; i < payload.length; i += 200) {
         const chunk = payload.slice(i, i + 200);
-        const { data, error } = await supabase.from(table).insert(chunk).select('*');
-        if (error) throw toError(error);
+        const data = await runRead(table, (columns) => supabase.from(table).insert(chunk).select(columns));
         created.push(...(data || []).map(normalizeRow));
       }
       return created;
@@ -188,10 +282,11 @@ function entityApi(table) {
         throw apiError('updateMany requires a filter');
       }
       const patch = sanitizeWrite(data?.$set ?? data, { isUpdate: true });
-      let query = supabase.from(table).update(patch);
-      query = applyClauses(query, compiled.clauses);
-      const { data: rows, error } = await query.select('*');
-      if (error) throw toError(error);
+      const rows = await runRead(table, (columns) => {
+        let query = supabase.from(table).update(patch).select(columns);
+        query = applyClauses(query, compiled.clauses);
+        return query;
+      });
       return (rows || []).map(normalizeRow);
     },
     async deleteMany(filters) {

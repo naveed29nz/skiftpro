@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'];
 
-export default function WorkerForm({ worker, onSubmit, onCancel, teamNames = { team1: 'Team 1' } }) {
+export default function WorkerForm({ worker, onSubmit, onCancel, teamNames = { team1: 'Team 1' }, showWages = false }) {
   const [form, setForm] = useState({
     name: worker?.name || '',
     email: worker?.email || '',
@@ -48,7 +48,10 @@ export default function WorkerForm({ worker, onSubmit, onCancel, teamNames = { t
     const ROLE_RANK = { admin: 4, sub_admin: 3, butikksjef: 2, user: 1 };
     const teamRoleValues = form.teams.map(t => form.team_roles[t] || 'user');
     const highestRole = teamRoleValues.reduce((best, r) => (ROLE_RANK[r] || 1) > (ROLE_RANK[best] || 1) ? r : best, 'user');
-    onSubmit({ ...form, hourly_rate: parseFloat(form.hourly_rate) || 0, role: highestRole });
+    const payload = { ...form, role: highestRole };
+    if (showWages) payload.hourly_rate = parseFloat(form.hourly_rate) || 0;
+    else delete payload.hourly_rate;
+    onSubmit(payload);
   };
 
   return (
@@ -62,10 +65,12 @@ export default function WorkerForm({ worker, onSubmit, onCancel, teamNames = { t
           <Label>Position</Label>
           <Input value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} placeholder="e.g. Barista, Server" />
         </div>
+        {showWages && (
         <div className="space-y-1.5">
           <Label>Hourly Rate *</Label>
           <Input type="number" step="0.01" min="0" value={form.hourly_rate} onChange={e => setForm({ ...form, hourly_rate: e.target.value })} placeholder="0.00" required />
         </div>
+        )}
         <div className="space-y-1.5">
           <Label>Stillingsprosent (%)</Label>
           <Input type="number" min="1" max="100" step="1" value={form.employment_percentage} onChange={e => setForm({ ...form, employment_percentage: parseFloat(e.target.value) || 100 })} placeholder="100" />

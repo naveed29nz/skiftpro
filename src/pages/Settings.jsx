@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MapPin, Navigation, Save, Users, Lock, Plus, Trash2 } from 'lucide-react';
 import { useOrg } from '@/hooks/useOrg';
+import { useCurrentWorker } from '@/hooks/useCurrentWorker';
+import { canSeeWageCosts } from '@/utils/wageAccess';
 
 const PLAN_DEPT_LIMITS = { basic: 1, pro: 3, enterprise: 6, ultimate: 10 };
 
@@ -180,6 +182,8 @@ const DEFAULTS = generateDefaults();
 export default function Settings() {
   const queryClient = useQueryClient();
   const { myOrg, orgId, orgs } = useOrg();
+  const { user, worker } = useCurrentWorker();
+  const showWages = canSeeWageCosts(user, worker);
   const [globalAddressInput, setGlobalAddressInput] = useState('');
   const [form, setForm] = useState(DEFAULTS);
 
@@ -261,6 +265,14 @@ export default function Settings() {
     const data = { ...form };
     numFields.forEach(f => { data[f] = parseFloat(data[f]) || 0; });
     data.radius_meters = parseInt(data.radius_meters) || 100;
+    if (!showWages) {
+      for (let i = 1; i <= 10; i += 1) {
+        delete data[`team${i}_sunday_extra_type`];
+        delete data[`team${i}_sunday_extra_amount`];
+        delete data[`team${i}_holiday_extra_type`];
+        delete data[`team${i}_holiday_extra_amount`];
+      }
+    }
     saveMut.mutate(data);
   };
 
@@ -397,7 +409,7 @@ export default function Settings() {
           )}
         </div>
 
-        {/* Per-team pay rules */}
+        {showWages && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
           <h2 className="text-base font-semibold text-slate-800">Tillegg per avdeling</h2>
           <p className="text-xs text-slate-400">Sett søndags- og helligdagstillegg separat for hver avdeling.</p>
@@ -405,6 +417,7 @@ export default function Settings() {
             <TeamPaySection key={key} teamKey={key} teamName={form[`${key}_name`] || key} form={form} setForm={setForm} />
           ))}
         </div>
+        )}
 
         {/* Per-team locations */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">

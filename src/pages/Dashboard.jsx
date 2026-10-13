@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import ManagerCharts from '@/components/dashboard/ManagerCharts';
 import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
+import { canSeeWageCosts } from '@/utils/wageAccess';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { format, parseISO, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { nb } from 'date-fns/locale';
@@ -48,6 +49,7 @@ export default function Dashboard() {
   }, []);
 
   const isManagerOrAdmin = currentUser?.role === 'admin' || currentUser?.role === 'butikksjef' || currentUser?.role === 'sub_admin';
+  const showWages = canSeeWageCosts(currentUser, myWorker);
   const teamNames = useTeamNames();
   const { orgId, myOrg, isImpersonating } = useOrg();
 
@@ -133,7 +135,7 @@ export default function Dashboard() {
   const vareavskrivning = monthResult?.vareavskrivning_pct ? db1 * (monthResult.vareavskrivning_pct / 100) : (monthResult?.vareavskrivning || 0);
   const franchise = monthResult?.franchiseavgift_pct ? db1 * (monthResult.franchiseavgift_pct / 100) : (monthResult?.franchiseavgift || 0);
   const drift = monthResult?.driftskostnader_pct ? db1 * (monthResult.driftskostnader_pct / 100) : (monthResult?.driftskostnader || 0);
-  const driftsresultat = db1 - svinn - vareavskrivning - franchise - drift - lonnskostnader;
+  const driftsresultat = db1 - svinn - vareavskrivning - franchise - drift - (showWages ? lonnskostnader : 0);
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
@@ -347,14 +349,14 @@ export default function Dashboard() {
           </div>
           <div className="text-right text-xs text-slate-500 space-y-0.5">
             <p>DB1: {Math.round(db1).toLocaleString('no-NO')} kr</p>
-            <p>Lønn: -{Math.round(lonnskostnader).toLocaleString('no-NO')} kr</p>
+            {showWages && <p>Lønn: -{Math.round(lonnskostnader).toLocaleString('no-NO')} kr</p>}
             <p>Øvrige: -{Math.round(svinn + vareavskrivning + franchise + drift).toLocaleString('no-NO')} kr</p>
           </div>
         </div>
       )}
 
       {/* Manager charts */}
-      {isManagerOrAdmin && !mobileView && (
+      {showWages && isManagerOrAdmin && !mobileView && (
         <div className="mt-2">
           <ManagerCharts />
         </div>

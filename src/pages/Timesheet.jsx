@@ -14,6 +14,7 @@ import { useStaffingBudget, getHourlyStaffing } from '@/hooks/useStaffingBudget'
 import { getActiveTeams } from '@/utils/teams';
 import { useOrg } from '@/hooks/useOrg';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { canSeeWageCosts } from '@/utils/wageAccess';
 import DayGantt from '@/components/timesheet/DayGantt';
 import { LEDIG_WORKER_ID, LEDIG_WORKER_NAME } from '@/utils/workerLifecycle';
 
@@ -113,7 +114,8 @@ function getNorwegianHolidays(year) {
 }
 
 export default function Timesheet() {
-  const { user, myTeams } = useCurrentWorker();
+  const { user, worker: currentWorker, myTeams } = useCurrentWorker();
+  const showWages = canSeeWageCosts(user, currentWorker);
   const isAdmin = user?.role === 'admin';
   // Rollene som får redigere vaktplan (legge til / slette / endre / kopiere / publisere)
   const canManageShifts = user?.role === 'admin' || user?.role === 'sub_admin' || user?.role === 'butikksjef';
@@ -768,6 +770,7 @@ export default function Timesheet() {
             const anyWorker = displayWorkers[0];
             if (anyWorker) setModalCell({ worker: anyWorker, day: selectedDay, defaultLabel: label });
           }}
+          showWages={showWages}
         />
       ) : sortByLabel ? (
         <DragDropContext onDragEnd={handleDragEnd}>
@@ -780,7 +783,7 @@ export default function Timesheet() {
                   <div className={`flex items-center justify-between px-4 py-2.5 ${group.headerClass}`}>
                     <span className="font-bold text-sm">{group.icon} {group.name}</span>
                     <span className="text-xs font-medium opacity-90">
-                      {fmtHours(stats.totalHours)} / {stats.totalCost.toFixed(0)} kr / {stats.count} vakter
+                      {fmtHours(stats.totalHours)}{showWages ? ` / ${stats.totalCost.toFixed(0)} kr` : ''} / {stats.count} vakter
                     </span>
                   </div>
                   {/* Day columns table */}
@@ -1125,7 +1128,7 @@ export default function Timesheet() {
                       })}
                       <td className="px-4 py-3 max-md:px-0.5 max-md:py-1 text-center text-xs max-md:text-[10px] font-bold text-slate-900">{fmtHours(weekTotalHours)}</td>
                     </tr>
-                    <tr className="border-t border-slate-200 bg-slate-50">
+                    {showWages && <><tr className="border-t border-slate-200 bg-slate-50">
                       <td className={`px-4 py-3 max-md:px-1.5 max-md:py-1 sticky left-0 bg-blue-50 z-10 text-xs max-md:text-[10px] font-semibold text-slate-600 max-md:border-r max-md:border-slate-200 ${nameCellClass}`}>
                         <span className="max-md:block max-md:truncate">Kostnad (eks. skatt)</span>
                       </td>
@@ -1152,7 +1155,7 @@ export default function Timesheet() {
                         );
                       })}
                       <td className="px-4 py-3 max-md:px-0.5 max-md:py-1 text-center text-xs max-md:text-[10px] font-bold text-orange-800 max-md:whitespace-nowrap">{(weekTotalCost * (1 + PAYROLL_TAX)).toFixed(0)} kr</td>
-                    </tr>
+                    </tr></>}
                     {Object.keys(budgetByHourDay).length > 0 && (
                       <tr className="border-t border-slate-200 bg-white">
                         <td className={`px-4 py-3 max-md:px-1.5 max-md:py-1 sticky left-0 bg-blue-50 z-10 text-xs max-md:text-[10px] font-semibold text-slate-600 max-md:border-r max-md:border-slate-200 ${nameCellClass}`}>

@@ -14,7 +14,7 @@ const STATUS_MAP = {
   avvist: { label: 'Avvist', color: 'bg-red-100 text-red-700' },
 };
 
-export default function WorkerContractsTab({ worker }) {
+export default function WorkerContractsTab({ worker, showWages = false }) {
   const queryClient = useQueryClient();
   const [pdfLoading, setPdfLoading] = useState(null);
 
@@ -95,12 +95,12 @@ export default function WorkerContractsTab({ worker }) {
                       </p>
                       <div className="flex items-center gap-4 mt-1 text-sm text-slate-600">
                         <span>{contract.weekly_hours?.toFixed(1)}t/uke</span>
-                        <span>{contract.hourly_rate} kr/t</span>
+                        {showWages && <span>{contract.hourly_rate} kr/t</span>}
                       </div>
                       <p className="text-xs text-slate-500 mt-1">{contract.org_name}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Button
+                      {showWages && <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDownloadPdf(contract)}
@@ -113,7 +113,7 @@ export default function WorkerContractsTab({ worker }) {
                         ) : (
                           <Download className="w-4 h-4" />
                         )}
-                      </Button>
+                      </Button>}
                       <Button
                         variant="outline"
                         size="sm"
@@ -181,7 +181,7 @@ export default function WorkerContractsTab({ worker }) {
                       <Badge className={statusCfg.color}>{statusCfg.label}</Badge>
                     </div>
                   </div>
-                  <Button
+                  {showWages && <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDownloadPdf(contract)}
@@ -193,7 +193,7 @@ export default function WorkerContractsTab({ worker }) {
                     ) : (
                       <Download className="w-4 h-4" />
                     )}
-                  </Button>
+                  </Button>}
                 </div>
               );
             })}
