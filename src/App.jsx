@@ -25,6 +25,7 @@ import SuperAdminAuditLog from '@/pages/SuperAdminAuditLog';
 import Contracts from '@/pages/Contracts';
 import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
+import InstallPrompt from '@/components/InstallPrompt';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, needsNewPassword, passwordLinkError } = useAuth();
@@ -88,6 +89,7 @@ function App() {
           </Routes>
         </Router>
         <Toaster />
+        <InstallPrompt />
       </QueryClientProvider>
     </AuthProvider>
   )

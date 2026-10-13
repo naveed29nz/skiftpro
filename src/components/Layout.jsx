@@ -258,7 +258,7 @@ export default function Layout() {
           <button
             onClick={() => base44.auth.logout()}
             title="Logg ut"
-            className="md:hidden fixed top-2 right-16 w-10 h-10 flex items-center justify-center rounded-md bg-blue-950 touch-manipulation"
+            className="md:hidden fixed top-2 right-16 w-10 h-10 flex items-center justify-center rounded-md bg-blue-950 touch-manipulation pwa-safe-logout"
             style={{ zIndex: 9999 }}
           >
             <LogOut className="w-5 h-5 text-white" />
@@ -288,7 +288,7 @@ export default function Layout() {
 
       {/* Fixed hamburger button — always on top, never blocked */}
       <button
-        className="md:hidden fixed top-2 right-3 w-10 h-10 flex items-center justify-center rounded-md bg-blue-950 touch-manipulation"
+        className="md:hidden fixed top-2 right-3 w-10 h-10 flex items-center justify-center rounded-md bg-blue-950 touch-manipulation pwa-safe-menu"
         style={{zIndex: 9999}}
         onClick={() => setMobileOpen(v => !v)}
       >
@@ -299,7 +299,7 @@ export default function Layout() {
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMobileOpen(false)}>
           <div className="absolute inset-0 bg-black/30" />
-          <aside className="relative w-60 bg-white h-full shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
+          <aside className="relative w-60 bg-white h-full shadow-xl flex flex-col pwa-safe-menu-panel" onClick={e => e.stopPropagation()}>
             <div className="h-14 flex items-center justify-between px-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-blue-600" />
