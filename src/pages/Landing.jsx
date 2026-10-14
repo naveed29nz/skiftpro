@@ -78,8 +78,8 @@ const steps = [
 
 const faqs = [
   {
-    q: 'Er prisen på 2 498 kr bekreftet?',
-    a: 'Nei. Beløpet på denne siden er en placeholder og er merket IKKE BEKREFTET. Det er ikke en vedtatt pris, og du blir ikke fakturert det før prisen er avklart.',
+    q: 'Hvordan får jeg et tilbud?',
+    a: 'Send en melding til post@zastek.no, så får du et tilbud til butikkene dine. Du kan også opprette konto og prøve gratis i 30 dager.',
   },
   {
     q: 'Hvordan blir jeg kunde?',
@@ -183,7 +183,7 @@ export default function Landing() {
             <a href="#funksjoner" className="hover:underline">Funksjoner</a>
             <a href="#historien" className="hover:underline">Historien</a>
             <a href="#slik" className="hover:underline">Slik virker det</a>
-            <a href="#pris" className="hover:underline">Pris</a>
+            <a href="#tilbud" className="hover:underline">Tilbud</a>
             <a href="#faq" className="hover:underline">FAQ</a>
           </nav>
           <div className="flex items-center gap-2">
@@ -218,7 +218,7 @@ export default function Landing() {
                 ['#funksjoner', 'Funksjoner'],
                 ['#historien', 'Historien'],
                 ['#slik', 'Slik virker det'],
-                ['#pris', 'Pris'],
+                ['#tilbud', 'Tilbud'],
                 ['#faq', 'FAQ'],
                 ['#kontakt', 'Kontakt'],
               ].map(([href, label]) => (
@@ -254,7 +254,7 @@ export default function Landing() {
             </div>
             <ul className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm text-[#3f4a63]">
               <li>30 dager gratis</li>
-              <li>Pris per butikk</li>
+              <li>Tilbud på forespørsel</li>
               <li>Laget i Norge</li>
             </ul>
           </div>
@@ -342,31 +342,25 @@ export default function Landing() {
           </div>
         </section>
 
-        <section id="pris" className="scroll-mt-20 py-16 md:py-24" aria-labelledby="pris-tittel">
-          <div className="mx-auto max-w-xl px-4">
-            <h2 id="pris-tittel" className="font-serif text-3xl md:text-4xl">Pris</h2>
-            <p className="mt-3 text-[#3f4a63]">Foreløpig placeholder. Ikke en bekreftet pris.</p>
-            <div className="mt-8 overflow-hidden rounded-3xl border-4 border-amber-500 bg-white shadow-lg">
-              <p className="bg-amber-400 px-4 py-2 text-center text-sm font-bold tracking-wide text-amber-950">
-                IKKE BEKREFTET · placeholder
-              </p>
-              <div className="p-6 md:p-8">
-                <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">Eksempel, ikke vedtatt</p>
-                <p className="mt-3 font-serif text-5xl">2 498 kr</p>
-                <p className="text-[#3f4a63]">per butikk / mnd</p>
-                <p className="mt-6 rounded-2xl border-2 border-amber-500 bg-amber-50 px-4 py-3 text-base font-semibold text-amber-950">
-                  Pris: 2 498 kr per butikk/mnd – IKKE BEKREFTET
-                </p>
-                <p className="mt-4 text-sm leading-relaxed text-[#3f4a63]">
-                  Tallet er et stedfortreder. Det er ikke lagt inn som Stripe-pris, og det er ikke et tilbud du kan akseptere. Prøveperioden på 30 dager er det som gjelder når du oppretter konto.
-                </p>
-                <Link
-                  to={SIGNUP}
-                  className="mt-6 inline-flex rounded-full bg-[#172554] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0f1b40]"
-                >
-                  Bli kunde / Prøv gratis i 30 dager
-                </Link>
-              </div>
+        <section id="tilbud" className="scroll-mt-20 py-16 md:py-24" aria-labelledby="tilbud-tittel">
+          <div className="mx-auto max-w-3xl px-4 text-center">
+            <h2 id="tilbud-tittel" className="font-serif text-3xl md:text-4xl">Kontakt oss for tilbud / Prøv gratis</h2>
+            <p className="mx-auto mt-4 max-w-xl text-[#3f4a63]">
+              Fortell oss om butikkene, så sender vi et tilbud. Vil du i gang med en gang, oppretter du konto og prøver i 30 dager.
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <a
+                href="#kontakt"
+                className="inline-flex rounded-full bg-[#172554] px-6 py-3 text-sm font-semibold text-white hover:bg-[#0f1b40]"
+              >
+                Kontakt oss for tilbud
+              </a>
+              <Link
+                to={SIGNUP}
+                className="inline-flex rounded-full border border-[#172554] px-6 py-3 text-sm font-semibold hover:bg-white"
+              >
+                Prøv gratis
+              </Link>
             </div>
           </div>
         </section>
