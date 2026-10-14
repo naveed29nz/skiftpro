@@ -27,7 +27,7 @@ export default defineConfig({
       manifest: {
         name: 'SkiftPro',
         short_name: 'SkiftPro',
-        description: 'Vaktplan og timelister',
+        description: 'Vaktplan, stempling, dagsoppgjør og loddtelling for kiosk og convenience.',
         lang: 'nb',
         id: '/',
         start_url: '/',
