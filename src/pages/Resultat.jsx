@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Save, TrendingUp, TrendingDown } from 'lucide-react';
 import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
+import { canSeeWageCosts } from '@/utils/wageAccess';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 const PAYROLL_TAX = 0.141;
@@ -19,7 +20,7 @@ const EMPTY_FORM = {
   franchiseavgift: '', franchiseavgift_pct: '', driftskostnader: '', driftskostnader_pct: ''
 };
 
-function ResultatSheet({ teamKey, teamName, year, month, results, workers, shifts, holidays, wpSettings }) {
+function ResultatSheet({ teamKey, teamName, year, month, results, workers, shifts, holidays, wpSettings, showWages = false }) {
   const queryClient = useQueryClient();
   const wp = wpSettings[0];
 
@@ -66,7 +67,7 @@ function ResultatSheet({ teamKey, teamName, year, month, results, workers, shift
   const getFranchise = () => form.franchiseavgift_pct ? db1 * (parseFloat(form.franchiseavgift_pct) / 100) : parseFloat(form.franchiseavgift) || 0;
   const getDrift = () => form.driftskostnader_pct ? db1 * (parseFloat(form.driftskostnader_pct) / 100) : parseFloat(form.driftskostnader) || 0;
 
-  const totalKostnader = getSvinn() + getVareavskrivning() + getFranchise() + getDrift() + lonnskostnader;
+  const totalKostnader = getSvinn() + getVareavskrivning() + getFranchise() + getDrift() + (showWages ? lonnskostnader : 0);
   const resultat = db1 - totalKostnader;
 
   const saveMut = useMutation({
@@ -129,7 +130,7 @@ function ResultatSheet({ teamKey, teamName, year, month, results, workers, shift
         </div>
       ))}
 
-      {/* Lønnskostnader auto */}
+      {showWages && (
       <div className="px-6 py-3.5 border-b border-slate-200 bg-slate-50/60">
         <div className="grid grid-cols-[1fr_150px_100px_120px] gap-3 items-center">
           <div>
@@ -141,6 +142,7 @@ function ResultatSheet({ teamKey, teamName, year, month, results, workers, shift
           <span className="text-right text-sm text-red-600 font-medium">-{fmt(lonnskostnader)} kr</span>
         </div>
       </div>
+      )}
 
       {/* Sum */}
       <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
@@ -256,6 +258,7 @@ export default function Resultat() {
         shifts={shifts}
         holidays={holidays}
         wpSettings={wpSettings}
+        showWages={canSeeWageCosts(currentUser, myWorker)}
       />
     </div>
   );

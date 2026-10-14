@@ -11,6 +11,7 @@ import BulkAddWorkers from '@/components/workers/BulkAddWorkers';
 import { useOrg } from '@/hooks/useOrg';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import { releaseUpcomingShifts } from '@/utils/workerLifecycle';
+import { canSeeWageCosts } from '@/utils/wageAccess';
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', color: 'bg-purple-100 text-purple-700' },
@@ -46,7 +47,8 @@ function InviteButton({ worker }) {
 }
 
 export default function Workers() {
-  const { user, myTeams } = useCurrentWorker();
+  const { user, worker: me, myTeams } = useCurrentWorker();
+  const showWages = canSeeWageCosts(user, me);
   const { orgId, isSuperAdmin: superAdmin } = useOrg();
   const isAdmin = user?.role === 'admin';
   const [showForm, setShowForm] = useState(false);
@@ -218,10 +220,12 @@ export default function Workers() {
               </div>
 
               <div className="mt-4 space-y-1.5 text-sm text-slate-500">
+                {showWages && (
                 <div className="flex items-center justify-between">
                   <span>Hourly Rate</span>
                   <span className="font-semibold text-slate-800">{worker.hourly_rate?.toFixed(2)} kr</span>
                 </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span>Stillingsprosent</span>
                   <span className="font-semibold text-slate-800">{worker.employment_percentage ?? 100}%</span>
@@ -274,9 +278,11 @@ export default function Workers() {
             <Button onClick={() => setShowForm(true)} variant="outline" className="gap-2">
               <Plus className="w-4 h-4" /> Add your first worker
             </Button>
+            {showWages && (
             <Button onClick={() => setShowBulk(true)} variant="outline" className="gap-2">
               <Users className="w-4 h-4" /> Add Multiple
             </Button>
+            )}
           </div>
         </div>
       )}
@@ -300,6 +306,7 @@ export default function Workers() {
             onSubmit={handleSubmit}
             onCancel={() => { setShowForm(false); setEditing(null); }}
             teamNames={teamNames}
+            showWages={showWages}
           />
           </div>
         </DialogContent>

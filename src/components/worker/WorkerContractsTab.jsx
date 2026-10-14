@@ -178,6 +178,8 @@ export default function WorkerContractsTab({ worker }) {
                       <span>·</span>
                       <span>{contract.weekly_hours?.toFixed(1)}t</span>
                       <span>·</span>
+                      <span>{contract.hourly_rate} kr/t</span>
+                      <span>·</span>
                       <Badge className={statusCfg.color}>{statusCfg.label}</Badge>
                     </div>
                   </div>

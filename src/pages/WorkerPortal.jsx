@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom';
 import { Clock, CalendarDays, Coins, Users, ArrowLeftRight, LayoutDashboard, LogOut, CheckSquare, FileText, ArrowLeft } from 'lucide-react';
 import AvailabilityCalendar from '@/components/worker/AvailabilityCalendar';
 import { Button } from '@/components/ui/button';
-import { nb } from 'date-fns/locale';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import StampCard from '@/components/worker/StampCard';
@@ -105,9 +104,10 @@ export default function WorkerPortal() {
   const weekHours = weekShifts.reduce((sum, s) => sum + calcHours(s), 0);
   const teamKey = getWorkerTeamKey(worker);
   const monthPay = monthShifts.reduce((sum, s) => {
-    const shiftTeamKey = s.team || teamKey; // bruk den avdelingen vakten faktisk ligger i, slik at søndags-/helligdagstillegg slår riktig
+    const shiftTeamKey = s.team || teamKey;
     return sum + getShiftBreakdown(s, worker.hourly_rate || 0, shiftTeamKey, holidays, workplaceSetting, worker.disabled_extras || []).pay;
   }, 0);
+  const tabs = TABS;
 
   return (
     <div className="space-y-6">
@@ -150,7 +150,7 @@ export default function WorkerPortal() {
 
       {/* Tab navigation */}
       <div className="flex gap-2 overflow-x-auto">
-        {TABS.map(tab => {
+        {tabs.map(tab => {
           const Icon = tab.icon;
           return (
             <button
@@ -272,7 +272,7 @@ export default function WorkerPortal() {
                             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               {isToday && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">I dag</span>}
                               {shift.team && teamNames[shift.team] && <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">{teamNames[shift.team]}</span>}
-                              {holiday && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">🎉 {holiday.name} ×{holiday.pay_multiplier}</span>}
+                              {holiday && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">🎉 {holiday.name}{holiday.pay_multiplier != null ? ` ×${holiday.pay_multiplier}` : ''}</span>}
                               {isSunday && !holiday && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Søndag</span>}
                               {shift.notes && <span className="text-xs text-slate-400">{shift.notes}</span>}
                             </div>

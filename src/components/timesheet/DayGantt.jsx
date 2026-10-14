@@ -48,7 +48,7 @@ function assignLanes(shifts) {
   return { lanesByShift, maxLanes };
 }
 
-export default function DayGantt({ day, workers, shifts, availability, filterTeam = 'all', onEdit, onAdd }) {
+export default function DayGantt({ day, workers, shifts, availability, filterTeam = 'all', onEdit, onAdd, showWages = false }) {
   const dayStr = format(day, 'yyyy-MM-dd');
   const workersById = useMemo(() => {
     const m = new Map();
@@ -132,7 +132,7 @@ export default function DayGantt({ day, workers, shifts, availability, filterTea
                   <div className={`inline-flex items-center gap-1.5 self-start px-2 py-0.5 rounded text-xs font-semibold ${row.headerClass}`}>{row.name}</div>
                   <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">
                     <span className="font-medium text-slate-600">{fmtHours(st.hours)}</span>
-                    <span>{st.cost.toFixed(0)} kr</span>
+                    {showWages && <span>{st.cost.toFixed(0)} kr</span>}
                     <span>{st.count} vakt{st.count !== 1 ? 'er' : ''}</span>
                   </div>
                 </div>

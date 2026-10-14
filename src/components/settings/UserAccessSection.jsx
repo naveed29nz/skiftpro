@@ -6,7 +6,7 @@ import { Shield } from 'lucide-react';
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', desc: 'Full tilgang til alt' },
-  { value: 'butikksjef', label: 'Butikksjef', desc: 'Timesheet, ansatte og lønn for eget team' },
+  { value: 'butikksjef', label: 'Butikksjef', desc: 'Vaktliste og innstillinger for eget team' },
   { value: 'user', label: 'Ansatt', desc: 'Kun Min Portal' },
 ];
 

@@ -25,6 +25,7 @@ import SuperAdminAuditLog from '@/pages/SuperAdminAuditLog';
 import Contracts from '@/pages/Contracts';
 import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
+import InstallPrompt from '@/components/InstallPrompt';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, needsNewPassword, passwordLinkError } = useAuth();
@@ -86,6 +87,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/*" element={<AuthenticatedApp />} />
           </Routes>
+          <InstallPrompt />
         </Router>
         <Toaster />
       </QueryClientProvider>
