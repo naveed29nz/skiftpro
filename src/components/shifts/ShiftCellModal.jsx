@@ -6,7 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, Plus, Copy, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
+import { nb } from 'date-fns/locale';
 import { base44 } from '@/api/base44Client';
+import { flushNotifications } from '@/utils/notify';
 
 const LABEL_STYLES = {
   morning: 'bg-amber-100 text-amber-700 border border-amber-200',
@@ -16,11 +18,11 @@ const LABEL_STYLES = {
 };
 
 const LABEL_OPTIONS = [
-  { value: 'none', label: 'No label' },
-  { value: 'morning', label: '🌅 Morning' },
-  { value: 'middle', label: '☀️ Middle' },
-  { value: 'evening', label: '🌙 Evening' },
-  { value: 'sick', label: '🤒 Sick' },
+  { value: 'none', label: 'Ingen merking' },
+  { value: 'morning', label: '🌅 Morgen' },
+  { value: 'middle', label: '☀️ Midt på dagen' },
+  { value: 'evening', label: '🌙 Kveld' },
+  { value: 'sick', label: '🤒 Syk' },
 ];
 
 const emptyShift = { worker_id: '', start_time: '08:00', end_time: '16:00', break_minutes: 30, notes: '', shift_label: 'none', team: '' };
@@ -36,9 +38,9 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
     <div className="space-y-2">
       {workers.length > 1 && (
         <div>
-          <Label className="text-xs">Worker</Label>
+          <Label className="text-xs">Ansatt</Label>
           <Select value={selectedWorkerId} onValueChange={v => setData(d => ({ ...d, worker_id: v, team: '' }))}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select worker" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Velg ansatt" /></SelectTrigger>
             <SelectContent>
               {workers.map(wk => <SelectItem key={wk.id} value={wk.id}>{wk.name}</SelectItem>)}
             </SelectContent>
@@ -69,7 +71,7 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
           />
         </div>
         <div>
-          <Label className="text-xs">End</Label>
+          <Label className="text-xs">Slutt</Label>
           <Input
             type="time"
             value={data.end_time}
@@ -80,16 +82,16 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <Label className="text-xs">Label</Label>
+          <Label className="text-xs">Merking</Label>
           <Select value={data.shift_label || 'none'} onValueChange={v => setData(d => ({ ...d, shift_label: v }))}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="No label" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Ingen merking" /></SelectTrigger>
             <SelectContent>
               {LABEL_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label className="text-xs">Break (min)</Label>
+          <Label className="text-xs">Pause (min)</Label>
           <Input
             type="number"
             value={data.break_minutes}
@@ -99,7 +101,7 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
         </div>
       </div>
       <div>
-        <Label className="text-xs">Notes</Label>
+        <Label className="text-xs">Notat</Label>
         <Input
           value={data.notes}
           onChange={e => setData(d => ({ ...d, notes: e.target.value }))}
@@ -108,7 +110,7 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
       </div>
       <div className="flex gap-2">
         <Button size="sm" className="h-7 text-xs flex-1" onClick={onSave} disabled={loading}>{saveLabel}</Button>
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCancel}>Cancel</Button>
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCancel}>Avbryt</Button>
       </div>
     </div>
   );
@@ -116,7 +118,7 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
 
 export default function ShiftCellModal({ worker, day, shifts, workers = [], onClose, onRefresh, currentTeam, teamNames = {}, defaultShiftLabel }) {
   const dayStr = format(day, 'yyyy-MM-dd');
-  const dayLabel = format(day, 'EEEE, MMM d');
+  const dayLabel = format(day, 'EEEE d. MMM', { locale: nb });
 
   const defaultTeam = currentTeam && currentTeam !== 'all' ? currentTeam : (worker.teams?.[0] || '');
 
@@ -156,6 +158,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
     resetNewShift();
     setLoading(false);
     onRefresh();
+    flushNotifications();
   };
 
   const resetNewShift = () => setNewShift({ ...emptyShift, worker_id: worker.id, team: defaultTeam, shift_label: defaultShiftLabel || emptyShift.shift_label });
@@ -176,6 +179,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
     setEditingId(null);
     setLoading(false);
     onRefresh();
+    flushNotifications();
   };
 
   const handleDelete = async (shiftId) => {
@@ -183,6 +187,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
     await base44.entities.Shift.delete(shiftId);
     setLoading(false);
     onRefresh();
+    flushNotifications();
   };
 
   const handleCopy = async (shift) => {
@@ -202,6 +207,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
     });
     setLoading(false);
     onRefresh();
+    flushNotifications();
   };
 
   const startEdit = (shift) => {
@@ -236,7 +242,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
 
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {shifts.length === 0 && !adding && (
-            <p className="text-sm text-slate-400 text-center py-3">No shifts this day</p>
+            <p className="text-sm text-slate-400 text-center py-3">Ingen vakter denne dagen</p>
           )}
 
           {shifts.map(shift => (
@@ -247,7 +253,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                   setData={setEditData}
                   onSave={() => handleEdit(shift.id)}
                   onCancel={() => setEditingId(null)}
-                  saveLabel="Save"
+                  saveLabel="Lagre"
                   loading={loading}
                   workers={workers}
                   worker={worker}
@@ -291,7 +297,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                       onClick={() => handleCopy(shift)}
                       disabled={loading}
                     >
-                      <Copy className="w-3 h-3" /> Copy
+                      <Copy className="w-3 h-3" /> Kopier
                     </Button>
                     <Button
                       variant="ghost" size="sm"
@@ -299,7 +305,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                       onClick={() => handleDelete(shift.id)}
                       disabled={loading}
                     >
-                      <Trash2 className="w-3 h-3" /> Delete
+                      <Trash2 className="w-3 h-3" /> Slett
                     </Button>
                   </div>
                 </div>
@@ -314,7 +320,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                 setData={setNewShift}
                 onSave={handleAdd}
                 onCancel={() => setAdding(false)}
-                saveLabel="Add Shift"
+                saveLabel="Legg til vakt"
                 loading={loading}
                 workers={workers}
                 worker={worker}
@@ -326,7 +332,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
 
         {!adding && (
           <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs" onClick={() => { setAdding(true); setEditingId(null); }}>
-            <Plus className="w-3.5 h-3.5" /> Add Shift
+            <Plus className="w-3.5 h-3.5" /> Legg til vakt
           </Button>
         )}
       </DialogContent>

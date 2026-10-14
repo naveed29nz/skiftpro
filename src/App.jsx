@@ -26,6 +26,10 @@ import Contracts from '@/pages/Contracts';
 import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
 import InstallPrompt from '@/components/InstallPrompt';
+import Personvern from '@/pages/Personvern';
+import Vilkar from '@/pages/Vilkar';
+import Databehandleravtale from '@/pages/Databehandleravtale';
+import Resultat from '@/pages/Resultat';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, needsNewPassword, passwordLinkError } = useAuth();
@@ -71,6 +75,7 @@ const AuthenticatedApp = () => {
         <Route path="/SuperAdmin/Billing" element={<SuperAdminBilling />} />
         <Route path="/SuperAdmin/AuditLog" element={<SuperAdminAuditLog />} />
         <Route path="/Contracts" element={<Contracts />} />
+        <Route path="/Resultat" element={<Resultat />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
@@ -85,6 +90,9 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/personvern" element={<Personvern />} />
+            <Route path="/vilkar" element={<Vilkar />} />
+            <Route path="/databehandleravtale" element={<Databehandleravtale />} />
             <Route path="/*" element={<AuthenticatedApp />} />
           </Routes>
           <InstallPrompt />

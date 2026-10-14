@@ -17,6 +17,8 @@ export const ENTITY_TABLES = {
   RecurringTask: 'recurring_tasks',
   Holiday: 'holidays',
   Stamp: 'stamps',
+  StampCorrection: 'stamp_corrections',
+  PushSubscription: 'push_subscriptions',
   ShiftSwap: 'shift_swaps',
   Dagsoppgjor: 'dagsoppgjor',
   Loddtelling: 'loddtelling',
@@ -60,9 +62,9 @@ function apiError(message, status = 400) {
 }
 
 function toError(error, status = 400) {
-  if (!error) return apiError('Request failed', status);
+  if (!error) return apiError('Forespørselen feilet', status);
   if (error instanceof Error && error.status) return error;
-  const err = apiError(error.message || 'Request failed', error.code === 'PGRST116' ? 404 : status);
+  const err = apiError(error.message || 'Forespørselen feilet', error.code === 'PGRST116' ? 404 : status);
   err.details = error;
   return err;
 }
@@ -429,7 +431,7 @@ export const base44 = {
     },
     redirectToLogin(nextUrl) {
       if (typeof window === 'undefined') {
-        throw new Error('Login method can only be used in a browser environment');
+        throw new Error('Innlogging kan bare brukes i nettleseren');
       }
       const from = nextUrl || window.location.href;
       const url = new URL('/login', window.location.origin);
@@ -450,7 +452,7 @@ export const base44 = {
       const { data, error } = await supabase.functions.invoke('invite-user', {
         body: { email, role },
       });
-      if (error) throw toError({ message: error.message || 'Invite failed' }, 400);
+      if (error) throw toError({ message: error.message || 'Invitasjonen feilet' }, 400);
       if (data?.error) throw apiError(data.error, 400);
       return data;
     },
@@ -458,12 +460,12 @@ export const base44 = {
   functions: {
     async invoke(functionName, payload) {
       if (typeof payload === 'string') {
-        throw apiError(`Function ${functionName} must receive an object`);
+        throw apiError(`Funksjonen ${functionName} må få et objekt`);
       }
       const name = FUNCTION_NAMES[functionName] || functionName;
       const { data, error } = await supabase.functions.invoke(name, { body: payload ?? {} });
       if (error) {
-        const err = apiError(error.message || `Function ${functionName} failed`, 500);
+        const err = apiError(error.message || `Funksjonen ${functionName} feilet`, 500);
         if (error.context && typeof error.context.status === 'number') {
           err.status = error.context.status;
         }
@@ -475,7 +477,7 @@ export const base44 = {
   integrations: {
     Core: {
       async UploadFile({ file }) {
-        if (!file) throw apiError('Missing file');
+        if (!file) throw apiError('Filen mangler');
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError || !userData?.user) throw apiError('Authentication required', 401);
         const safeName = String(file.name || 'upload').replace(/[^\w.\-]+/g, '_');

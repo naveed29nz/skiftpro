@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import StampCard from '@/components/worker/StampCard';
+import StampCorrections from '@/components/worker/StampCorrections';
+import PushOptIn from '@/components/PushOptIn';
 import WeekSummary from '@/components/worker/WeekSummary';
 import ColleaguesToday from '@/components/worker/ColleaguesToday';
 import TeamSchedule from '@/components/worker/TeamSchedule';
@@ -216,6 +218,10 @@ export default function WorkerPortal() {
               onStampChange={setTodayStamp}
             />
             <WeekSummary allShifts={myShifts} today={today} />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <StampCorrections worker={worker} user={currentUser} />
+            <PushOptIn userId={currentUser?.id} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

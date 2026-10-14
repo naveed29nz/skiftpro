@@ -25,7 +25,7 @@ export default function OAuthConsent() {
       let redirecting = false;
       try {
         if (!ctx) {
-          setError("This authorization link is invalid or has expired.");
+          setError("Lenken er ugyldig eller utløpt.");
           return;
         }
         // Resolve the handle first: a dead handle must never render
@@ -41,7 +41,7 @@ export default function OAuthConsent() {
           { credentials: "include", headers: infoHeaders },
         );
         if (!res.ok) {
-          setError("This authorization link is invalid or has expired.");
+          setError("Lenken er ugyldig eller utløpt.");
           return;
         }
         const data = await res.json();
@@ -72,7 +72,7 @@ export default function OAuthConsent() {
         }
         setInfo(data);
       } catch (e) {
-        setError("Could not load this authorization request. Please try again.");
+        setError("Kunne ikke hente forespørselen. Prøv igjen.");
       } finally {
         if (!redirecting) setChecking(false);
       }
@@ -113,11 +113,11 @@ export default function OAuthConsent() {
         if ([400, 403, 404, 409].includes(res.status)) {
           let detail = "";
           try { detail = (await res.json()).detail; } catch (_) { /* keep default */ }
-          setReconnect(detail || "This authorization can no longer be completed. Reconnect from your AI client to try again.");
+          setReconnect(detail || "Godkjenningen kan ikke fullføres. Koble til på nytt fra klienten.");
           setSubmitting(false);
           return;
         }
-        throw new Error("Could not complete authorization. Please try again.");
+        throw new Error("Kunne ikke fullføre godkjenningen. Prøv igjen.");
       }
       const data = await res.json();
       window.location.href = data.redirect_url;
@@ -136,24 +136,24 @@ export default function OAuthConsent() {
 
   if (checking) {
     return (
-      <AuthLayout icon={ShieldCheck} title="Authorize access">
+      <AuthLayout icon={ShieldCheck} title="Gi tilgang">
         <div className="flex items-center justify-center py-6 text-muted-foreground">
           <Loader2 className="w-5 h-5 mr-2 animate-spin" aria-hidden="true" />
-          Loading…
+          Laster…
         </div>
       </AuthLayout>
     );
   }
 
-  const client = (info && info.client_name) || "An AI client";
-  const appName = (info && info.app_name) || "this app";
+  const client = (info && info.client_name) || "en klient";
+  const appName = (info && info.app_name) || "denne appen";
 
   if (decided) {
     return (
       <AuthLayout
         icon={ShieldCheck}
-        title={decided === "approve" ? "Access granted" : "Access denied"}
-        subtitle={`You can return to ${client} and close this window.`}
+        title={decided === "approve" ? "Tilgang gitt" : "Tilgang avslått"}
+        subtitle={`Du kan gå tilbake til ${client} og lukke vinduet.`}
       />
     );
   }
@@ -163,7 +163,7 @@ export default function OAuthConsent() {
   // no approve/deny controls.
   if (reconnect) {
     return (
-      <AuthLayout icon={ShieldCheck} title="Reconnect required">
+      <AuthLayout icon={ShieldCheck} title="Koble til på nytt">
         <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
           {reconnect}
         </div>
@@ -176,7 +176,7 @@ export default function OAuthConsent() {
   // the error alone, never the approve/deny controls.
   if (error && !info) {
     return (
-      <AuthLayout icon={ShieldCheck} title="Authorize access">
+      <AuthLayout icon={ShieldCheck} title="Gi tilgang">
         <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
           {error}
         </div>
@@ -189,8 +189,8 @@ export default function OAuthConsent() {
   return (
     <AuthLayout
       icon={ShieldCheck}
-      title="Authorize access"
-      subtitle={`${client} wants to access ${appName} on your behalf`}
+      title="Gi tilgang"
+      subtitle={`${client} ber om tilgang til ${appName} på dine vegne`}
     >
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
@@ -199,7 +199,7 @@ export default function OAuthConsent() {
       )}
 
       <p className="text-sm font-medium text-foreground mb-2">
-        {tools.length ? `It will be able to use these tools in ${appName}:` : "No tools requested"}
+        {tools.length ? `Den kan bruke disse verktøyene i ${appName}:` : "Ingen verktøy er forespurt"}
       </p>
       {tools.length > 0 && (
         <ul className="space-y-2 text-sm mb-6">
@@ -223,7 +223,7 @@ export default function OAuthConsent() {
           disabled={submitting}
           onClick={() => respond("deny")}
         >
-          Deny
+          Avslå
         </Button>
         <Button
           className="flex-1 h-12 font-medium"
@@ -231,7 +231,7 @@ export default function OAuthConsent() {
           onClick={() => respond("approve")}
         >
           {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-          Approve
+          Godkjenn
         </Button>
       </div>
     </AuthLayout>

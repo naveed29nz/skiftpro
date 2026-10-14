@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
-import { ArrowLeftRight, CheckCircle, XCircle, Clock, Plus } from 'lucide-react';
+import { flushNotifications } from '@/utils/notify';
 
 const STATUS_LABELS = {
   pending: { label: 'Venter', color: 'bg-yellow-100 text-yellow-700' },
@@ -27,7 +27,10 @@ export default function ShiftSwapPanel({ worker, myShifts, workers, isAdmin, all
     queryFn: () => base44.entities.ShiftSwap.list('-created_date', 100),
   });
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['shift-swaps'] });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['shift-swaps'] });
+    flushNotifications();
+  };
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const myUpcoming = myShifts.filter(s => s.date >= today && s.status !== 'cancelled');

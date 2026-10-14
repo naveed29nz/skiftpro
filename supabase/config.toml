@@ -35,3 +35,24 @@ verify_jwt = true
 
 [functions.invite-user]
 verify_jwt = true
+
+[functions.stripe-checkout]
+verify_jwt = true
+
+[functions.stripe-portal]
+verify_jwt = true
+
+[functions.stripe-config]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.dispatch-notifications]
+verify_jwt = true
+
+[functions.clock-in-reminders]
+verify_jwt = true
+
+[functions.purge-stamp-locations]
+verify_jwt = false

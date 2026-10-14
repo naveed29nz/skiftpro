@@ -5,7 +5,9 @@ import ResetPassword from '@/pages/ResetPassword';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Link } from 'react-router-dom';
 import { Clock } from 'lucide-react';
+import LegalFooter from '@/components/LegalFooter';
 
 function safeNextPath(raw) {
   if (!raw) return '/Dashboard';
@@ -26,6 +28,8 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState('password');
+  const [fullName, setFullName] = useState('');
+  const [consent, setConsent] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
@@ -43,6 +47,40 @@ export default function Login() {
   }, [nextPath, needsNewPassword, passwordLinkError]);
 
   if (needsNewPassword || passwordLinkError) return <ResetPassword />;
+
+  const handleSignup = async (event) => {
+    event.preventDefault();
+    if (!consent) {
+      setError('Du må godta vilkårene og personvernerklæringen.');
+      return;
+    }
+    setPending(true);
+    setError('');
+    setMessage('');
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          signup: 'self_serve',
+          terms_accepted: 'true',
+          full_name: fullName,
+          role: 'user',
+        },
+        emailRedirectTo: `${window.location.origin}/login`,
+      },
+    });
+    setPending(false);
+    if (signUpError) {
+      setError(signUpError.message);
+      return;
+    }
+    if (data.session) {
+      window.location.assign('/Dashboard');
+      return;
+    }
+    setMessage('Kontoen er opprettet. Bekreft e-posten hvis du får en melding, og logg deretter inn for å opprette organisasjonen.');
+  };
 
   const handlePassword = async (event) => {
     event.preventDefault();
@@ -84,7 +122,13 @@ export default function Login() {
           <p className="text-slate-500 text-sm mt-1">Logg inn for å åpne vaktplanen.</p>
         </div>
 
-        <form onSubmit={mode === 'reset' ? handleReset : handlePassword} className="space-y-4">
+        <form onSubmit={mode === 'reset' ? handleReset : mode === 'signup' ? handleSignup : handlePassword} className="space-y-4">
+          {mode === 'signup' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="name">Navn</Label>
+              <Input id="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="email">E-post</Label>
             <Input
@@ -96,7 +140,7 @@ export default function Login() {
               required
             />
           </div>
-          {mode === 'password' && (
+          {mode !== 'reset' && (
             <div className="space-y-1.5">
               <Label htmlFor="password">Passord</Label>
               <Input
@@ -109,10 +153,18 @@ export default function Login() {
               />
             </div>
           )}
+          {mode === 'signup' && (
+            <label className="flex items-start gap-2 text-xs text-slate-600">
+              <input type="checkbox" className="mt-0.5" checked={consent} onChange={(event) => setConsent(event.target.checked)} required />
+              <span>
+                Jeg godtar <Link to="/vilkar" className="underline">vilkårene</Link>, <Link to="/personvern" className="underline">personvernerklæringen</Link> og <Link to="/databehandleravtale" className="underline">databehandleravtalen</Link>. Tekstene er utkast og skal gjennomgås juridisk.
+              </span>
+            </label>
+          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
           {message && <p className="text-sm text-emerald-700">{message}</p>}
           <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? 'Vennligst vent…' : mode === 'reset' ? 'Send lenke' : 'Logg inn'}
+            {pending ? 'Vennligst vent…' : mode === 'reset' ? 'Send lenke' : mode === 'signup' ? 'Opprett konto' : 'Logg inn'}
           </Button>
         </form>
 
@@ -127,6 +179,17 @@ export default function Login() {
         >
           {mode === 'reset' ? 'Tilbake til innlogging' : 'Glemt passord?'}
         </button>
+        {mode !== 'signup' && (
+          <button type="button" className="mt-2 text-sm text-blue-700 hover:underline" onClick={() => { setMode('signup'); setError(''); setMessage(''); }}>
+            Opprett konto
+          </button>
+        )}
+        {mode === 'signup' && (
+          <button type="button" className="mt-2 text-sm text-blue-700 hover:underline" onClick={() => { setMode('password'); setError(''); setMessage(''); }}>
+            Har du allerede konto? Logg inn
+          </button>
+        )}
+        <LegalFooter className="mt-6 justify-center" />
       </div>
     </div>
   );

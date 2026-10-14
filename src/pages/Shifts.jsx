@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import ShiftForm from '@/components/shifts/ShiftForm';
 import { format } from 'date-fns';
+import { nb } from 'date-fns/locale';
+import { flushNotifications } from '@/utils/notify';
 
 function calcHours(shift) {
   const [sh, sm] = shift.start_time.split(':').map(Number);
@@ -33,12 +35,12 @@ export default function Shifts() {
 
   const createMut = useMutation({
     mutationFn: d => base44.entities.Shift.create(d),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shifts'] }); setShowForm(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shifts'] }); setShowForm(false); flushNotifications(); },
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Shift.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shifts'] }); setEditing(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shifts'] }); setEditing(null); flushNotifications(); },
   });
 
   const deleteMut = useMutation({
@@ -59,32 +61,32 @@ export default function Shifts() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between gap-3 items-start sm:items-center">
         <Select value={filterWorker} onValueChange={setFilterWorker}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="All workers" /></SelectTrigger>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Alle ansatte" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Workers</SelectItem>
+            <SelectItem value="all">Alle ansatte</SelectItem>
             {workers.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Button onClick={() => setShowForm(true)} className="gap-2">
-          <Plus className="w-4 h-4" /> Add Shift
+          <Plus className="w-4 h-4" /> Legg til vakt
         </Button>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {filtered.length === 0 ? (
-          <div className="px-5 py-16 text-center text-sm text-slate-400">No shifts found</div>
+          <div className="px-5 py-16 text-center text-sm text-slate-400">Ingen vakter</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                  <th className="px-5 py-3 text-left font-medium">Worker</th>
-                  <th className="px-5 py-3 text-left font-medium">Date</th>
-                  <th className="px-5 py-3 text-left font-medium">Time</th>
-                  <th className="px-5 py-3 text-left font-medium">Break</th>
-                  <th className="px-5 py-3 text-left font-medium">Hours</th>
+                  <th className="px-5 py-3 text-left font-medium">Ansatt</th>
+                  <th className="px-5 py-3 text-left font-medium">Dato</th>
+                  <th className="px-5 py-3 text-left font-medium">Tid</th>
+                  <th className="px-5 py-3 text-left font-medium">Pause</th>
+                  <th className="px-5 py-3 text-left font-medium">Timer</th>
                   <th className="px-5 py-3 text-left font-medium">Status</th>
-                  <th className="px-5 py-3 text-right font-medium">Actions</th>
+                  <th className="px-5 py-3 text-right font-medium">Handlinger</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -101,7 +103,7 @@ export default function Shifts() {
                           <span className="font-medium text-slate-800">{shift.worker_name}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-slate-600">{shift.date ? format(new Date(shift.date + 'T00:00:00'), 'MMM d, yyyy') : ''}</td>
+                      <td className="px-5 py-3 text-slate-600">{shift.date ? format(new Date(shift.date + 'T00:00:00'), 'd. MMM yyyy', { locale: nb }) : ''}</td>
                       <td className="px-5 py-3 text-slate-600">{shift.start_time} – {shift.end_time}</td>
                       <td className="px-5 py-3 text-slate-500">{shift.break_minutes || 0}m</td>
                       <td className="px-5 py-3 font-medium text-slate-700">{calcHours(shift).toFixed(1)}h</td>
@@ -111,7 +113,7 @@ export default function Shifts() {
                           shift.status === 'cancelled' ? 'bg-red-50 text-red-700' :
                           'bg-blue-50 text-blue-700'
                         }`}>
-                          {shift.status}
+                          {shift.status === 'completed' ? 'Fullført' : shift.status === 'cancelled' ? 'Avlyst' : 'Planlagt'}
                         </span>
                       </td>
                       <td className="px-5 py-3 text-right">
@@ -119,7 +121,7 @@ export default function Shifts() {
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditing(shift)}>
                             <Pencil className="w-3.5 h-3.5 text-slate-400" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (confirm('Delete shift?')) deleteMut.mutate(shift.id); }}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { if (confirm('Slette vakten?')) deleteMut.mutate(shift.id); }}>
                             <Trash2 className="w-3.5 h-3.5 text-red-400" />
                           </Button>
                         </div>
@@ -136,7 +138,7 @@ export default function Shifts() {
       <Dialog open={showForm || !!editing} onOpenChange={v => { if (!v) { setShowForm(false); setEditing(null); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Shift' : 'Add Shift'}</DialogTitle>
+            <DialogTitle>{editing ? 'Rediger vakt' : 'Ny vakt'}</DialogTitle>
           </DialogHeader>
           <ShiftForm
             shift={editing}

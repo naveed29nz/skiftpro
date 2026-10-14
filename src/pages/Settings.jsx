@@ -9,12 +9,13 @@ import { MapPin, Navigation, Save, Users, Lock, Plus, Trash2 } from 'lucide-reac
 import { useOrg } from '@/hooks/useOrg';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { canSeeWageCosts } from '@/utils/wageAccess';
+import BillingCard from '@/components/BillingCard';
 
 const PLAN_DEPT_LIMITS = { basic: 1, pro: 3, enterprise: 6, ultimate: 10 };
 
 const generateDefaults = () => {
   const d = {
-    workplace_name: 'Main Workplace', latitude: '', longitude: '', radius_meters: 100,
+    workplace_name: 'Hovedarbeidssted', latitude: '', longitude: '', radius_meters: 100,
     full_time_hours_per_week: 37.5,
     active_teams_count: 1,
   };
@@ -434,6 +435,7 @@ export default function Settings() {
         </Button>
         {saveMut.isSuccess && <p className="text-sm text-emerald-600 text-center">Innstillinger lagret!</p>}
       </form>
+      {showWages && <BillingCard orgId={orgId} />}
     </div>
   );
 }
