@@ -41,17 +41,17 @@ export default function BulkAddWorkers({ onClose, onSave, teamNames = { team1: '
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-600" />
-            Add Multiple Workers
+            Legg til flere ansatte
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
           {/* Header row */}
           <div className="grid grid-cols-[1fr_1fr_100px_auto_32px] gap-2 text-xs font-medium text-slate-500 px-1">
-            <span>Name *</span>
-            <span>Position</span>
-            <span>Hourly Rate *</span>
-            <span>Teams</span>
+            <span>Navn *</span>
+            <span>Stilling</span>
+            <span>Timelønn *</span>
+            <span>Avdelinger</span>
             <span></span>
           </div>
 
@@ -60,7 +60,7 @@ export default function BulkAddWorkers({ onClose, onSave, teamNames = { team1: '
               <Input
                 value={row.name}
                 onChange={e => update(i, 'name', e.target.value)}
-                placeholder="Full name"
+                placeholder="Fullt navn"
                 className="h-8 text-sm bg-white"
               />
               <Input
@@ -97,16 +97,16 @@ export default function BulkAddWorkers({ onClose, onSave, teamNames = { team1: '
           ))}
 
           <Button variant="outline" size="sm" className="w-full gap-2 border-dashed" onClick={addRow}>
-            <Plus className="w-3.5 h-3.5" /> Add Row
+            <Plus className="w-3.5 h-3.5" /> Ny rad
           </Button>
         </div>
 
         <div className="flex justify-between items-center pt-2">
-          <span className="text-sm text-slate-400">{validCount} worker{validCount !== 1 ? 's' : ''} ready to save</span>
+          <span className="text-sm text-slate-400">{validCount} ansatt{validCount !== 1 ? 'e' : ''} klar til lagring</span>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" onClick={onClose}>Avbryt</Button>
             <Button onClick={handleSave} disabled={loading || validCount === 0}>
-              {loading ? 'Saving...' : `Save ${validCount} Worker${validCount !== 1 ? 's' : ''}`}
+              {loading ? 'Lagrer…' : `Lagre ${validCount} ansatt${validCount !== 1 ? 'e' : ''}`}
             </Button>
           </div>
         </div>

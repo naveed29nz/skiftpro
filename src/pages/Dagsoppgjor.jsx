@@ -8,6 +8,7 @@ import { Plus, Download, Search, AlertTriangle, CheckCircle2, ChevronDown, Chevr
 import SeddelSkjema from '@/components/dagsoppgjor/SeddelSkjema';
 import { useOrg } from '@/hooks/useOrg';
 import { useScopedWorkplaceSetting } from '@/hooks/useScopedWorkplaceSetting';
+import { effectiveAppRole } from '@/utils/wageAccess';
 
 const STATUS_COLORS = {
   Registrert: 'bg-slate-100 text-slate-700',
@@ -84,6 +85,8 @@ export default function Dagsoppgjor() {
   }, []);
 
   const isAdmin = currentUser?.role === 'admin';
+  const appRole = effectiveAppRole(currentUser, myWorker);
+  const canEditLocked = appRole === 'admin' || appRole === 'sub_admin';
   const isController = myWorker?.role === 'sub_admin' || myWorker?.role === 'butikksjef' || isAdmin;
 
   const { data: records = [] } = useQuery({
@@ -140,6 +143,7 @@ export default function Dagsoppgjor() {
         month: getMonth(new Date(data.dato)) + 1,
         year: getYear(new Date(data.dato)),
         org_id: orgId || '',
+        team: data.butikk && /^team([1-9]|10)$/.test(data.butikk) ? data.butikk : (myTeam || data.butikk),
         ...calc,
         updated_by: currentUser?.email || '',
       };
@@ -173,6 +177,10 @@ export default function Dagsoppgjor() {
   const handleSubmit = () => { if (validate()) saveMut.mutate(form); };
 
   const startEdit = (r) => {
+    if ((r.locked || r.status !== 'Registrert') && !canEditLocked) {
+      alert('Innsendt dagsoppgjør er låst. Bare administrator kan endre det.');
+      return;
+    }
     setEditId(r.id);
     setForm({
       butikk: r.butikk, butikk_nr: r.butikk_nr || '', dato: r.dato,
@@ -416,7 +424,9 @@ export default function Dagsoppgjor() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
-                      <button onClick={() => startEdit(r)} className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50">Rediger</button>
+                      <button onClick={() => startEdit(r)} className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50">
+                        {(r.locked || r.status !== 'Registrert') && !canEditLocked ? 'Låst' : 'Rediger'}
+                      </button>
                       {isAdmin && (
                         <button onClick={() => { if (window.confirm('Slett denne?')) deleteMut.mutate(r.id); }} className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50">Slett</button>
                       )}

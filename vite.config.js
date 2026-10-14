@@ -47,6 +47,7 @@ export default defineConfig({
         navigateFallbackDenylist: [
           /^\/manifest\.webmanifest$/,
           /^\/sw\.js$/,
+          /^\/push-handler\.js$/,
           /^\/workbox-/,
           /^\/registerSW\.js$/,
           /\/auth\/v1\//,
@@ -56,6 +57,7 @@ export default defineConfig({
           /\/realtime\/v1\//,
         ],
         runtimeCaching: supabaseNetworkOnly,
+        importScripts: ['/push-handler.js'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
     }),

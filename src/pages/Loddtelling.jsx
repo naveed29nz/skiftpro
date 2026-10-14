@@ -228,9 +228,10 @@ export default function Loddtelling() {
     setLocalData(prev => ({ ...prev, [loddtype]: { ...prev[loddtype], [field]: val } }));
   };
 
-  const saveAll = async () => {
+  const saveAll = async (nextStatus) => {
     if (!butikk) return alert('Velg butikk først');
     setSaving(true);
+    try {
     for (const lt of [...FIXED_LODDTYPER, ...CUSTOM_KEYS]) {
       const r = localData[lt];
       if (!r) continue;
@@ -241,13 +242,14 @@ export default function Loddtelling() {
       const { forventet } = calcForventet(r);
       const slutt = r.slutt_fysisk !== '' ? parseFloat(r.slutt_fysisk) || 0 : null;
       const payload = {
-        butikk, uke_nummer: weekNum, year, loddtype: lt,
+        butikk, team: butikk, uke_nummer: weekNum, year, loddtype: lt,
         org_id: orgId || '',
         ...(CUSTOM_KEYS.includes(lt) ? { loddtype_label: customNames[lt] || '' } : {}),
         slutt_fysisk: slutt ?? 0,
         differanse: slutt !== null ? slutt - forventet : 0,
         kommentar: r.kommentar || '',
         updated_by: currentUser?.email || '',
+        ...(nextStatus === 'innsendt' ? { status: 'innsendt', locked: true } : {}),
       };
       DAYS.forEach(d => {
         ['_inng','_akt','_salg'].forEach(s => {
@@ -256,6 +258,9 @@ export default function Loddtelling() {
       });
       if (r.id) await base44.entities.Loddtelling.update(r.id, payload);
       else await base44.entities.Loddtelling.create(payload);
+    }
+    } catch (error) {
+      alert(error?.message || 'Kunne ikke lagre. Innsendt loddtelling kan bare endres av administrator.');
     }
     await queryClient.invalidateQueries({ queryKey: ['loddtelling'] });
     setSaving(false);
@@ -366,9 +371,10 @@ export default function Loddtelling() {
       {/* Save bar */}
       <div className="sticky bottom-4 z-10">
         <div className="bg-white border border-slate-200 rounded-2xl shadow-lg px-5 py-3 flex items-center gap-4 flex-wrap">
-          <Button onClick={saveAll} disabled={saving || !butikk} className="gap-1.5">
+          <Button onClick={() => saveAll()} disabled={saving || !butikk} className="gap-1.5">
             <Save className="w-4 h-4" />{saving ? 'Lagrer...' : 'Lagre uke'}
           </Button>
+          <Button variant="outline" onClick={() => saveAll('innsendt')} disabled={saving || !butikk}>Send inn</Button>
           {savedMsg && <span className="text-sm text-emerald-600 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" />Lagret!</span>}
           {!butikk && <span className="text-xs text-amber-600">Skriv inn butikk for å lagre</span>}
           {totalAvvik > 0 && (

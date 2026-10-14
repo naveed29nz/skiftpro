@@ -58,16 +58,16 @@ export default function WorkerForm({ worker, onSubmit, onCancel, teamNames = { t
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label>Name *</Label>
-          <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Full name" required />
+          <Label>Navn *</Label>
+          <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Fullt navn" required />
         </div>
         <div className="space-y-1.5">
-          <Label>Position</Label>
-          <Input value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} placeholder="e.g. Barista, Server" />
+          <Label>Stilling</Label>
+          <Input value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} placeholder="f.eks. barista" />
         </div>
         {showWages && (
         <div className="space-y-1.5">
-          <Label>Hourly Rate *</Label>
+          <Label>Timelønn *</Label>
           <Input type="number" step="0.01" min="0" value={form.hourly_rate} onChange={e => setForm({ ...form, hourly_rate: e.target.value })} placeholder="0.00" required />
         </div>
         )}
@@ -90,8 +90,8 @@ export default function WorkerForm({ worker, onSubmit, onCancel, teamNames = { t
           <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="active">Aktiv</SelectItem>
+              <SelectItem value="inactive">Inaktiv</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -127,12 +127,12 @@ export default function WorkerForm({ worker, onSubmit, onCancel, teamNames = { t
           <p className="text-xs text-slate-400 mt-1">Rolle bestemmer tilgang per avdeling når den ansatte er logget inn.</p>
         </div>
         <div className="space-y-1.5">
-          <Label>Email</Label>
+          <Label>E-post</Label>
           <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" />
         </div>
         <div className="space-y-1.5">
-          <Label>Phone</Label>
-          <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+1 234 567 890" />
+          <Label>Telefon</Label>
+          <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+47 000 00 000" />
         </div>
       </div>
       <div className="space-y-1.5">
@@ -162,7 +162,7 @@ export default function WorkerForm({ worker, onSubmit, onCancel, teamNames = { t
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label>Color</Label>
+        <Label>Farge</Label>
         <div className="flex gap-2 flex-wrap">
           {COLORS.map(c => (
             <button key={c} type="button" onClick={() => setForm({ ...form, color: c })}
@@ -172,8 +172,8 @@ export default function WorkerForm({ worker, onSubmit, onCancel, teamNames = { t
         </div>
       </div>
       <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit">{worker ? 'Update' : 'Add Worker'}</Button>
+        <Button type="button" variant="outline" onClick={onCancel}>Avbryt</Button>
+        <Button type="submit">{worker ? 'Oppdater' : 'Legg til ansatt'}</Button>
       </div>
     </form>
   );

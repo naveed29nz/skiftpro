@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import OrgOnboarding from '@/components/OrgOnboarding';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
+import LegalFooter from '@/components/LegalFooter';
 import { useOrg } from '@/hooks/useOrg';
 
 const superAdminOnlyNav = [
@@ -15,36 +16,39 @@ const superAdminOnlyNav = [
 ];
 
 const adminNav = [
-  { path: '/Dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/Workers', label: 'Workers', icon: Users },
+  { path: '/Dashboard', label: 'Oversikt', icon: LayoutDashboard },
+  { path: '/Workers', label: 'Ansatte', icon: Users },
   { path: '/Timesheet', label: 'Timelister', icon: CalendarDays },
   { path: '/Ukeplan', label: 'Prognose', icon: ClipboardList },
   { path: '/Tasks', label: 'Oppgaver', icon: CheckSquare },
-  { path: '/Salary', label: 'Salary', icon: DollarSign },
+  { path: '/Salary', label: 'Lønn', icon: DollarSign },
+  { path: '/Resultat', label: 'Resultat', icon: BarChart },
   { path: '/Dagsoppgjor', label: 'Dagsoppgjør', icon: Banknote },
   { path: '/Loddtelling', label: 'Loddtelling', icon: Ticket },
   { path: '/Contracts', label: 'Kontrakter', icon: FileText },
-  { path: '/Settings', label: 'Settings', icon: Settings },
+  { path: '/Settings', label: 'Innstillinger', icon: Settings },
 ];
 
 const subAdminNav = [
-  { path: '/WorkerPortal', label: 'Min Portal', icon: UserCircle },
-  { path: '/Workers', label: 'Workers', icon: Users },
+  { path: '/WorkerPortal', label: 'Min side', icon: UserCircle },
+  { path: '/Workers', label: 'Ansatte', icon: Users },
   { path: '/Timesheet', label: 'Timelister', icon: CalendarDays },
   { path: '/Tasks', label: 'Oppgaver', icon: CheckSquare },
-  { path: '/Salary', label: 'Salary', icon: DollarSign },
+  { path: '/Salary', label: 'Lønn', icon: DollarSign },
+  { path: '/Resultat', label: 'Resultat', icon: BarChart },
   { path: '/Dagsoppgjor', label: 'Dagsoppgjør', icon: Banknote },
   { path: '/Loddtelling', label: 'Loddtelling', icon: Ticket },
   { path: '/Contracts', label: 'Kontrakter', icon: FileText },
-  { path: '/Settings', label: 'Settings', icon: Settings },
+  { path: '/Settings', label: 'Innstillinger', icon: Settings },
 ];
 
 const butikksjeflNav = [
-  { path: '/WorkerPortal', label: 'Min Portal', icon: UserCircle },
+  { path: '/WorkerPortal', label: 'Min side', icon: UserCircle },
   { path: '/Timesheet', label: 'Timelister', icon: CalendarDays },
+  { path: '/Resultat', label: 'Resultat', icon: BarChart },
   { path: '/Dagsoppgjor', label: 'Dagsoppgjør', icon: Banknote },
   { path: '/Loddtelling', label: 'Loddtelling', icon: Ticket },
-  { path: '/Settings', label: 'Settings', icon: Settings },
+  { path: '/Settings', label: 'Innstillinger', icon: Settings },
 ];
 
 const workerNav = [
@@ -107,8 +111,8 @@ function NavItems({ items, location, onClick }) {
   );
 }
 
-const subAdminAllowed = ['/WorkerPortal', '/Workers', '/Timesheet', '/Tasks', '/Salary', '/Settings', '/Dagsoppgjor', '/Loddtelling', '/Contracts'];
-const butikksjefAllowed = ['/WorkerPortal', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Settings'];
+const subAdminAllowed = ['/WorkerPortal', '/Workers', '/Timesheet', '/Tasks', '/Salary', '/Settings', '/Dagsoppgjor', '/Loddtelling', '/Contracts', '/Resultat'];
+const butikksjefAllowed = ['/WorkerPortal', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Settings', '/Resultat'];
 const workerAllowed = ['/WorkerPortal', '/Dagsoppgjor', '/Loddtelling'];
 
 export default function Layout() {
@@ -179,9 +183,21 @@ export default function Layout() {
       }
 
       setUserRole(role);
-      const canSeeResultat = myWorker?.can_see_resultat || false;
-      setCanSeeResultat(canSeeResultat);
-      const allowed = role === 'user' ? (canSeeResultat ? ['/WorkerPortal', '/Resultat'] : ['/WorkerPortal']) : null;
+      const canSeeResultatFlag = myWorker?.can_see_resultat || role === 'admin' || role === 'sub_admin' || role === 'butikksjef';
+      setCanSeeResultat(canSeeResultatFlag);
+
+      if (u?.terms_accepted_at && platformRole !== 'admin' && !myWorker) {
+        try {
+          const ownOrgs = await base44.entities.Organization.list();
+          if (!ownOrgs.length) {
+            setOnboardingUser(u);
+            setNeedsOnboarding(true);
+            return;
+          }
+        } catch {}
+      }
+
+      const allowed = role === 'user' ? (myWorker?.can_see_resultat ? ['/WorkerPortal', '/Resultat'] : ['/WorkerPortal']) : null;
       const isImpersonatingNow = !!localStorage.getItem('impersonate_org_id');
       const isSuperAdminPage = location.pathname === '/SuperAdmin' || location.pathname.startsWith('/SuperAdmin/');
       if (role === 'superadmin' && !isImpersonatingNow && !isSuperAdminPage) {
@@ -196,7 +212,9 @@ export default function Layout() {
     }).catch(() => setUserRole('user'));
   }, []);
 
-  const workerNavDynamic = workerNav;
+  const workerNavDynamic = canSeeResultat && userRole === 'user'
+    ? [...workerNav, { path: '/Resultat', label: 'Resultat', icon: BarChart }]
+    : workerNav;
   const navItems = userRole === 'superadmin'
     ? (isImpersonating ? adminNav : superAdminOnlyNav)
     : userRole === 'admin' ? adminNav
@@ -221,7 +239,7 @@ export default function Layout() {
         <div className="bg-blue-950 flex items-center gap-4 px-4 h-10">
           <div className="flex items-center gap-2 shrink-0">
             <Clock className="w-4 h-4 text-blue-400" />
-            <span className="text-sm font-semibold tracking-tight text-white">TimePlanner</span>
+            <span className="text-sm font-semibold tracking-tight text-white">SkiftPro</span>
           </div>
           <div className="w-px h-5 bg-blue-800 shrink-0" />
           {!(userRole === 'superadmin' && !isImpersonating) && (
@@ -230,13 +248,13 @@ export default function Layout() {
               className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap",
                 location.pathname === '/Dashboard' ? "bg-blue-800 text-white" : "text-blue-200 hover:text-white hover:bg-blue-800"
               )}>
-              <LayoutDashboard className="w-3.5 h-3.5" />Dashboard
+              <LayoutDashboard className="w-3.5 h-3.5" />Oversikt
             </Link>
             <Link to="/WorkerPortal"
               className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap",
                 location.pathname === '/WorkerPortal' ? "bg-blue-800 text-white" : "text-blue-200 hover:text-white hover:bg-blue-800"
               )}>
-              <UserCircle className="w-3.5 h-3.5" />Worker Portal
+              <UserCircle className="w-3.5 h-3.5" />Min side
             </Link>
           </div>
           )}
@@ -303,7 +321,7 @@ export default function Layout() {
             <div className="h-14 flex items-center justify-between px-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-semibold text-slate-900">TimePlanner</span>
+                <span className="text-sm font-semibold text-slate-900">SkiftPro</span>
               </div>
               <button onClick={() => setMobileOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
             </div>
@@ -325,7 +343,7 @@ export default function Layout() {
                   className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
                     location.pathname === '/WorkerPortal' ? "bg-blue-50 text-blue-700" : "text-slate-400 hover:text-slate-700 hover:bg-slate-50"
                   )}>
-                  <UserCircle className="w-4 h-4" />Worker Portal
+                  <UserCircle className="w-4 h-4" />Min side
                 </Link>
               )}
               <button
@@ -343,6 +361,9 @@ export default function Layout() {
       <main className="flex-1 p-4 lg:p-6">
         <Outlet />
       </main>
+      <div className="px-4 py-3 border-t border-slate-200 bg-white">
+        <LegalFooter />
+      </div>
     </div>
   );
 }

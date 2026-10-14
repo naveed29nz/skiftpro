@@ -31,9 +31,9 @@ export default function ShiftForm({ shift, workers, onSubmit, onCancel }) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label>Worker *</Label>
+          <Label>Ansatt *</Label>
           <Select value={form.worker_id} onValueChange={v => setForm({ ...form, worker_id: v })}>
-            <SelectTrigger><SelectValue placeholder="Select a worker" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Velg ansatt" /></SelectTrigger>
             <SelectContent>
               {workers.filter(w => w.status === 'active').map(w => (
                 <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
@@ -42,7 +42,7 @@ export default function ShiftForm({ shift, workers, onSubmit, onCancel }) {
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Date *</Label>
+          <Label>Dato *</Label>
           <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required />
         </div>
         <div className="space-y-1.5">
@@ -50,32 +50,32 @@ export default function ShiftForm({ shift, workers, onSubmit, onCancel }) {
           <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="scheduled">Scheduled</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="scheduled">Planlagt</SelectItem>
+              <SelectItem value="completed">Fullført</SelectItem>
+              <SelectItem value="cancelled">Avlyst</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Start Time *</Label>
+          <Label>Start *</Label>
           <Input type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} required />
         </div>
         <div className="space-y-1.5">
-          <Label>End Time *</Label>
+          <Label>Slutt *</Label>
           <Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} required />
         </div>
         <div className="space-y-1.5">
-          <Label>Break (minutes)</Label>
+          <Label>Pause (minutter)</Label>
           <Input type="number" min="0" value={form.break_minutes} onChange={e => setForm({ ...form, break_minutes: e.target.value })} />
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label>Notes</Label>
-        <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes..." rows={2} />
+        <Label>Notat</Label>
+        <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Valgfritt notat..." rows={2} />
       </div>
       <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit">{shift ? 'Update' : 'Add Shift'}</Button>
+        <Button type="button" variant="outline" onClick={onCancel}>Avbryt</Button>
+        <Button type="submit">{shift ? 'Oppdater' : 'Legg til vakt'}</Button>
       </div>
     </form>
   );
