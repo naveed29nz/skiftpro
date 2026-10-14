@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import {
   ArrowLeftRight,
   CalendarDays,
+  CheckCircle2,
+  FileText,
   MapPin,
   Menu,
   Receipt,
+  Send,
   Shield,
   Smartphone,
   Ticket,
@@ -14,7 +17,26 @@ import {
 
 const SIGNUP = '/login?mode=signup';
 
+const highlights = [
+  {
+    icon: CheckCircle2,
+    title: 'Oppgavestyring',
+    text: 'Faste oppgaver kan tildeles faste personer eller faste dager, og kvitteres ut ✅ når de er ferdige.',
+  },
+  {
+    icon: FileText,
+    title: 'Digitale kontrakter',
+    text: 'Arbeidskontrakter genereres i appen – slutt på papir og permer.',
+  },
+  {
+    icon: Send,
+    title: 'Automatiske ekstrahjelp-kontrakter',
+    text: 'Når noen tar ekstra timer, genereres kontrakten automatisk og sendes til den ansatte for signering.',
+  },
+];
+
 const features = [
+  ...highlights,
   {
     icon: CalendarDays,
     title: 'Vaktliste',
@@ -174,6 +196,7 @@ export default function Landing() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <a href="#topp" className="font-serif text-xl tracking-tight">SkiftPro</a>
           <nav className="hidden items-center gap-6 text-sm md:flex" aria-label="Seksjoner">
+            <a href="#oppgaver" className="hover:underline">Oppgaver</a>
             <a href="#funksjoner" className="hover:underline">Funksjoner</a>
             <a href="#historien" className="hover:underline">Historien</a>
             <a href="#slik" className="hover:underline">Slik virker det</a>
@@ -209,6 +232,7 @@ export default function Landing() {
           <nav id="mobilmeny" className="border-t border-[#e7e0d4] px-4 py-3 md:hidden" aria-label="Mobilmeny">
             <div className="flex flex-col gap-3 text-sm">
               {[
+                ['#oppgaver', 'Oppgaver'],
                 ['#funksjoner', 'Funksjoner'],
                 ['#historien', 'Historien'],
                 ['#slik', 'Slik virker det'],
@@ -232,7 +256,7 @@ export default function Landing() {
               Vaktplan, stempling, dagsoppgjør og loddtelling i ett – laget for kiosk og convenience
             </h1>
             <p className="mt-5 max-w-xl text-lg text-[#3f4a63]">
-              Ett sted for vaktlisten, inn- og utstempling, kveldens oppgjør og loddtellingen. Bygget for butikker som holder åpent når andre har gått hjem.
+              Ett sted for vaktlisten, inn- og utstempling, kveldens oppgjør og loddtellingen. Med oppgavestyring, digitale arbeidskontrakter og automatiske ekstrahjelp-kontrakter. Bygget for butikker som holder åpent når andre har gått hjem.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
@@ -270,6 +294,22 @@ export default function Landing() {
               <ShiftMockup />
             </div>
             <p className="mt-3 text-xs text-[#5c677a]">Illustrasjon laget for SkiftPro. Ikke et fotografi, og ikke en virkelig person.</p>
+          </div>
+        </section>
+
+        <section id="oppgaver" className="scroll-mt-20 border-t border-[#e7e0d4] bg-[#172554] py-16 text-white md:py-24">
+          <div className="mx-auto max-w-6xl px-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Det kjøpmannen merker</p>
+            <h2 className="mt-3 max-w-3xl font-serif text-3xl md:text-4xl">Oppgaver og kontrakter, uten permer</h2>
+            <ul className="mt-10 grid gap-4 md:grid-cols-3">
+              {highlights.map(({ icon: Icon, title, text }) => (
+                <li key={title} className="rounded-3xl bg-white p-6 text-[#172554] shadow-lg">
+                  <Icon className="h-6 w-6" aria-hidden="true" />
+                  <h3 className="mt-4 font-serif text-2xl">{title}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-[#3f4a63]">{text}</p>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 
