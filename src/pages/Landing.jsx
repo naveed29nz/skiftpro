@@ -8,7 +8,6 @@ import {
   Receipt,
   Shield,
   Smartphone,
-  Store,
   Ticket,
   X,
 } from 'lucide-react';
@@ -47,11 +46,6 @@ const features = [
     text: 'Telling av lodd hører med i oppgjøret, ikke i en egen perm.',
   },
   {
-    icon: Store,
-    title: 'Resultat per butikk',
-    text: 'Se hvordan hver butikk ligger an, uten å blande tallene i ett regneark.',
-  },
-  {
     icon: Shield,
     title: 'Lønnstilgang styrt per rolle',
     text: 'Lønn vises bare for rollene du åpner for. Resten av staben ser vakter og egne timer.',
@@ -72,7 +66,7 @@ const steps = [
   {
     n: '03',
     title: 'Stemple, gjør opp, følg med',
-    text: 'GPS-stempling, dagsoppgjør, loddtelling og resultat per butikk i samme løp.',
+    text: 'GPS-stempling, dagsoppgjør og loddtelling i samme løp.',
   },
 ];
 
@@ -98,8 +92,8 @@ const faqs = [
     a: 'Lønnstilgang styres per rolle. Arbeidsgiveren bestemmer hvem som ser lønnsgrunnlag, og hvem som bare ser egne timer og vakter.',
   },
   {
-    q: 'Er SkiftPro et offisielt Narvesen-produkt?',
-    a: 'Nei. Det er laget av en Narvesen-franchisetaker og drives av Zastek AS. Det er et uavhengig produkt, ikke et system fra Narvesen.',
+    q: 'Hvem er SkiftPro laget for?',
+    a: 'SkiftPro er laget av en kjøpmann, for kjøpmenn i kiosk og convenience. Zastek AS står bak produktet.',
   },
   {
     q: 'Hvor ligger dataene?',
@@ -282,7 +276,7 @@ export default function Landing() {
         <section id="funksjoner" className="scroll-mt-20 border-t border-[#e7e0d4] bg-[#fffcf8] py-16 md:py-24">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="font-serif text-3xl md:text-4xl">Det butikken faktisk gjør på en dag</h2>
-            <p className="mt-3 max-w-2xl text-[#3f4a63]">Åtte ting som i dag ofte ligger i meldinger, permer og regneark.</p>
+            <p className="mt-3 max-w-2xl text-[#3f4a63]">Det som i dag ofte ligger i meldinger, permer og regneark.</p>
             <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {features.map(({ icon: Icon, title, text }) => (
                 <li key={title} className="rounded-2xl border border-[#e7e0d4] bg-[#f4f0e8] p-5">
@@ -314,13 +308,13 @@ export default function Landing() {
             </figure>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#9a3412]">Historien</p>
-              <h2 className="mt-3 font-serif text-3xl md:text-4xl">Laget av en Narvesen-franchisetaker</h2>
+              <h2 className="mt-3 font-serif text-3xl md:text-4xl">Laget av en kjøpmann, for kjøpmenn</h2>
               <div className="mt-5 space-y-4 text-[#3f4a63]">
                 <p>
-                  SkiftPro kommer fra hverdagen i kiosk: vaktlister i meldinger, stempling som ikke stemte med tiden folk faktisk sto i butikken, og et dagsoppgjør som tok kvelden.
+                  SkiftPro kommer fra hverdagen i kiosk og convenience: vaktlister i meldinger, stempling som ikke stemte med tiden folk faktisk sto i butikken, og et dagsoppgjør som tok kvelden.
                 </p>
                 <p>
-                  En Narvesen-franchisetaker bygde verktøyet han selv manglet. Zastek AS står bak produktet. SkiftPro er ikke et offisielt Narvesen-system.
+                  En kjøpmann bygde verktøyet han selv manglet. Zastek AS står bak produktet, for kjøpmenn i bransjen.
                 </p>
               </div>
             </div>
