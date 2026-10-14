@@ -18,14 +18,9 @@ Deno.serve(async (req) => {
     const contractId = body.contract_id;
     if (!contractId) return json({ error: "Missing contract_id" }, 400);
 
-    const { data: contracts, error } = await auth.client
-      .from("contracts")
-      .select("*")
-      .eq("id", contractId)
-      .limit(1);
-    if (error) return json({ error: error.message }, 500);
-    if (!contracts?.length) return json({ error: "Contract not found" }, 404);
-    const contract = contracts[0];
+    const loaded = await loadContract(auth.client, contractId);
+    if (loaded instanceof Response) return loaded;
+    const contract = loaded;
 
     let orgName = contract.org_name || "Arbeidsgiver";
     if (contract.org_id) {
@@ -51,6 +46,38 @@ Deno.serve(async (req) => {
     return json({ error: error instanceof Error ? error.message : "Unknown error" }, 500);
   }
 });
+
+const CONTRACT_WITHOUT_RATE = "id, org_id, worker_id, worker_name, contract_type, status, org_name, worker_position, employment_percentage, weekly_hours, overtime_hours, full_time_hours_per_week, start_date, end_date, week_number, year, reason, notice_period_months, pdf_url, approved_by_worker_id, approved_at, generated_automatically, created_date, updated_date, created_by";
+
+// select * works until the wage migration is applied. After it, hourly_rate is
+// revoked and comes back only for the caller's own contract (my_wage_info) or
+// for an admin (contract_hourly_rates).
+async function loadContract(client: any, contractId: string): Promise<Record<string, unknown> | Response> {
+  const full = await client.from("contracts").select("*").eq("id", contractId).limit(1);
+  if (!full.error) {
+    if (!full.data?.length) return json({ error: "Contract not found" }, 404);
+    return full.data[0];
+  }
+  const message = full.error.message || "";
+  const denied = full.error.code === "42501" || /permission denied for column/i.test(message);
+  if (!denied) return json({ error: message }, 500);
+
+  const safe = await client.from("contracts").select(CONTRACT_WITHOUT_RATE).eq("id", contractId).limit(1);
+  if (safe.error) return json({ error: safe.error.message }, 500);
+  if (!safe.data?.length) return json({ error: "Contract not found" }, 404);
+  const contract = safe.data[0];
+
+  const own = await client.rpc("my_wage_info");
+  const mine = (own.data || []).find((row: { kind?: string; id?: string; hourly_rate?: number }) => row.kind === "contract" && row.id === contractId);
+  if (mine && mine.hourly_rate != null) {
+    contract.hourly_rate = mine.hourly_rate;
+    return contract;
+  }
+  const rates = await client.rpc("contract_hourly_rates");
+  const rate = (rates.data || []).find((row: { id?: string; hourly_rate?: number }) => row.id === contractId);
+  if (rate && rate.hourly_rate != null) contract.hourly_rate = rate.hourly_rate;
+  return contract;
+}
 
 function safeFile(value: string | null | undefined): string {
   return String(value || "ansatt").replace(/[^\w.\-]+/g, "_");
@@ -136,7 +163,9 @@ function buildContractPdf(c: Record<string, unknown>, orgName: string): Uint8Arr
   addLine(y);
   y += 3;
   addText("5. Lonn", 13, true, 4);
-  addText(`Ved tiltredelse er Arbeidstakerens ordinaere timelonn NOK ${Number(c.hourly_rate || 0).toFixed(2)}.`, 10, false, 2);
+  if (c.hourly_rate != null) {
+    addText(`Ved tiltredelse er Arbeidstakerens ordinaere timelonn NOK ${Number(c.hourly_rate).toFixed(2)}.`, 10, false, 2);
+  }
   addText("Arbeidstakeren skal kontrollere at alle utbetalinger fra Arbeidsgiveren er riktige og skal umiddelbart informere Arbeidsgiver om eventuelle feil. Partene er enige om at feil skal rettes opp og Arbeidstaker har ikke rett til a beholde belop mottatt som folge av feilutbetaling fra arbeidsgivers side.", 10, false, 4);
 
   addLine(y);
@@ -188,7 +217,9 @@ function buildContractPdf(c: Record<string, unknown>, orgName: string): Uint8Arr
   addText(`Periode: ${c.start_date || ""} til ${c.end_date || ""}`, 11, false, 2);
   addText(`Antall timer: ${c.weekly_hours || 0} timer per uke`, 11, false, 2);
   addText(`Herav ekstratimer: ${c.overtime_hours || 0} timer`, 11, false, 2);
-  addText(`Timelonn: NOK ${Number(c.hourly_rate || 0).toFixed(2)}`, 11, false, 4);
+  if (c.hourly_rate != null) {
+    addText(`Timelonn: NOK ${Number(c.hourly_rate).toFixed(2)}`, 11, false, 4);
+  }
   addText("Arbeidstaker bekrefter med dette a ha mottatt og godtatt vilkarene i denne midlertidige ansettelsesavtalen.", 10, false, 6);
   y += 4;
   doc.setFontSize(10);

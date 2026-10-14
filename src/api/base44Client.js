@@ -187,6 +187,78 @@ function applyOverlay(table, data, overlay) {
   return Array.isArray(data) ? merged : merged[0];
 }
 
+let selfWageRows = null;
+let selfWageStatus = 'unknown';
+
+async function loadSelfWages() {
+  if (selfWageStatus === 'no') return null;
+  if (selfWageStatus === 'yes') return selfWageRows;
+  const { data, error } = await supabase.rpc('my_wage_info');
+  if (error) {
+    if (isMissingRpc(error)) {
+      selfWageStatus = 'no';
+      return null;
+    }
+    throw toError(error);
+  }
+  selfWageStatus = 'yes';
+  selfWageRows = data || [];
+  return selfWageRows;
+}
+
+function applySelfWages(table, data, selfRows) {
+  if (!selfRows || data == null) return data;
+  const rows = Array.isArray(data) ? data : [data];
+  let merged = rows;
+  if (table === 'workers' || table === 'contracts') {
+    const kind = table === 'workers' ? 'worker' : 'contract';
+    const byId = new Map(selfRows.filter((row) => row.kind === kind).map((row) => [row.id, row]));
+    merged = rows.map((row) => {
+      if (!row) return row;
+      const own = byId.get(row.id);
+      if (!own) return row;
+      return { ...row, hourly_rate: own.hourly_rate };
+    });
+  } else if (table === 'holidays') {
+    const byId = new Map(selfRows.filter((row) => row.kind === 'holiday').map((row) => [row.id, row]));
+    merged = rows.map((row) => {
+      if (!row) return row;
+      const own = byId.get(row.id);
+      if (!own) return row;
+      return {
+        ...row,
+        pay_multiplier: own.pay_multiplier,
+        extra_type: own.extra_type,
+        extra_amount: own.extra_amount,
+      };
+    });
+  } else if (table === 'workplace_settings') {
+    const byId = new Map(selfRows.filter((row) => row.kind === 'workplace').map((row) => [row.id, row]));
+    merged = rows.map((row) => {
+      if (!row) return row;
+      const extras = ownWorkplaceExtras(byId.get(row.id));
+      if (!extras) return row;
+      return { ...row, ...extras };
+    });
+  } else {
+    return data;
+  }
+  return Array.isArray(data) ? merged : merged[0];
+}
+
+function ownWorkplaceExtras(row) {
+  const extras = row?.workplace_extras;
+  if (!extras || typeof extras !== 'object') return null;
+  return extras;
+}
+
+async function withWageColumns(table, data, overlay) {
+  const overlaid = applyOverlay(table, data, overlay);
+  if (!WAGE_FIELDS[table]) return overlaid;
+  const selfRows = await loadSelfWages();
+  return applySelfWages(table, overlaid, selfRows);
+}
+
 async function runRead(table, build) {
   let result = await build('*');
   if (result.error && WAGE_FIELDS[table] && isColumnPrivilegeError(result.error)) {
@@ -194,11 +266,11 @@ async function runRead(table, build) {
     result = await build(SAFE_COLUMNS[table].join(','));
     if (result.error) throw toError(result.error);
     const overlay = await loadWageOverlay(table);
-    return applyOverlay(table, result.data, overlay || []);
+    return withWageColumns(table, result.data, overlay || []);
   }
   if (result.error) throw toError(result.error);
   const overlay = await loadWageOverlay(table);
-  return applyOverlay(table, result.data, overlay);
+  return withWageColumns(table, result.data, overlay);
 }
 
 async function selectRows(table, { sort, limit, filters } = {}) {

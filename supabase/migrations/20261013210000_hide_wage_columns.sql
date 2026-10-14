@@ -9,8 +9,10 @@
 --
 -- Column privileges are per database role, so SELECT on hourly_rate is revoked
 -- from authenticated for everyone. Admins read the hidden columns through the
--- security-definer RPCs below. service_role is unchanged (edge functions and
--- the overtime job still read the real rates).
+-- security-definer RPCs below. Every worker reads their own rate through
+-- my_wage_info(), limited to the worker row tied to auth.uid() by email.
+-- service_role is unchanged (edge functions and the overtime job still read
+-- the real rates).
 --
 -- Tables stay tables. Renaming them to views would recurse through
 -- my_worker_ids(), user_org_ids(), and check_overtime_for_shift().
@@ -335,12 +337,137 @@ as $$
     and (public.is_super_admin() or public.in_org(w.org_id));
 $$;
 
+-- Own pay. A worker, butikksjef, or employee can read their own hourly rate
+-- and their own contracts. Other workers' rates stay revoked.
+-- Holiday and workplace extras are included only for this caller's own
+-- organization, so Min side can calculate that person's tillegg. They are
+-- not other employees' rates.
+create or replace function public.my_wage_info()
+returns table (
+  kind text,
+  id text,
+  worker_id text,
+  hourly_rate double precision,
+  pay_multiplier double precision,
+  extra_type text,
+  extra_amount double precision,
+  workplace_extras jsonb
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    'worker'::text,
+    w.id,
+    w.id,
+    w.hourly_rate,
+    null::double precision,
+    null::text,
+    null::double precision,
+    null::jsonb
+  from public.workers w
+  where w.id in (select public.my_worker_ids())
+  union all
+  select
+    'contract'::text,
+    c.id,
+    c.worker_id,
+    c.hourly_rate,
+    null::double precision,
+    null::text,
+    null::double precision,
+    null::jsonb
+  from public.contracts c
+  where public.worker_matches(c.worker_id)
+  union all
+  select
+    'holiday'::text,
+    h.id,
+    null::text,
+    null::double precision,
+    h.pay_multiplier,
+    h.extra_type,
+    h.extra_amount,
+    null::jsonb
+  from public.holidays h
+  where h.org_id in (
+    select w.org_id
+    from public.workers w
+    where w.id in (select public.my_worker_ids())
+      and w.org_id is not null
+      and btrim(w.org_id) <> ''
+  )
+  union all
+  select
+    'workplace'::text,
+    s.id,
+    null::text,
+    null::double precision,
+    null::double precision,
+    null::text,
+    null::double precision,
+    jsonb_build_object(
+      'team1_sunday_extra_type', s.team1_sunday_extra_type,
+      'team1_sunday_extra_amount', s.team1_sunday_extra_amount,
+      'team1_holiday_extra_type', s.team1_holiday_extra_type,
+      'team1_holiday_extra_amount', s.team1_holiday_extra_amount,
+      'team2_sunday_extra_type', s.team2_sunday_extra_type,
+      'team2_sunday_extra_amount', s.team2_sunday_extra_amount,
+      'team2_holiday_extra_type', s.team2_holiday_extra_type,
+      'team2_holiday_extra_amount', s.team2_holiday_extra_amount,
+      'team3_sunday_extra_type', s.team3_sunday_extra_type,
+      'team3_sunday_extra_amount', s.team3_sunday_extra_amount,
+      'team3_holiday_extra_type', s.team3_holiday_extra_type,
+      'team3_holiday_extra_amount', s.team3_holiday_extra_amount,
+      'team4_sunday_extra_type', s.team4_sunday_extra_type,
+      'team4_sunday_extra_amount', s.team4_sunday_extra_amount,
+      'team4_holiday_extra_type', s.team4_holiday_extra_type,
+      'team4_holiday_extra_amount', s.team4_holiday_extra_amount,
+      'team5_sunday_extra_type', s.team5_sunday_extra_type,
+      'team5_sunday_extra_amount', s.team5_sunday_extra_amount,
+      'team5_holiday_extra_type', s.team5_holiday_extra_type,
+      'team5_holiday_extra_amount', s.team5_holiday_extra_amount,
+      'team6_sunday_extra_type', s.team6_sunday_extra_type,
+      'team6_sunday_extra_amount', s.team6_sunday_extra_amount,
+      'team6_holiday_extra_type', s.team6_holiday_extra_type,
+      'team6_holiday_extra_amount', s.team6_holiday_extra_amount,
+      'team7_sunday_extra_type', s.team7_sunday_extra_type,
+      'team7_sunday_extra_amount', s.team7_sunday_extra_amount,
+      'team7_holiday_extra_type', s.team7_holiday_extra_type,
+      'team7_holiday_extra_amount', s.team7_holiday_extra_amount,
+      'team8_sunday_extra_type', s.team8_sunday_extra_type,
+      'team8_sunday_extra_amount', s.team8_sunday_extra_amount,
+      'team8_holiday_extra_type', s.team8_holiday_extra_type,
+      'team8_holiday_extra_amount', s.team8_holiday_extra_amount,
+      'team9_sunday_extra_type', s.team9_sunday_extra_type,
+      'team9_sunday_extra_amount', s.team9_sunday_extra_amount,
+      'team9_holiday_extra_type', s.team9_holiday_extra_type,
+      'team9_holiday_extra_amount', s.team9_holiday_extra_amount,
+      'team10_sunday_extra_type', s.team10_sunday_extra_type,
+      'team10_sunday_extra_amount', s.team10_sunday_extra_amount,
+      'team10_holiday_extra_type', s.team10_holiday_extra_type,
+      'team10_holiday_extra_amount', s.team10_holiday_extra_amount
+    )
+  from public.workplace_settings s
+  where s.org_id in (
+    select w.org_id
+    from public.workers w
+    where w.id in (select public.my_worker_ids())
+      and w.org_id is not null
+      and btrim(w.org_id) <> ''
+  );
+$$;
+
 revoke all on function public.worker_hourly_rates() from public;
 revoke all on function public.contract_hourly_rates() from public;
 revoke all on function public.holiday_wage_rules() from public;
 revoke all on function public.workplace_wage_rules() from public;
+revoke all on function public.my_wage_info() from public;
 
 grant execute on function public.worker_hourly_rates() to authenticated;
 grant execute on function public.contract_hourly_rates() to authenticated;
 grant execute on function public.holiday_wage_rules() to authenticated;
 grant execute on function public.workplace_wage_rules() to authenticated;
+grant execute on function public.my_wage_info() to authenticated;

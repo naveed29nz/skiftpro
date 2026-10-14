@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom';
 import { Clock, CalendarDays, Coins, Users, ArrowLeftRight, LayoutDashboard, LogOut, CheckSquare, FileText, ArrowLeft } from 'lucide-react';
 import AvailabilityCalendar from '@/components/worker/AvailabilityCalendar';
 import { Button } from '@/components/ui/button';
-import { nb } from 'date-fns/locale';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import StampCard from '@/components/worker/StampCard';
@@ -17,7 +16,6 @@ import WorkerTasksTab from '@/components/worker/WorkerTasksTab';
 import WorkerContractsTab from '@/components/worker/WorkerContractsTab';
 import WorkerSalaryTab from '@/components/worker/WorkerSalaryTab';
 import { useTeamNames } from '@/hooks/useTeamNames';
-import { canSeeWageCosts } from '@/utils/wageAccess';
 
 function calcHours(shift) {
   const [sh, sm] = shift.start_time.split(':').map(Number);
@@ -105,12 +103,11 @@ export default function WorkerPortal() {
   const monthHours = monthShifts.reduce((sum, s) => sum + calcHours(s), 0);
   const weekHours = weekShifts.reduce((sum, s) => sum + calcHours(s), 0);
   const teamKey = getWorkerTeamKey(worker);
-  const showWages = canSeeWageCosts(currentUser, worker);
-  const monthPay = showWages ? monthShifts.reduce((sum, s) => {
+  const monthPay = monthShifts.reduce((sum, s) => {
     const shiftTeamKey = s.team || teamKey;
     return sum + getShiftBreakdown(s, worker.hourly_rate || 0, shiftTeamKey, holidays, workplaceSetting, worker.disabled_extras || []).pay;
-  }, 0) : 0;
-  const tabs = TABS.filter((tab) => tab.id !== 'salary' || showWages);
+  }, 0);
+  const tabs = TABS;
 
   return (
     <div className="space-y-6">
@@ -123,7 +120,7 @@ export default function WorkerPortal() {
         <div>
           <p className="text-blue-100 text-sm">Hei,</p>
           <h2 className="text-2xl font-bold">{worker.name}</h2>
-          <p className="text-blue-200 text-sm mt-0.5">{worker.position || 'Ansatt'}{showWages ? ` · ${worker.hourly_rate} kr/t` : ''}</p>
+          <p className="text-blue-200 text-sm mt-0.5">{worker.position || 'Ansatt'} · {worker.hourly_rate} kr/t</p>
         </div>
         <div className="ml-auto flex items-center gap-3">
           <div className="text-right hidden sm:block">
@@ -184,7 +181,7 @@ export default function WorkerPortal() {
       {activeTab === 'tasks' && <WorkerTasksTab worker={worker} workers={workers} teamNames={teamNames} />}
 
       {/* Salary tab — viser tillegg per vakt slik at ansatte ser søndags/helligdagsberegning */}
-      {showWages && activeTab === 'salary' && (
+      {activeTab === 'salary' && (
         <WorkerSalaryTab
           worker={worker}
           shifts={myShifts}
@@ -195,7 +192,7 @@ export default function WorkerPortal() {
       )}
 
       {/* Contracts tab */}
-      {activeTab === 'contracts' && <WorkerContractsTab worker={worker} showWages={showWages} />}
+      {activeTab === 'contracts' && <WorkerContractsTab worker={worker} />}
 
       {/* Swaps tab */}
       {activeTab === 'swaps' && (
@@ -221,7 +218,7 @@ export default function WorkerPortal() {
             <WeekSummary allShifts={myShifts} today={today} />
           </div>
 
-          <div className={`grid grid-cols-1 ${showWages ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-slate-500">Denne uken</p>
@@ -238,7 +235,6 @@ export default function WorkerPortal() {
               <p className="text-2xl font-bold text-slate-900 mt-1">{monthHours.toFixed(1)}t</p>
               <p className="text-xs text-slate-400">{monthShifts.length} vakt{monthShifts.length !== 1 ? 'er' : ''} i {format(new Date(), 'MMMM')}</p>
             </div>
-            {showWages && (
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-slate-500">Estimert lønn</p>
@@ -247,7 +243,6 @@ export default function WorkerPortal() {
               <p className="text-2xl font-bold text-slate-900 mt-1">{monthPay.toFixed(0)} kr</p>
               <p className="text-xs text-slate-400">{format(new Date(), 'MMMM yyyy')} (inkl. tillegg)</p>
             </div>
-            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -277,7 +272,7 @@ export default function WorkerPortal() {
                             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               {isToday && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">I dag</span>}
                               {shift.team && teamNames[shift.team] && <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">{teamNames[shift.team]}</span>}
-                              {holiday && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">🎉 {holiday.name}{showWages ? ` ×${holiday.pay_multiplier}` : ''}</span>}
+                              {holiday && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">🎉 {holiday.name}{holiday.pay_multiplier != null ? ` ×${holiday.pay_multiplier}` : ''}</span>}
                               {isSunday && !holiday && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Søndag</span>}
                               {shift.notes && <span className="text-xs text-slate-400">{shift.notes}</span>}
                             </div>
@@ -285,7 +280,7 @@ export default function WorkerPortal() {
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-semibold text-slate-700">{hours.toFixed(1)}t</p>
-                          {showWages && <p className="text-xs text-slate-400">{getShiftBreakdown(shift, worker.hourly_rate || 0, shift.team || teamKey, holidays, workplaceSetting, worker.disabled_extras || []).pay.toFixed(0)} kr</p>}
+                          <p className="text-xs text-slate-400">{getShiftBreakdown(shift, worker.hourly_rate || 0, shift.team || teamKey, holidays, workplaceSetting, worker.disabled_extras || []).pay.toFixed(0)} kr</p>
                         </div>
                       </div>
                     );
