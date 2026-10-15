@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { ScrollText, LogIn, UserPlus, CalendarPlus, FileText, Building2 } from 'lucide-react';
+import { ScrollText, UserPlus, CalendarPlus, FileText, Building2 } from 'lucide-react';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { format } from 'date-fns';
 

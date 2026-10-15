@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Badge } from '@/components/ui/badge';
 import { CreditCard, TrendingUp, Clock, CheckCircle2 } from 'lucide-react';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 

@@ -1,4 +1,3 @@
-import { format } from 'date-fns';
 
 export default function ColleaguesToday({ shifts, workers, currentWorkerId, today, currentWorkerTeam }) {
   const todayColleagues = shifts

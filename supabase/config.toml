@@ -56,3 +56,12 @@ verify_jwt = true
 
 [functions.purge-stamp-locations]
 verify_jwt = false
+
+[functions.sign-contract]
+verify_jwt = true
+
+[functions.contract-reminders]
+verify_jwt = true
+
+[functions.signing-webhook]
+verify_jwt = false

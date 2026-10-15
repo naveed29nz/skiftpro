@@ -48,6 +48,7 @@ const butikksjeflNav = [
   { path: '/Resultat', label: 'Resultat', icon: BarChart },
   { path: '/Dagsoppgjor', label: 'Dagsoppgjør', icon: Banknote },
   { path: '/Loddtelling', label: 'Loddtelling', icon: Ticket },
+  { path: '/Contracts', label: 'Kontrakter', icon: FileText },
   { path: '/Settings', label: 'Innstillinger', icon: Settings },
 ];
 
@@ -112,7 +113,7 @@ function NavItems({ items, location, onClick }) {
 }
 
 const subAdminAllowed = ['/WorkerPortal', '/Workers', '/Timesheet', '/Tasks', '/Salary', '/Settings', '/Dagsoppgjor', '/Loddtelling', '/Contracts', '/Resultat'];
-const butikksjefAllowed = ['/WorkerPortal', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Settings', '/Resultat'];
+const butikksjefAllowed = ['/WorkerPortal', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Settings', '/Resultat', '/Contracts'];
 const workerAllowed = ['/WorkerPortal', '/Dagsoppgjor', '/Loddtelling'];
 
 export default function Layout() {
@@ -202,11 +203,11 @@ export default function Layout() {
       const isSuperAdminPage = location.pathname === '/SuperAdmin' || location.pathname.startsWith('/SuperAdmin/');
       if (role === 'superadmin' && !isImpersonatingNow && !isSuperAdminPage) {
         navigate('/SuperAdmin', { replace: true });
-      } else if (role === 'sub_admin' && !subAdminAllowed.includes(location.pathname)) {
+      } else if (role === 'sub_admin' && !subAdminAllowed.includes(location.pathname) && !location.pathname.startsWith('/kontrakt/')) {
         navigate('/WorkerPortal', { replace: true });
-      } else if (role === 'butikksjef' && !butikksjefAllowed.includes(location.pathname)) {
+      } else if (role === 'butikksjef' && !butikksjefAllowed.includes(location.pathname) && !location.pathname.startsWith('/kontrakt/')) {
         navigate('/WorkerPortal', { replace: true });
-      } else if (role === 'user' && allowed && !allowed.includes(location.pathname)) {
+      } else if (role === 'user' && allowed && !allowed.includes(location.pathname) && !location.pathname.startsWith('/kontrakt/')) {
         navigate('/WorkerPortal', { replace: true });
       }
     }).catch(() => setUserRole('user'));

@@ -10,12 +10,13 @@ import { useOrg } from '@/hooks/useOrg';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import BillingCard from '@/components/BillingCard';
+import EmployerSettingsCard from '@/components/settings/EmployerSettingsCard';
 
 const PLAN_DEPT_LIMITS = { basic: 1, pro: 3, enterprise: 6, ultimate: 10 };
 
 const generateDefaults = () => {
   const d = {
-    workplace_name: 'Hovedarbeidssted', latitude: '', longitude: '', radius_meters: 100,
+    workplace_name: 'Hovedarbeidssted', workplace_address: '', apningstid_fra: '07:00', apningstid_til: '23:00', latitude: '', longitude: '', radius_meters: 100,
     full_time_hours_per_week: 37.5,
     active_teams_count: 1,
   };
@@ -331,6 +332,20 @@ export default function Settings() {
             <Label>Navn på arbeidssted</Label>
             <Input value={form.workplace_name} onChange={e => setForm(f => ({ ...f, workplace_name: e.target.value }))} />
           </div>
+          <div className="space-y-1.5">
+            <Label>Adresse til arbeidsstedet</Label>
+            <Input value={form.workplace_address || ''} onChange={e => setForm(f => ({ ...f, workplace_address: e.target.value }))} placeholder="Gate, postnummer og sted" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Åpningstid fra</Label>
+              <Input type="time" value={form.apningstid_fra || ''} onChange={e => setForm(f => ({ ...f, apningstid_fra: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Åpningstid til</Label>
+              <Input type="time" value={form.apningstid_til || ''} onChange={e => setForm(f => ({ ...f, apningstid_til: e.target.value }))} />
+            </div>
+          </div>
           <div className="flex gap-2">
             <Input
               className="flex-1"
@@ -435,6 +450,7 @@ export default function Settings() {
         </Button>
         {saveMut.isSuccess && <p className="text-sm text-emerald-600 text-center">Innstillinger lagret!</p>}
       </form>
+      {showWages && <EmployerSettingsCard orgId={orgId} />}
       {showWages && <BillingCard orgId={orgId} />}
     </div>
   );

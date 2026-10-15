@@ -1,5 +1,6 @@
 import { jsPDF } from "npm:jspdf@4.0.0";
-import { corsHeaders, handleOptions, json, requireUser } from "../_shared/auth.ts";
+import { adminClient, corsHeaders, handleOptions, json, requireUser } from "../_shared/auth.ts";
+import { buildSnapshotPdf } from "../_shared/contractPdf.ts";
 
 // Port of base44/functions/generateContractPDF.
 // The caller must be allowed to read the contract (worker on the contract,
@@ -17,6 +18,19 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const contractId = body.contract_id;
     if (!contractId) return json({ error: "Missing contract_id" }, 400);
+
+    const sealed = await loadSealedPdf(auth.client, contractId);
+    if (sealed instanceof Response) return sealed;
+    if (sealed) {
+      return new Response(sealed, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="arbeidsavtale-${contractId}.pdf"`,
+        },
+      });
+    }
 
     const loaded = await loadContract(auth.client, contractId);
     if (loaded instanceof Response) return loaded;
@@ -47,7 +61,46 @@ Deno.serve(async (req) => {
   }
 });
 
-const CONTRACT_WITHOUT_RATE = "id, org_id, worker_id, worker_name, contract_type, status, org_name, worker_position, employment_percentage, weekly_hours, overtime_hours, full_time_hours_per_week, start_date, end_date, week_number, year, reason, notice_period_months, pdf_url, approved_by_worker_id, approved_at, generated_automatically, created_date, updated_date, created_by";
+const CONTRACT_WITHOUT_RATE = "id, org_id, worker_id, worker_name, contract_type, status, org_name, worker_position, employment_percentage, weekly_hours, overtime_hours, full_time_hours_per_week, start_date, end_date, week_number, year, reason, notice_period_months, approved_by_worker_id, approved_at, generated_automatically, created_date, updated_date, created_by, template_key, template_version, contract_kind, content_sha256, pdf_sha256, employee_signed_at, employer_signed_at, signing_provider";
+
+function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
+  const message = error?.message || "";
+  return error?.code === "PGRST202" || /schema cache/i.test(message) || /could not find the function/i.test(message);
+}
+
+async function loadSealedPdf(client: any, contractId: string): Promise<Uint8Array | Response | null> {
+  const doc = await client.rpc("contract_document", { p_id: contractId });
+  if (isMissingRpc(doc.error)) return null;
+  if (doc.error) return json({ error: doc.error.message }, 500);
+  if (!doc.data) {
+    const row = await client.from("contracts").select("id").eq("id", contractId).maybeSingle();
+    if (row.error) return json({ error: row.error.message }, 500);
+    if (!row.data) return json({ error: "Contract not found" }, 404);
+    return json({ error: "Du har ikke tilgang til avtaleteksten" }, 403);
+  }
+  if (doc.data.pdf_path) {
+    const file = await adminClient().storage.from("contracts").download(doc.data.pdf_path);
+    if (!file.error && file.data) return new Uint8Array(await file.data.arrayBuffer());
+  }
+  if (!doc.data.body_snapshot) return null;
+  const events = await client
+    .from("contract_events")
+    .select("event_type, actor_id, actor_role, ip, user_agent, created_at")
+    .eq("contract_id", contractId)
+    .order("created_at", { ascending: true });
+  return buildSnapshotPdf({
+    id: contractId,
+    body: doc.data.body_snapshot,
+    templateKey: doc.data.template_key,
+    templateVersion: doc.data.template_version,
+    contentSha256: doc.data.content_sha256,
+    workerName: doc.data.field_values?.navn || doc.data.field_values?.ansatt_navn,
+    orgName: doc.data.field_values?.selskap,
+    employeeSignedAt: null,
+    employerSignedAt: null,
+    events: events.data || [],
+  });
+}
 
 // select * works until the wage migration is applied. After it, hourly_rate is
 // revoked and comes back only for the caller's own contract (my_wage_info) or

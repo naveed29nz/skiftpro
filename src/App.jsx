@@ -23,6 +23,8 @@ import SuperAdminAnalytics from '@/pages/SuperAdminAnalytics';
 import SuperAdminBilling from '@/pages/SuperAdminBilling';
 import SuperAdminAuditLog from '@/pages/SuperAdminAuditLog';
 import Contracts from '@/pages/Contracts';
+import ContractSign from '@/pages/ContractSign';
+import ContractScreensPreview from '@/pages/ContractScreensPreview';
 import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
 import InstallPrompt from '@/components/InstallPrompt';
@@ -75,6 +77,7 @@ const AuthenticatedApp = () => {
         <Route path="/SuperAdmin/Billing" element={<SuperAdminBilling />} />
         <Route path="/SuperAdmin/AuditLog" element={<SuperAdminAuditLog />} />
         <Route path="/Contracts" element={<Contracts />} />
+        <Route path="/kontrakt/:contractId" element={<ContractSign />} />
         <Route path="/Resultat" element={<Resultat />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
@@ -91,6 +94,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/personvern" element={<Personvern />} />
+            {import.meta.env.DEV && <Route path="/dev/kontrakt-skjermer" element={<ContractScreensPreview />} />}
             <Route path="/vilkar" element={<Vilkar />} />
             <Route path="/databehandleravtale" element={<Databehandleravtale />} />
             <Route path="/*" element={<AuthenticatedApp />} />
