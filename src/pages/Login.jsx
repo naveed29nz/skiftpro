@@ -14,7 +14,7 @@ function safeNextPath(raw) {
   try {
     const url = new URL(raw, window.location.origin);
     if (url.origin !== window.location.origin) return '/Dashboard';
-    if (url.pathname === '/login' || url.pathname === '/reset-password') return '/Dashboard';
+    if (url.pathname === '/' || url.pathname === '/login' || url.pathname === '/reset-password') return '/Dashboard';
     return `${url.pathname}${url.search}${url.hash}` || '/Dashboard';
   } catch {
     return '/Dashboard';
@@ -27,7 +27,7 @@ export default function Login() {
   const nextPath = safeNextPath(params.get('from'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState('password');
+  const [mode, setMode] = useState(params.get('mode') === 'signup' ? 'signup' : 'password');
   const [fullName, setFullName] = useState('');
   const [consent, setConsent] = useState(false);
   const [message, setMessage] = useState('');
@@ -119,7 +119,9 @@ export default function Login() {
             <Clock className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-xl font-bold text-slate-800">SkiftPro</h1>
-          <p className="text-slate-500 text-sm mt-1">Logg inn for å åpne vaktplanen.</p>
+          <p className="text-slate-500 text-sm mt-1">
+            {mode === 'signup' ? 'Opprett konto og prøv gratis i 30 dager.' : 'Logg inn for å åpne vaktplanen.'}
+          </p>
         </div>
 
         <form onSubmit={mode === 'reset' ? handleReset : mode === 'signup' ? handleSignup : handlePassword} className="space-y-4">
@@ -189,7 +191,10 @@ export default function Login() {
             Har du allerede konto? Logg inn
           </button>
         )}
-        <LegalFooter className="mt-6 justify-center" />
+        <p className="mt-6 text-center text-sm">
+          <Link to="/" className="text-blue-700 hover:underline">Til forsiden</Link>
+        </p>
+        <LegalFooter className="mt-3 justify-center" />
       </div>
     </div>
   );
