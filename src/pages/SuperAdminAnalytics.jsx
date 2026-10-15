@@ -34,7 +34,7 @@ export default function SuperAdminAnalytics() {
 
   const activeWorkers = workers.filter(w => w.status !== 'inactive');
   const completedShifts = shifts.filter(s => s.status === 'completed');
-  const approvedContracts = contracts.filter(c => c.status === 'godkjent');
+  const approvedContracts = contracts.filter(c => c.status === 'godkjent' || c.status === 'signert');
   const openTasks = tasks.filter(t => t.status === 'open');
 
   // Per-org breakdown

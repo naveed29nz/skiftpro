@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronRight, Plus, Copy, GripVertical, ArrowUpDown, Trash
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay, getISOWeek } from 'date-fns';
 import ShiftCellModal from '@/components/shifts/ShiftCellModal';
 import CopyWeekModal from '@/components/timesheet/CopyWeekModal';
-import { useStaffingBudget, getHourlyStaffing } from '@/hooks/useStaffingBudget';
+import { useStaffingBudget } from '@/hooks/useStaffingBudget';
 import { getActiveTeams } from '@/utils/teams';
 import { useOrg } from '@/hooks/useOrg';
 import { useIsMobile } from '@/hooks/use-mobile';

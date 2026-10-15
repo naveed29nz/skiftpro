@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addWeeks, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, endOfWeek, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
 import { nb } from 'date-fns/locale';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { getActiveTeams } from '@/utils/teams';
 import { TrendingUp, Clock, Wallet, Target, ChevronLeft, ChevronRight } from 'lucide-react';

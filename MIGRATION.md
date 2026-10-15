@@ -89,7 +89,7 @@ supabase secrets set SITE_URL=https://your-production-domain
 | Base44 function | Edge function | Who can call it |
 | --- | --- | --- |
 | `generateContractPDF` | `generate-contract-pdf` | Anyone who can read that contract. Returns `application/pdf`. |
-| `updateContractStatus` | `update-contract-status` | `send`: manager of the org. `approve` / `reject`: that worker or a manager. |
+| `updateContractStatus` | `update-contract-status` | `send`: admin who can read wages, via `send_contract`. `approve`: always rejected. The employee signs with a one-time code in `sign-contract`. `reject`: only the employee. |
 | `generateRecurringTasks` | `generate-recurring-tasks` | `profiles.role = admin`. Cron does not use HTTP; it calls the SQL function. |
 | `checkOvertimeAndGenerateContract` | `check-overtime-and-generate-contract` | Any signed-in user. The shift trigger is what runs it in normal use. |
 | `users.inviteUser` | `invite-user` | Managers and super-admins. |
@@ -206,3 +206,59 @@ Run the import with the service role so RLS does not block the load. After it fi
 - Empty-string dates from the old client are stored as null. Responses still include `id`, `_id`, and `created_by_id` (alias of `created_by`) so existing screens keep working.
 - While a super-admin is impersonating an organization, creates that omit `org_id` (for example a new holiday) are stamped with `localStorage.impersonate_org_id`. The database still authorizes them as a super-admin.
 - The `uploads` bucket is public-read so `<img src={file_url}>` works. Only the signed-in user can write into their own folder.
+
+## 7. Digital employment contracts
+
+Migrations `20261015120000_digital_contracts.sql` and `20261015120100_contract_template_seed.sql` are in the repo and are **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Do not run them until the templates have been read by the chain's HR or a lawyer. Deploy the new edge functions only after the migrations are applied, and do not deploy them as part of opening the pull request.
+
+Apply, when you are ready:
+
+```bash
+supabase db push
+```
+
+or paste the two files into the SQL editor in order. The second file seeds six global templates (version 1): `fast`, `midlertidig_vikar`, `tilkalling_ramme`, `butikksjef_ledende`, `merarbeid`, `bilag`.
+
+The migration creates a private `contracts` storage bucket when the `storage` schema exists. Confirm in Storage that the bucket is private. Signed PDFs are stored at `{org_id}/{worker_id}/{contract_id}.pdf`.
+
+If the migration prints a notice that `pg_cron` is missing, schedule the reminder yourself after the functions are deployed:
+
+```sql
+select cron.schedule(
+  'contract-signing-reminders',
+  '0 6 * * *',
+  $$select public.enqueue_contract_reminders()$$
+);
+```
+
+The HTTP function `contract-reminders` does the same enqueue and, when `RESEND_API_KEY` is set, emails the employee. It does not replace the SQL schedule.
+
+### Environment variables (edge functions, not Vite)
+
+Leave these unset until you mean to use them. Do not commit secrets.
+
+| Variable | Purpose |
+| --- | --- |
+| `SIGNING_PROVIDER` | `simple_otp` (default), `idura`, or `signicat`. BankID stays off until this matches the org setting and the secrets below exist. |
+| `IDURA_CLIENT_ID` | Idura / Criipto client id. Not used yet. |
+| `IDURA_CLIENT_SECRET` | Idura client secret. Not used yet. |
+| `IDURA_WEBHOOK_SECRET` | Reserved for the Idura webhook. The webhook currently returns 501. |
+| `SIGNICAT_CLIENT_ID` | Signicat client id. Not used yet. |
+| `SIGNICAT_CLIENT_SECRET` | Signicat client secret. Not used yet. |
+| `SIGNICAT_WEBHOOK_SECRET` | Reserved for the Signicat webhook. |
+| `RESEND_API_KEY` | Sends the one-time code and the signed PDF. Without it, signing still works if `SIGNING_DEV_OTP=true` on a non-production project. |
+| `RESEND_FROM_EMAIL` | From-address. Defaults to `SkiftPro <noreply@skiftpro.no>`. |
+| `SIGNING_DEV_OTP` | `true` returns the code in the API response. Never set this in production. |
+
+Do not request fødselsnummer from BankID unless a legal basis has been written down. The provider stubs store nothing today.
+
+### What an admin does after the migration
+
+1. Settings → Arbeidsgiver i avtalene: company name, org number, address, who signs, tariff, opening hours on the workplace card.
+2. New employee → leave **Send arbeidsavtale til signering** checked, or preview first.
+3. The employee opens Min side → Kontrakter → Les og signer, scrolls the frozen text, checks «Jeg har lest og godtar avtalen», and enters the e-mail code.
+4. An admin countersigns from Kontrakter when the status is «Signert av ansatt».
+5. Both parties then see the certificate. The PDF copy is emailed when Resend is configured.
+
+A store manager sees status for their own store and does not see wages, birth date, contract text, or the PDF. `approve` on `update-contract-status` no longer records a manager as the employee.
+

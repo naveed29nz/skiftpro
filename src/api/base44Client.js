@@ -13,6 +13,7 @@ export const ENTITY_TABLES = {
   Shift: 'shifts',
   WorkplaceSetting: 'workplace_settings',
   Contract: 'contracts',
+  EmployerSetting: 'employer_settings',
   Task: 'tasks',
   RecurringTask: 'recurring_tasks',
   Holiday: 'holidays',
@@ -32,6 +33,7 @@ const FUNCTION_NAMES = {
   generateContractPDF: 'generate-contract-pdf',
   generateRecurringTasks: 'generate-recurring-tasks',
   checkOvertimeAndGenerateContract: 'check-overtime-and-generate-contract',
+  signContract: 'sign-contract',
 };
 
 const DATE_FIELDS = new Set([
@@ -42,6 +44,9 @@ const DATE_FIELDS = new Set([
   'dato',
   'requester_shift_date',
   'target_shift_date',
+  'birth_date',
+  'tiltredelsesdato',
+  'opphorsdato',
 ]);
 
 const TIMESTAMP_FIELDS = new Set([
@@ -103,7 +108,7 @@ export function sanitizeWrite(data, { isUpdate = false } = {}) {
 }
 
 function workplaceColumns() {
-  const cols = ['id', 'org_id', 'workplace_name', 'latitude', 'longitude', 'radius_meters', 'full_time_hours_per_week', 'active_teams_count'];
+  const cols = ['id', 'org_id', 'workplace_name', 'workplace_address', 'apningstid_fra', 'apningstid_til', 'latitude', 'longitude', 'radius_meters', 'full_time_hours_per_week', 'active_teams_count'];
   for (let i = 1; i <= 10; i += 1) {
     cols.push(
       `team${i}_name`,
@@ -131,10 +136,21 @@ const WAGE_FIELDS = {
 };
 
 const SAFE_COLUMNS = {
-  workers: ['id', 'org_id', 'name', 'email', 'phone', 'position', 'status', 'color', 'teams', 'role', 'team_roles', 'employment_type', 'employment_percentage', 'disabled_extras', 'can_see_resultat', 'created_date', 'updated_date', 'created_by'],
-  contracts: ['id', 'org_id', 'worker_id', 'worker_name', 'contract_type', 'status', 'org_name', 'worker_position', 'employment_percentage', 'weekly_hours', 'overtime_hours', 'full_time_hours_per_week', 'start_date', 'end_date', 'week_number', 'year', 'reason', 'notice_period_months', 'pdf_url', 'approved_by_worker_id', 'approved_at', 'generated_automatically', 'created_date', 'updated_date', 'created_by'],
+  workers: ['id', 'org_id', 'name', 'email', 'phone', 'position', 'status', 'color', 'teams', 'role', 'team_roles', 'employment_type', 'employment_percentage', 'disabled_extras', 'can_see_resultat', 'address', 'ansettelsestype', 'tiltredelsesdato', 'opphorsdato', 'timer_per_uke', 'timer_per_dag', 'arbeidsoppgaver', 'provetid_mnd', 'created_date', 'updated_date', 'created_by'],
+  contracts: ['id', 'org_id', 'worker_id', 'worker_name', 'contract_type', 'status', 'org_name', 'worker_position', 'employment_percentage', 'weekly_hours', 'overtime_hours', 'full_time_hours_per_week', 'start_date', 'end_date', 'week_number', 'year', 'reason', 'notice_period_months', 'approved_by_worker_id', 'approved_at', 'generated_automatically', 'created_date', 'updated_date', 'created_by', 'template_key', 'template_version', 'contract_kind', 'parent_contract_id', 'employee_signed_at', 'employee_signed_by', 'employer_signed_at', 'employer_signed_by', 'content_sha256', 'pdf_sha256', 'rejection_reason', 'expires_at', 'opened_at', 'sent_at', 'signing_provider'],
   holidays: ['id', 'org_id', 'name', 'date', 'created_date', 'updated_date', 'created_by'],
   workplace_settings: workplaceColumns().filter((col) => !workplaceWageFields.includes(col)),
+};
+
+const LEGACY_SAFE_COLUMNS = {
+  workers: ['id', 'org_id', 'name', 'email', 'phone', 'position', 'status', 'color', 'teams', 'role', 'team_roles', 'employment_type', 'employment_percentage', 'disabled_extras', 'can_see_resultat', 'created_date', 'updated_date', 'created_by'],
+  contracts: ['id', 'org_id', 'worker_id', 'worker_name', 'contract_type', 'status', 'org_name', 'worker_position', 'employment_percentage', 'weekly_hours', 'overtime_hours', 'full_time_hours_per_week', 'start_date', 'end_date', 'week_number', 'year', 'reason', 'notice_period_months', 'pdf_url', 'approved_by_worker_id', 'approved_at', 'generated_automatically', 'created_date', 'updated_date', 'created_by'],
+  workplace_settings: ['id', 'org_id', 'workplace_name', 'latitude', 'longitude', 'radius_meters', 'full_time_hours_per_week', 'active_teams_count', 'created_date', 'updated_date', 'created_by'].concat(
+    Array.from({ length: 10 }, (_, index) => {
+      const n = index + 1;
+      return [`team${n}_name`, `team${n}_latitude`, `team${n}_longitude`, `team${n}_radius_meters`];
+    }).flat(),
+  ),
 };
 
 const WAGE_RPC = {
@@ -149,6 +165,11 @@ const rpcState = new Map();
 function isColumnPrivilegeError(error) {
   const message = error?.message || '';
   return error?.code === '42501' || /permission denied for column/i.test(message);
+}
+
+function isMissingColumn(error) {
+  const message = error?.message || '';
+  return error?.code === '42703' || /column .* does not exist/i.test(message);
 }
 
 function isMissingRpc(error) {
@@ -266,6 +287,9 @@ async function runRead(table, build) {
   if (result.error && WAGE_FIELDS[table] && isColumnPrivilegeError(result.error)) {
     rpcState.set(WAGE_RPC[table], 'yes');
     result = await build(SAFE_COLUMNS[table].join(','));
+    if (result.error && isMissingColumn(result.error) && LEGACY_SAFE_COLUMNS[table]) {
+      result = await build(LEGACY_SAFE_COLUMNS[table].join(','));
+    }
     if (result.error) throw toError(result.error);
     const overlay = await loadWageOverlay(table);
     return withWageColumns(table, result.data, overlay || []);

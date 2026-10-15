@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -57,6 +58,8 @@ export default function Workers() {
   const [filterTeam, setFilterTeam] = useState('all');
   const [teamDefaultSet, setTeamDefaultSet] = useState(false);
   const [savingRole, setSavingRole] = useState(null);
+  const [formError, setFormError] = useState('');
+  const [preview, setPreview] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: allWorkers = [], isLoading } = useQuery({
@@ -88,7 +91,7 @@ export default function Workers() {
 
   const createMut = useMutation({
     mutationFn: d => base44.entities.Worker.create(d),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); setShowForm(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); },
   });
 
   const bulkCreateMut = useMutation({
@@ -98,7 +101,7 @@ export default function Workers() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Worker.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); setEditing(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['workers'] }); },
   });
 
   const deleteMut = useMutation({
@@ -113,27 +116,93 @@ export default function Workers() {
     },
   });
 
+  const { data: workplaces = [] } = useQuery({
+    queryKey: ['workplace-settings'],
+    queryFn: () => base44.entities.WorkplaceSetting.list(),
+    enabled: showWages,
+  });
+  const workplace = (orgId ? workplaces.filter(row => row.org_id === orgId) : workplaces)[0] || null;
+  const { data: employerRows = [] } = useQuery({
+    queryKey: ['employer-settings', orgId],
+    queryFn: () => base44.entities.EmployerSetting.filter({ org_id: orgId }),
+    enabled: showWages && !!orgId,
+  });
+
+  useEffect(() => {
+    if (!editing?.id || !showWages) return;
+    let cancelled = false;
+    supabase.rpc('worker_contract_fields', { p_worker_id: editing.id }).then(({ data }) => {
+      if (cancelled || !data?.birth_date) return;
+      setEditing(current => current && current.id === editing.id ? { ...current, birth_date: data.birth_date, address: data.address ?? current.address } : current);
+    });
+    return () => { cancelled = true; };
+  }, [editing?.id, showWages]);
+
   const handleSubmit = async (data) => {
-    if (editing) {
-      await updateMut.mutateAsync({ id: editing.id, data });
-      const promises = [];
-      // Deaktivert: kommende vakter gjøres ledige (tidligere beholdes med navn)
-      if (editing.status === 'active' && data.status === 'inactive') {
-        promises.push(releaseUpcomingShifts(editing.id, { orgId }));
+    setFormError('');
+    const sendContract = Boolean(data.send_arbeidsavtale);
+    const previewFirst = Boolean(data.preview_first);
+    const checklist = data.checklist || {};
+    const workerFields = { ...data };
+    delete workerFields.send_arbeidsavtale;
+    delete workerFields.preview_first;
+    delete workerFields.checklist;
+    try {
+      let saved;
+      if (editing) {
+        saved = await updateMut.mutateAsync({ id: editing.id, data: workerFields });
+        const promises = [];
+        if (editing.status === 'active' && data.status === 'inactive') {
+          promises.push(releaseUpcomingShifts(editing.id, { orgId }));
+        }
+        const oldTeams = editing.teams || (editing.team ? [editing.team] : ['team1']);
+        const newTeams = data.teams || oldTeams;
+        oldTeams.filter(t => !newTeams.includes(t)).forEach(t =>
+          promises.push(releaseUpcomingShifts(editing.id, { teamKey: t, orgId }))
+        );
+        if (promises.length) {
+          await Promise.all(promises);
+          queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        }
+      } else {
+        saved = await createMut.mutateAsync({ ...workerFields, org_id: orgId });
       }
-      // Fjernet fra avdeling: kommende vakter i de avdelingene gjøres ledige
-      const oldTeams = editing.teams || (editing.team ? [editing.team] : ['team1']);
-      const newTeams = data.teams || oldTeams;
-      oldTeams.filter(t => !newTeams.includes(t)).forEach(t =>
-        promises.push(releaseUpcomingShifts(editing.id, { teamKey: t, orgId }))
-      );
-      if (promises.length) {
-        await Promise.all(promises);
-        queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      if (sendContract) {
+        const { data: created, error } = await supabase.rpc('create_employment_contract', {
+          p_worker_id: saved.id,
+          p_send_now: !previewFirst,
+          p_checklist: checklist,
+        });
+        if (error) throw new Error(error.message);
+        if (!created?.ok) {
+          const missing = Array.isArray(created?.missing) ? created.missing.join(', ') : 'Avtalen kunne ikke opprettes';
+          setFormError(missing);
+          setEditing(saved);
+          setShowForm(true);
+          return;
+        }
+        if (previewFirst) {
+          setPreview({ id: created.id, body: created.body_snapshot, name: saved.name });
+          setShowForm(false);
+          setEditing(null);
+          return;
+        }
       }
-    } else {
-      createMut.mutate({ ...data, org_id: orgId });
+      setShowForm(false);
+      setEditing(null);
+    } catch (err) {
+      setFormError(err.message || 'Lagring feilet');
     }
+  };
+
+  const sendPreview = async () => {
+    if (!preview?.id) return;
+    const { data, error } = await supabase.rpc('send_contract', { p_contract_id: preview.id });
+    if (error || data?.ok === false) {
+      setFormError(error?.message || data?.error || 'Kunne ikke sende');
+      return;
+    }
+    setPreview(null);
   };
 
   const handleRoleChange = async (worker, newRole) => {
@@ -295,19 +364,36 @@ export default function Workers() {
         />
       )}
 
-      <Dialog open={showForm || !!editing} onOpenChange={v => { if (!v) { setShowForm(false); setEditing(null); } }}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+      <Dialog open={showForm || !!editing} onOpenChange={v => { if (!v) { setShowForm(false); setEditing(null); setFormError(''); } }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Worker' : 'Add Worker'}</DialogTitle>
+            <DialogTitle>{editing ? 'Rediger ansatt' : 'Ny ansatt'}</DialogTitle>
           </DialogHeader>
           <div className="overflow-y-auto flex-1 pr-1">
+          {formError && <p className="text-sm text-red-600 mb-3">{formError}</p>}
           <WorkerForm
+            key={`${editing?.id || 'new'}-${editing?.birth_date || ''}`}
             worker={editing}
             onSubmit={handleSubmit}
-            onCancel={() => { setShowForm(false); setEditing(null); }}
+            onCancel={() => { setShowForm(false); setEditing(null); setFormError(''); }}
             teamNames={teamNames}
             showWages={showWages}
+            employerSettings={employerRows[0] || null}
+            workplace={workplace}
           />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!preview} onOpenChange={v => { if (!v) setPreview(null); }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Forhåndsvisning for {preview?.name}</DialogTitle>
+          </DialogHeader>
+          <pre className="overflow-y-auto flex-1 whitespace-pre-wrap text-sm text-slate-800 bg-slate-50 rounded-lg p-4">{preview?.body}</pre>
+          <div className="flex justify-end gap-2 pt-3">
+            <Button variant="outline" onClick={() => setPreview(null)}>Behold som utkast</Button>
+            <Button onClick={sendPreview}>Send til signering</Button>
           </div>
         </DialogContent>
       </Dialog>

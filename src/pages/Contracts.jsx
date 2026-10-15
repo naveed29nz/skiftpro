@@ -6,21 +6,11 @@ import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Download, Send, Trash2, Eye, Search, Filter, ChevronDown } from 'lucide-react';
+import { FileText, Download, Send, Trash2, Eye, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { nb } from 'date-fns/locale';
-
-const STATUS_MAP = {
-  utkast: { label: 'Utkast', color: 'bg-slate-100 text-slate-700' },
-  sendt: { label: 'Sendt', color: 'bg-blue-100 text-blue-700' },
-  godkjent: { label: 'Godkjent', color: 'bg-emerald-100 text-emerald-700' },
-  avvist: { label: 'Avvist', color: 'bg-red-100 text-red-700' },
-};
-
-const TYPE_MAP = {
-  fast: { label: 'Fast', color: 'bg-indigo-100 text-indigo-700' },
-  ekstrahjelp: { label: 'Ekstrahjelp', color: 'bg-amber-100 text-amber-700' },
-};
+import { Link } from 'react-router-dom';
+import { contractStatus, contractType } from '@/contracts/labels';
 
 export default function Contracts() {
   const queryClient = useQueryClient();
@@ -80,7 +70,7 @@ export default function Contracts() {
     </div>
   );
 
-  const godkjentCount = filtered.filter(c => c.status === 'godkjent').length;
+  const signedCount = filtered.filter(c => c.status === 'godkjent' || c.status === 'signert').length;
   const utkastCount = filtered.filter(c => c.status === 'utkast').length;
   const sendtCount = filtered.filter(c => c.status === 'sendt').length;
 
@@ -89,15 +79,15 @@ export default function Contracts() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Kontraktsarkiv</h1>
-          <p className="text-sm text-slate-500 mt-1">Oversikt over alle arbeidskontrakter</p>
+          <p className="text-sm text-slate-500 mt-1">Oversikt over alle arbeidskontrakter. Butikksjef ser status, ikke lønn eller avtaletekst.</p>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-500">Godkjente</p>
-          <p className="text-2xl font-bold text-emerald-600">{godkjentCount}</p>
+          <p className="text-sm text-slate-500">Signert</p>
+          <p className="text-2xl font-bold text-emerald-600">{signedCount}</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-sm text-slate-500">Sendt / Venter</p>
@@ -128,8 +118,13 @@ export default function Contracts() {
           <option value="all">Alle statuser</option>
           <option value="utkast">Utkast</option>
           <option value="sendt">Sendt</option>
-          <option value="godkjent">Godkjent</option>
+          <option value="godkjent">Signert (eldre)</option>
+          <option value="signert">Signert</option>
+          <option value="signert_ansatt">Signert av ansatt</option>
+          <option value="apnet">Åpnet</option>
           <option value="avvist">Avvist</option>
+          <option value="utlopt">Utløpt</option>
+          <option value="trukket">Trukket</option>
         </select>
         <select
           value={typeFilter}
@@ -138,6 +133,11 @@ export default function Contracts() {
         >
           <option value="all">Alle typer</option>
           <option value="fast">Fast</option>
+          <option value="midlertidig_vikar">Midlertidig vikar</option>
+          <option value="tilkalling_ramme">Tilkalling</option>
+          <option value="butikksjef_ledende">Butikksjef</option>
+          <option value="merarbeid">Merarbeid</option>
+          <option value="bilag">Bilag</option>
           <option value="ekstrahjelp">Ekstrahjelp</option>
         </select>
       </div>
@@ -153,8 +153,8 @@ export default function Contracts() {
         ) : (
           <div className="divide-y divide-slate-100">
             {filtered.map(contract => {
-              const statusCfg = STATUS_MAP[contract.status] || STATUS_MAP.utkast;
-              const typeCfg = TYPE_MAP[contract.contract_type] || TYPE_MAP.ekstrahjelp;
+              const statusCfg = contractStatus(contract.status);
+              const typeCfg = contractType(contract.contract_type);
               return (
                 <div key={contract.id} className="px-5 py-4 hover:bg-slate-50/50 transition-colors">
                   <div className="flex items-center justify-between">
@@ -187,7 +187,7 @@ export default function Contracts() {
                         <p className="text-sm font-medium text-slate-600">{contract.weekly_hours?.toFixed(1)}t{showWages ? ` · ${contract.hourly_rate} kr/t` : ''}</p>
                       </div>
                       <div className="flex items-center gap-1">
-                        {contract.status === 'utkast' && (
+                        {contract.status === 'utkast' && showWages && (
                           <Button variant="ghost" size="sm" onClick={() => handleSend(contract.id)} className="text-blue-600 hover:text-blue-700" title="Send til ansatt">
                             <Send className="w-4 h-4" />
                           </Button>
@@ -209,9 +209,16 @@ export default function Contracts() {
                         <Button variant="ghost" size="sm" onClick={() => setViewingContract(contract)} className="text-slate-500 hover:text-slate-700" title="Vis detaljer">
                           <Eye className="w-4 h-4" />
                         </Button>
+                        {showWages && contract.status === 'signert_ansatt' && (
+                          <Button variant="ghost" size="sm" asChild className="text-amber-700" title="Motsigner">
+                            <Link to={`/kontrakt/${contract.id}?rolle=arbeidsgiver`}>Motsigner</Link>
+                          </Button>
+                        )}
+                        {contract.status !== 'signert' && showWages && (
                         <Button variant="ghost" size="sm" onClick={() => handleDelete(contract.id)} className="text-red-400 hover:text-red-600" title="Slett">
                           <Trash2 className="w-4 h-4" />
                         </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -243,14 +250,14 @@ export default function Contracts() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Type</p>
-                    <Badge className={(TYPE_MAP[viewingContract.contract_type] || TYPE_MAP.ekstrahjelp).color}>
-                      {(TYPE_MAP[viewingContract.contract_type] || TYPE_MAP.ekstrahjelp).label}
+                    <Badge className={contractType(viewingContract.contract_type).color}>
+                      {contractType(viewingContract.contract_type).label}
                     </Badge>
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Status</p>
-                    <Badge className={(STATUS_MAP[viewingContract.status] || STATUS_MAP.utkast).color}>
-                      {(STATUS_MAP[viewingContract.status] || STATUS_MAP.utkast).label}
+                    <Badge className={contractStatus(viewingContract.status).color}>
+                      {contractStatus(viewingContract.status).label}
                     </Badge>
                   </div>
                   <div>
@@ -312,7 +319,7 @@ export default function Contracts() {
                   )}
                   Last ned PDF
                 </Button>}
-                {viewingContract.status === 'utkast' && (
+                {viewingContract.status === 'utkast' && showWages && (
                   <Button variant="outline" onClick={() => { handleSend(viewingContract.id); setViewingContract(null); }} className="gap-2">
                     <Send className="w-4 h-4" /> Send til ansatt
                   </Button>

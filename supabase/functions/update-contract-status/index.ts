@@ -1,7 +1,8 @@
-import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.ts";
+import { handleOptions, json, requireUser } from "../_shared/auth.ts";
 
-// Port of base44/functions/updateContractStatus.
-// Workers may approve or reject their own contract. Managers of the org may send it.
+// Sending stays with an admin. The employee's signature can only be given
+// by the employee, with a one-time code, in sign-contract. A manager must
+// not be stored as approved_by_worker_id.
 
 Deno.serve(async (req) => {
   const opt = handleOptions(req);
@@ -19,49 +20,36 @@ Deno.serve(async (req) => {
       return json({ error: "Missing contract_id or action" }, 400);
     }
 
-    const admin = adminClient();
-    const { data: contract, error } = await admin
-      .from("contracts")
-      .select("id, org_id, worker_id, created_by, status")
-      .eq("id", contractId)
-      .maybeSingle();
-    if (error) return json({ error: error.message }, 500);
-    if (!contract) return json({ error: "Contract not found" }, 404);
-
-    const [{ data: superAdmin }, { data: manager }, { data: inOrg }, { data: ownsWorker }] = await Promise.all([
-      auth.client.rpc("is_super_admin"),
-      auth.client.rpc("is_manager"),
-      auth.client.rpc("in_org", { org: contract.org_id }),
-      auth.client.rpc("worker_matches", { worker: contract.worker_id }),
-    ]);
-
-    const managerOfOrg = Boolean(superAdmin) || (Boolean(manager) && Boolean(inOrg));
-    const isParty = Boolean(ownsWorker) || contract.created_by === auth.user.id;
+    if (action === "approve") {
+      return json({
+        error: "Ansattens signatur kan bare avgis av den ansatte selv, med engangskode. En leder kan ikke godkjenne på vegne av den ansatte.",
+      }, 403);
+    }
 
     if (action === "send") {
-      if (!managerOfOrg) return json({ error: "Forbidden" }, 403);
-      const { error: updateError } = await admin.from("contracts").update({ status: "sendt" }).eq("id", contractId);
-      if (updateError) return json({ error: updateError.message }, 500);
+      const { data, error } = await auth.client.rpc("send_contract", { p_contract_id: contractId });
+      if (error) {
+        const status = /bare admin/i.test(error.message) ? 403 : 400;
+        return json({ error: error.message }, status);
+      }
+      if (data && data.ok === false) return json({ error: data.error || "Kunne ikke sende" }, 400);
       return json({ status: "sent", contract_id: contractId });
     }
 
-    if (action === "approve" || action === "reject") {
-      if (!managerOfOrg && !isParty) return json({ error: "Forbidden" }, 403);
-      if (action === "approve") {
-        const { error: updateError } = await admin.from("contracts").update({
-          status: "godkjent",
-          approved_by_worker_id: auth.user.id,
-          approved_at: new Date().toISOString(),
-        }).eq("id", contractId);
-        if (updateError) return json({ error: updateError.message }, 500);
-        return json({ status: "approved", contract_id: contractId });
+    if (action === "reject") {
+      const { data, error } = await auth.client.rpc("reject_contract", {
+        p_contract_id: contractId,
+        p_reason: body.reason || "",
+      });
+      if (error) {
+        const status = /ansatte selv/i.test(error.message) ? 403 : 400;
+        return json({ error: error.message }, status);
       }
-      const { error: updateError } = await admin.from("contracts").update({ status: "avvist" }).eq("id", contractId);
-      if (updateError) return json({ error: updateError.message }, 500);
+      if (data && data.ok === false) return json({ error: data.error || "Kunne ikke avvise" }, 400);
       return json({ status: "rejected", contract_id: contractId });
     }
 
-    return json({ error: "Invalid action. Use: approve, reject, send" }, 400);
+    return json({ error: "Invalid action. Use: send, reject. Signering skjer i sign-contract." }, 400);
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Unknown error" }, 500);
   }

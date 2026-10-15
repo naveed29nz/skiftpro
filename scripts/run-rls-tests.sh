@@ -43,14 +43,37 @@ begin
 end $$;
 grant usage on schema auth to authenticated, anon, service_role;
 grant execute on function auth.uid() to authenticated, anon, service_role;
+
+create schema if not exists storage;
+create table if not exists storage.buckets (
+  id text primary key,
+  name text,
+  public boolean
+);
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text,
+  name text
+);
+create or replace function storage.foldername(name text)
+returns text[]
+language sql
+immutable
+as $$
+  select string_to_array(name, '/')
+$$;
 SQL
 
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261012180000_schema.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261012180100_rls.sql"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261012180200_jobs_and_storage.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261013210000_hide_wage_columns.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261014100000_wage_column_grants.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261014120000_prelaunch_security.sql"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261015120000_digital_contracts.sql"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261015120100_contract_template_seed.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/rls_isolation.sql" | tee /tmp/rls-test.out
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/contract_signing.sql" | tee -a /tmp/rls-test.out
 if grep -E 'FAIL|[[:space:]]+[1-9][0-9]* \|[[:space:]]+[0-9]+' /tmp/rls-test.out | head -n 1 | grep -q FAIL; then
   echo "RLS tests failed" >&2
   exit 1

@@ -3,8 +3,6 @@
  * Used in Dashboard to show under/over/ok status.
  */
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { useStaffingBudget, getHourlyStaffing } from '@/hooks/useStaffingBudget';
 import { getISODay } from 'date-fns';
 
