@@ -56,6 +56,26 @@ declare
   detail text;
   actor text;
 begin
+  update public.organizations
+  set admin_signerer_navn = 'Naveed Zafar'
+  where id = 'org-a';
+  fields := public.contract_field_values('w-ansatt-a');
+  insert into rls_results values (
+    'customer-card admin name signs, not the contact or the selected profile',
+    fields ->> 'selskap' = 'Butikkdrift Nas AS'
+      and fields ->> 'org_nr' = '912345678'
+      and fields ->> 'signatur_navn' = 'Naveed Zafar'
+      and fields ->> 'signatur_navn' is distinct from 'ZAS'
+      and fields ->> 'signatur_navn' is distinct from 'Kari Avdeling'
+      and fields ->> 'signatur_navn' is distinct from 'Kari Person'
+      and fields ->> 'signatur_navn' is distinct from 'Super'
+      and fields ->> 'signatur_navn' is distinct from 'Admin B',
+    coalesce(fields ->> 'signatur_navn', '')
+  );
+
+  update public.organizations
+  set admin_signerer_navn = '   '
+  where id = 'org-a';
   fields := public.contract_field_values('w-ansatt-a');
   insert into rls_results values (
     'chosen department admin signs for the customer company',

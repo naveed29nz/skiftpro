@@ -144,23 +144,23 @@ const signatoryWorkers = [
   { org_id: 'org-other', email: 'other@example.com', role: 'admin', team_roles: {} },
 ];
 
-test('the signature line uses the chosen admin, then the customer admin, then explicit text', () => {
+test('the signature line uses the customer-card admin name, then the selected profile, then explicit text', () => {
   assert.equal(employerSignerName({
-    chosenAdminName: 'Kari Avdeling',
-    primaryAdminName: 'Naveed Zafar',
-    explicitName: 'Kari Person',
-  }), 'Kari Avdeling');
-  assert.equal(employerSignerName({
-    chosenAdminName: '  ',
-    primaryAdminName: 'Naveed Zafar',
+    cardAdminName: 'Naveed Zafar',
+    selectedAdminName: 'Kari Avdeling',
     explicitName: 'Kari Person',
   }), 'Naveed Zafar');
   assert.equal(employerSignerName({
-    chosenAdminName: '',
-    primaryAdminName: '',
+    cardAdminName: '  ',
+    selectedAdminName: 'Kari Avdeling',
+    explicitName: 'Kari Person',
+  }), 'Kari Avdeling');
+  assert.equal(employerSignerName({
+    cardAdminName: '',
+    selectedAdminName: '',
     explicitName: 'Kari Person',
   }), 'Kari Person');
-  assert.equal(employerSignerName({ chosenAdminName: '', primaryAdminName: '', explicitName: '' }), '');
+  assert.equal(employerSignerName({ cardAdminName: '', selectedAdminName: '', explicitName: '' }), '');
 });
 
 test('the customer card only offers this customer’s admins', () => {
@@ -172,9 +172,19 @@ test('the customer card only offers this customer’s admins', () => {
   assert.equal(options.some((option) => option.fullName === 'Admin Annen'), false);
 });
 
-test('a chosen admin signs, otherwise the customer’s primary admin', () => {
+test('the customer-card admin name signs, not the contact or the profile', () => {
+  const fromCard = resolveEmployerSignerName({
+    organization: { ...customer, admin_signerer_navn: 'Naveed Zafar', employer_signatory_user_id: 'dept', contact_name: 'ZAS' },
+    profiles: signatoryProfiles,
+    workers: signatoryWorkers,
+    settings: { signatur_navn: 'Kari Person' },
+  });
+  assert.equal(fromCard, 'Naveed Zafar');
+});
+
+test('a chosen admin signs when the customer card has no admin name', () => {
   const chosen = resolveEmployerSignerName({
-    organization: { ...customer, employer_signatory_user_id: 'dept' },
+    organization: { ...customer, admin_signerer_navn: '', employer_signatory_user_id: 'dept', contact_name: 'ZAS' },
     profiles: signatoryProfiles,
     workers: signatoryWorkers,
     settings: { signatur_navn: 'Kari Person' },

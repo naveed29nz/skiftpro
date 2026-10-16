@@ -119,7 +119,7 @@ export default function EmployerSettingsCard({ orgId }) {
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Signatur, fullt navn</Label>
           <Input value={form.signatur_navn || ''} onChange={(e) => setField('signatur_navn', e.target.value)} placeholder="Brukes bare når kunden mangler et adminnavn" />
-          <p className="text-xs text-slate-500">Siste reserveløsning. Signaturlinjen er ellers «For [selskapsnavn]: [valgt admin]». Kontaktpersonen brukes ikke.</p>
+          <p className="text-xs text-slate-500">Siste reserveløsning, etter navnet «Admin / signerer» på kundekortet og deretter valgt admin. Kontaktpersonen brukes ikke.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Alminnelig ukentlig arbeidstid</Label>
