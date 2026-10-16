@@ -28,6 +28,9 @@ Arbeidstid
 Arbeidsforholdet tiltres ved hvert avtalte oppdrag/tilkallingens begynnelse, og avsluttes uten forutgående oppsigelse og uten oppsigelsesfrist etter endt tilkalling.
 
 Den alminnelige arbeidstiden hos Arbeidsgiveren er {{alminnelig_ukentlig_arbeidstid}} timer per uke. Arbeidstiden plasseres i tidsrommet mellom kl {{apningstid_fra}} og kl {{apningstid_til}}. Daglig og ukentlig arbeidstid fastsettes for hvert enkelt oppdrag.
+{{#apningstider}}
+Åpningstidene er {{apningstider}}.
+{{/apningstider}}
 
 Arbeidstaker har rett på pauser etter arbeidsmiljøloven § 10-9.
 

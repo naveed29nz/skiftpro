@@ -13,6 +13,9 @@ Det vises til rammeavtale for tilkallingsvikar som er inngått mellom partene{{#
 Timelønn er NOK {{timelonn}}, som avtalt i rammeavtalen.
 
 Arbeidssted: {{sted}}.
+{{#apningstider}}
+Åpningstidene er {{apningstider}}.
+{{/apningstider}}
 
 Signatur
 

@@ -26,6 +26,9 @@ For overtidsarbeid utbetales overtidstillegg i henhold til den til enhver tid gj
 {{/tariff}}
 
 Arbeidssted er for tiden {{sted}}.
+{{#apningstider}}
+Åpningstidene er {{apningstider}}.
+{{/apningstider}}
 
 Signatur
 

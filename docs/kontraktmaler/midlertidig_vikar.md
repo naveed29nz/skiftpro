@@ -30,6 +30,9 @@ Arbeidstid
 Det praktiseres skiftordning i virksomheten og den daglige og ukentlige arbeidstiden vil variere, og arbeidstaker er forpliktet til å følge den til enhver tid gjeldende arbeidsplan.
 
 Arbeidstiden er gjennomsnittlig på {{timer_per_uke}} timer per uke. Den gjennomsnittlige daglige arbeidstiden er {{timer_per_dag}} timer i kioskens åpningstid som for tiden er mellom klokken {{apningstid_fra}} og {{apningstid_til}}.
+{{#apningstider}}
+Nærmere om åpningstidene: {{apningstider}}.
+{{/apningstider}}
 
 Nærmere plassering av daglig og ukentlig arbeidstid følger av gjeldende arbeidsplan.
 

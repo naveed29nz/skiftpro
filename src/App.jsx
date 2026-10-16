@@ -16,6 +16,9 @@ const AuthenticatedApp = lazy(() => import('./AuthenticatedApp'));
 const ContractScreensPreview = import.meta.env.DEV
   ? lazy(() => import('@/pages/ContractScreensPreview'))
   : null;
+const StoreSettingsPreview = import.meta.env.DEV
+  ? lazy(() => import('@/pages/StoreSettingsPreview'))
+  : null;
 
 function storedSessionPresent() {
   try {
@@ -73,6 +76,16 @@ function App() {
                 element={(
                   <Suspense fallback={<OpeningSplash />}>
                     <ContractScreensPreview />
+                  </Suspense>
+                )}
+              />
+            )}
+            {import.meta.env.DEV && StoreSettingsPreview && (
+              <Route
+                path="/dev/butikk-innstillinger"
+                element={(
+                  <Suspense fallback={<OpeningSplash />}>
+                    <StoreSettingsPreview />
                   </Suspense>
                 )}
               />

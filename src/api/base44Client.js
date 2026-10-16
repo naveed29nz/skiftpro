@@ -107,6 +107,23 @@ export function sanitizeWrite(data, { isUpdate = false } = {}) {
   return out;
 }
 
+const STORE_WORKPLACE_COLUMNS = [];
+for (let i = 1; i <= 10; i += 1) {
+  STORE_WORKPLACE_COLUMNS.push(
+    `team${i}_address`,
+    `team${i}_apningstid_fra`,
+    `team${i}_apningstid_til`,
+    `team${i}_apningstider`,
+    `team${i}_notes`,
+  );
+}
+
+function withoutStoreWorkplaceColumns(payload) {
+  const next = { ...payload };
+  for (const column of STORE_WORKPLACE_COLUMNS) delete next[column];
+  return next;
+}
+
 function workplaceColumns() {
   const cols = ['id', 'org_id', 'workplace_name', 'workplace_address', 'apningstid_fra', 'apningstid_til', 'latitude', 'longitude', 'radius_meters', 'full_time_hours_per_week', 'active_teams_count'];
   for (let i = 1; i <= 10; i += 1) {
@@ -119,6 +136,11 @@ function workplaceColumns() {
       `team${i}_latitude`,
       `team${i}_longitude`,
       `team${i}_radius_meters`,
+      `team${i}_address`,
+      `team${i}_apningstid_fra`,
+      `team${i}_apningstid_til`,
+      `team${i}_apningstider`,
+      `team${i}_notes`,
     );
   }
   cols.push('created_date', 'updated_date', 'created_by');
@@ -321,6 +343,15 @@ async function selectRows(table, { sort, limit, filters } = {}) {
   return rows.slice(0, cap).map(normalizeRow);
 }
 
+async function writeRow(table, payload, run) {
+  try {
+    return await runRead(table, (columns) => run(columns, payload));
+  } catch (error) {
+    if (table !== 'workplace_settings' || !isMissingColumn(error)) throw error;
+    return runRead(table, (columns) => run(columns, withoutStoreWorkplaceColumns(payload)));
+  }
+}
+
 function entityApi(table) {
   return {
     list(sort, limit) {
@@ -336,13 +367,15 @@ function entityApi(table) {
     },
     async create(data) {
       const payload = withImpersonatedOrg(table, sanitizeWrite(data, { isUpdate: false }));
-      const row = await runRead(table, (columns) => supabase.from(table).insert(payload).select(columns).single());
+      const row = await writeRow(table, payload, (columns, body) => (
+        supabase.from(table).insert(body).select(columns).single()
+      ));
       return normalizeRow(row);
     },
     async update(id, data) {
       const payload = sanitizeWrite(data, { isUpdate: true });
-      const row = await runRead(table, (columns) => (
-        supabase.from(table).update(payload).eq('id', id).select(columns).maybeSingle()
+      const row = await writeRow(table, payload, (columns, body) => (
+        supabase.from(table).update(body).eq('id', id).select(columns).maybeSingle()
       ));
       if (!row) throw apiError(`${table} ${id} not found`, 404);
       return normalizeRow(row);
