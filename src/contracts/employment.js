@@ -90,12 +90,70 @@ export function employerOrgNumber(settings, organizationOrgNumber) {
   return String(organizationOrgNumber || '').trim() || String(settings?.org_nr || '').trim();
 }
 
+function normalizedEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
 /**
- * Person on the signature line. An explicit signatory wins.
- * Otherwise the organization owner's full name. The contact name is not used.
+ * A customer admin is this organization's primary admin, the invited admin
+ * email, or a department admin (admin/sub_admin) employed by this customer.
+ * A platform super-admin and another customer's admin do not qualify.
  */
-export function employerSignerName(settings, ownerFullName) {
-  return String(settings?.signatur_navn || '').trim() || String(ownerFullName || '').trim();
+export function isCustomerAdminProfile(profile, organization, workers) {
+  if (!profile?.id || !organization) return false;
+  if (organization.admin_user_id && profile.id === organization.admin_user_id) return true;
+  const email = normalizedEmail(profile.email);
+  if (email && email === normalizedEmail(organization.admin_email)) return true;
+  if (!email || !organization.id) return false;
+  return (workers || []).some((worker) => {
+    if (worker.org_id !== organization.id) return false;
+    if (normalizedEmail(worker.email) !== email) return false;
+    if (worker.role === 'admin' || worker.role === 'sub_admin') return true;
+    return Object.values(worker.team_roles || {}).some((role) => role === 'admin' || role === 'sub_admin');
+  });
+}
+
+/** Admins who may sign for this customer. The primary admin is marked. */
+export function customerAdminOptions(organization, profiles, workers) {
+  if (!organization) return [];
+  const primaryId = organization.admin_user_id || '';
+  const adminEmail = normalizedEmail(organization.admin_email);
+  const options = [];
+  const seen = new Set();
+  const sorted = [...(profiles || [])].sort((a, b) => String(a.created_date || '').localeCompare(String(b.created_date || '')));
+  for (const profile of sorted) {
+    if (!profile?.id || seen.has(profile.id) || !isCustomerAdminProfile(profile, organization, workers)) continue;
+    seen.add(profile.id);
+    options.push({
+      id: profile.id,
+      fullName: String(profile.full_name || '').trim(),
+      email: profile.email || '',
+      primary: Boolean(primaryId && profile.id === primaryId) || (!primaryId && Boolean(adminEmail) && normalizedEmail(profile.email) === adminEmail),
+    });
+  }
+  options.sort((a, b) => Number(b.primary) - Number(a.primary) || a.fullName.localeCompare(b.fullName, 'nb'));
+  return options;
+}
+
+/**
+ * Signature person. Chosen customer admin, then that customer's primary
+ * admin, then the explicit employer-settings text. The contact name is not used.
+ */
+export function employerSignerName({ chosenAdminName, primaryAdminName, explicitName }) {
+  return String(chosenAdminName || '').trim()
+    || String(primaryAdminName || '').trim()
+    || String(explicitName || '').trim();
+}
+
+export function resolveEmployerSignerName({ organization, profiles, workers, settings }) {
+  const options = customerAdminOptions(organization, profiles, workers);
+  const chosen = options.find((option) => option.id === organization?.employer_signatory_user_id);
+  const primary = options.find((option) => option.primary);
+  return employerSignerName({
+    chosenAdminName: chosen?.fullName,
+    primaryAdminName: primary?.fullName,
+    explicitName: settings?.signatur_navn,
+  });
 }
 
 export function missingEmploymentFields({
@@ -106,7 +164,7 @@ export function missingEmploymentFields({
   showWages,
   organizationName,
   organizationOrgNumber,
-  ownerFullName,
+  signerName,
 }) {
   const missing = [];
   const type = worker?.ansettelsestype || 'fast';
@@ -142,7 +200,7 @@ export function missingEmploymentFields({
   need(employerCompanyName(settings, organizationName), 'Arbeidsgivers juridiske navn');
   need(employerOrgNumber(settings, organizationOrgNumber), 'Organisasjonsnummer');
   need(String(settings?.adresse || '').trim(), 'Arbeidsgivers adresse');
-  if (ownerFullName != null) need(employerSignerName(settings, ownerFullName), 'Signaturberettiget navn');
+  if (signerName != null) need(String(signerName).trim(), 'Signaturberettiget navn');
   need(settings?.alminnelig_ukentlig_arbeidstid, 'Alminnelig ukentlig arbeidstid');
   const store = storeFieldsForWorker(worker, workplace);
   need(store.sted, 'Arbeidssted');

@@ -1,7 +1,8 @@
--- Employer party is the customer-card company. The signature line is an
--- explicit signatory, otherwise the organization owner's full name.
--- organizations.contact_name is never the signer.
--- The countersigning admin stays in the audit trail.
+-- The contract party is the customer-card company.
+-- The signature line is the chosen customer admin, then that customer's
+-- primary admin, then the explicit employer-settings text.
+-- The contact name, a platform super-admin, and another customer's admin
+-- are not the signer. The countersigning admin stays in the audit trail.
 
 create temp table if not exists rls_results (
   name text primary key,
@@ -13,12 +14,17 @@ update public.profiles
 set full_name = 'Naveed Zafar'
 where id = '11111111-1111-1111-1111-111111111111';
 
+update public.profiles
+set full_name = 'Kari Avdeling'
+where id = '33333333-3333-3333-3333-333333333333';
+
 update public.organizations
 set name = 'Butikkdrift Nas AS',
     org_number = '912345678',
     contact_name = 'ZAS',
     admin_user_id = '11111111-1111-1111-1111-111111111111',
-    admin_email = 'admin-a@example.com'
+    admin_email = 'admin-a@example.com',
+    employer_signatory_user_id = '33333333-3333-3333-3333-333333333333'
 where id = 'org-a';
 
 insert into public.employer_settings (id, org_id, selskap, org_nr, adresse, signatur_navn, signatur_stilling)
@@ -52,37 +58,73 @@ declare
 begin
   fields := public.contract_field_values('w-ansatt-a');
   insert into rls_results values (
-    'card company and org number win, explicit signatory is used',
+    'chosen department admin signs for the customer company',
     fields ->> 'selskap' = 'Butikkdrift Nas AS'
       and fields ->> 'org_nr' = '912345678'
-      and fields ->> 'signatur_navn' = 'Kari Person'
+      and fields ->> 'signatur_navn' = 'Kari Avdeling'
       and fields ->> 'signatur_navn' is distinct from 'ZAS'
-      and fields ->> 'signatur_navn' is distinct from 'Butikkdrift Nas AS'
-      and fields ->> 'selskap' is distinct from 'Annet navn AS'
-      and fields ->> 'org_nr' is distinct from '000000000',
+      and fields ->> 'signatur_navn' is distinct from 'Kari Person'
+      and fields ->> 'signatur_navn' is distinct from 'Naveed Zafar'
+      and fields ->> 'signatur_navn' is distinct from 'Super'
+      and fields ->> 'signatur_navn' is distinct from 'Admin B'
+      and fields ->> 'selskap' is distinct from 'Annet navn AS',
     coalesce(fields ->> 'selskap', '') || ' / ' || coalesce(fields ->> 'org_nr', '') || ' / ' || coalesce(fields ->> 'signatur_navn', '')
   );
 
-  update public.employer_settings
-  set signatur_navn = '   '
-  where id = 'es-a';
-
+  update public.organizations
+  set employer_signatory_user_id = null
+  where id = 'org-a';
   fields := public.contract_field_values('w-ansatt-a');
   insert into rls_results values (
-    'blank signatory falls back to the owner full name',
+    'empty choice uses the customer primary admin, not the explicit text',
     fields ->> 'signatur_navn' = 'Naveed Zafar'
-      and fields ->> 'selskap' = 'Butikkdrift Nas AS'
-      and fields ->> 'signatur_navn' is distinct from 'ZAS',
+      and fields ->> 'signatur_navn' is distinct from 'Kari Person'
+      and fields ->> 'signatur_navn' is distinct from 'ZAS'
+      and fields ->> 'signatur_navn' is distinct from 'Super'
+      and fields ->> 'signatur_navn' is distinct from 'Admin B',
     coalesce(fields ->> 'signatur_navn', '')
   );
 
   update public.organizations
-  set admin_user_id = '00000000-0000-0000-0000-000000000099'
+  set employer_signatory_user_id = '22222222-2222-2222-2222-222222222222'
   where id = 'org-a';
-
   fields := public.contract_field_values('w-ansatt-a');
   insert into rls_results values (
-    'owner name is found from admin email when the user id does not match',
+    'another customer admin is not the signer',
+    fields ->> 'signatur_navn' = 'Naveed Zafar'
+      and fields ->> 'signatur_navn' is distinct from 'Admin B',
+    coalesce(fields ->> 'signatur_navn', '')
+  );
+
+  update public.organizations
+  set employer_signatory_user_id = '00000000-0000-0000-0000-000000000001'
+  where id = 'org-a';
+  fields := public.contract_field_values('w-ansatt-a');
+  insert into rls_results values (
+    'the platform super-admin is not the signer',
+    fields ->> 'signatur_navn' = 'Naveed Zafar'
+      and fields ->> 'signatur_navn' is distinct from 'Super',
+    coalesce(fields ->> 'signatur_navn', '')
+  );
+
+  update public.organizations
+  set employer_signatory_user_id = '44444444-4444-4444-4444-444444444444'
+  where id = 'org-a';
+  fields := public.contract_field_values('w-ansatt-a');
+  insert into rls_results values (
+    'a store manager is not the signer',
+    fields ->> 'signatur_navn' = 'Naveed Zafar'
+      and fields ->> 'signatur_navn' is distinct from 'Sjef A',
+    coalesce(fields ->> 'signatur_navn', '')
+  );
+
+  update public.organizations
+  set admin_user_id = null,
+      employer_signatory_user_id = null
+  where id = 'org-a';
+  fields := public.contract_field_values('w-ansatt-a');
+  insert into rls_results values (
+    'primary admin is found from the customer admin email',
     fields ->> 'signatur_navn' = 'Naveed Zafar'
       and fields ->> 'signatur_navn' is distinct from 'ZAS',
     coalesce(fields ->> 'signatur_navn', '')
@@ -93,25 +135,37 @@ begin
   where id = '11111111-1111-1111-1111-111111111111';
   update public.organizations
   set admin_user_id = '11111111-1111-1111-1111-111111111111',
-      admin_email = 'nobody@example.com'
+      admin_email = 'nobody@example.com',
+      employer_signatory_user_id = null
   where id = 'org-a';
+  fields := public.contract_field_values('w-ansatt-a');
+  insert into rls_results values (
+    'explicit signatory text is used when the customer admin has no name',
+    fields ->> 'signatur_navn' = 'Kari Person'
+      and fields ->> 'signatur_navn' is distinct from 'ZAS'
+      and fields ->> 'signatur_navn' is distinct from 'Super'
+      and fields ->> 'signatur_navn' is distinct from 'Admin B',
+    coalesce(fields ->> 'signatur_navn', '')
+  );
 
+  update public.employer_settings
+  set signatur_navn = '   '
+  where id = 'es-a';
   fields := public.contract_field_values('w-ansatt-a');
   missing := public.employment_contract_missing('w-ansatt-a', '{}'::jsonb);
   insert into rls_results values (
-    'missing owner name is required and the contact is not used',
+    'missing admin name is required and the contact is not used',
     coalesce(fields ->> 'signatur_navn', '') = ''
       and fields ->> 'signatur_navn' is distinct from 'ZAS'
       and 'Signaturberettiget navn' = any(missing)
-      and not ('Signaturberettiget stilling' = any(missing))
       and not ('Arbeidsgivers juridiske navn' = any(missing))
       and not ('Organisasjonsnummer' = any(missing)),
     coalesce(fields ->> 'signatur_navn', '') || ' | ' || array_to_string(missing, ', ')
   );
 
   update public.organizations
-  set org_number = '   ',
-      name = '   '
+  set name = '   ',
+      org_number = '   '
   where id = 'org-a';
   fields := public.contract_field_values('w-ansatt-a');
   insert into rls_results values (
@@ -125,7 +179,8 @@ begin
   set name = 'Butikkdrift Nas AS',
       org_number = '912345678',
       admin_user_id = '11111111-1111-1111-1111-111111111111',
-      admin_email = 'admin-a@example.com'
+      admin_email = 'admin-a@example.com',
+      employer_signatory_user_id = null
   where id = 'org-a';
   update public.profiles
   set full_name = 'Naveed Zafar'
@@ -136,7 +191,7 @@ begin
     public.contract_field_values('w-ansatt-a')
   );
   insert into rls_results values (
-    'rendered signature line names the company and the owner',
+    'rendered signature line names the company and the customer admin',
     rendered = E'For Butikkdrift Nas AS: Naveed Zafar\n',
     rendered
   );
@@ -147,29 +202,11 @@ begin
   order by version desc
   limit 1;
   insert into rls_results values (
-    'fast template prints the company, org number, and owner signature line',
-    body like '%' || E'For {{selskap}}: {{signatur_navn}}' || '%'
-      and body like '%Org.nr {{org_nr}}%'
-      and body not like '%Stilling: {{signatur_stilling}}%'
-      and body not like '%Navn: {{signatur_navn}}%',
-    case
-      when body like '%Stilling: {{signatur_stilling}}%' then 'stilling remains'
-      when body not like '%Org.nr {{org_nr}}%' then 'org.nr missing'
-      else 'owner line'
-    end
-  );
-
-  select body_markdown into body
-  from public.contract_templates
-  where org_id is null and key = 'bilag'
-  order by version desc
-  limit 1;
-  insert into rls_results values (
-    'bilag prints the company, org number, and owner signature line',
+    'fast template prints the company, org number, and signature line',
     body like '%' || E'For {{selskap}}: {{signatur_navn}}' || '%'
       and body like '%Org.nr {{org_nr}}%'
       and body not like '%Stilling: {{signatur_stilling}}%',
-    case when body like '%Org.nr {{org_nr}}%' then 'org.nr present' else 'org.nr missing' end
+    case when body like '%Org.nr {{org_nr}}%' then 'owner line' else 'org.nr missing' end
   );
 
   detail := public._rls_exec(

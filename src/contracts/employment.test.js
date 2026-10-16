@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contractTeamKey, employerCompanyName, employerOrgNumber, employerSignerName, missingEmploymentFields, storeFieldsForWorker } from './employment.js';
+import { contractTeamKey, customerAdminOptions, employerCompanyName, employerOrgNumber, employerSignerName, missingEmploymentFields, resolveEmployerSignerName, storeFieldsForWorker } from './employment.js';
 
 const settings = {
   selskap: 'Kiosk AS',
@@ -123,19 +123,88 @@ test('the contract party is the customer-card company and organization number', 
   assert.equal(employerOrgNumber({ org_nr: '999999999' }, ''), '999999999');
 });
 
-test('the signature line is the explicit signatory or the owner, never the contact', () => {
-  assert.equal(employerSignerName({ signatur_navn: 'Kari Person' }, 'Naveed Zafar'), 'Kari Person');
-  assert.equal(employerSignerName({ signatur_navn: '  ' }, 'Naveed Zafar'), 'Naveed Zafar');
-  assert.equal(employerSignerName({ signatur_navn: '' }, ''), '');
+const customer = {
+  id: 'org-nas',
+  name: 'Butikkdrift Nas AS',
+  admin_user_id: 'naveed',
+  admin_email: 'naveed@example.com',
+  contact_name: 'ZAS',
+  employer_signatory_user_id: '',
+};
+const signatoryProfiles = [
+  { id: 'super', email: 'super@example.com', full_name: 'Plattform Super', role: 'admin', created_date: '2020-01-01' },
+  { id: 'other', email: 'other@example.com', full_name: 'Admin Annen', role: 'admin', created_date: '2020-01-02' },
+  { id: 'naveed', email: 'naveed@example.com', full_name: 'Naveed Zafar', role: 'admin', created_date: '2020-01-03' },
+  { id: 'dept', email: 'dept@example.com', full_name: 'Kari Avdeling', role: 'user', created_date: '2020-01-04' },
+  { id: 'zas', email: 'zas@example.com', full_name: 'ZAS', role: 'user', created_date: '2020-01-05' },
+];
+const signatoryWorkers = [
+  { org_id: 'org-nas', email: 'dept@example.com', role: 'sub_admin', team_roles: { team1: 'sub_admin' } },
+  { org_id: 'org-nas', email: 'sjef@example.com', role: 'butikksjef', team_roles: { team1: 'butikksjef' } },
+  { org_id: 'org-other', email: 'other@example.com', role: 'admin', team_roles: {} },
+];
+
+test('the signature line uses the chosen admin, then the customer admin, then explicit text', () => {
+  assert.equal(employerSignerName({
+    chosenAdminName: 'Kari Avdeling',
+    primaryAdminName: 'Naveed Zafar',
+    explicitName: 'Kari Person',
+  }), 'Kari Avdeling');
+  assert.equal(employerSignerName({
+    chosenAdminName: '  ',
+    primaryAdminName: 'Naveed Zafar',
+    explicitName: 'Kari Person',
+  }), 'Naveed Zafar');
+  assert.equal(employerSignerName({
+    chosenAdminName: '',
+    primaryAdminName: '',
+    explicitName: 'Kari Person',
+  }), 'Kari Person');
+  assert.equal(employerSignerName({ chosenAdminName: '', primaryAdminName: '', explicitName: '' }), '');
 });
 
-test('owner name satisfies the signature requirement without using the contact', () => {
+test('the customer card only offers this customer’s admins', () => {
+  const options = customerAdminOptions(customer, signatoryProfiles, signatoryWorkers);
+  assert.deepEqual(options.map((option) => option.fullName), ['Naveed Zafar', 'Kari Avdeling']);
+  assert.equal(options[0].primary, true);
+  assert.equal(options.some((option) => option.fullName === 'ZAS'), false);
+  assert.equal(options.some((option) => option.fullName === 'Plattform Super'), false);
+  assert.equal(options.some((option) => option.fullName === 'Admin Annen'), false);
+});
+
+test('a chosen admin signs, otherwise the customer’s primary admin', () => {
+  const chosen = resolveEmployerSignerName({
+    organization: { ...customer, employer_signatory_user_id: 'dept' },
+    profiles: signatoryProfiles,
+    workers: signatoryWorkers,
+    settings: { signatur_navn: 'Kari Person' },
+  });
+  assert.equal(chosen, 'Kari Avdeling');
+
+  const primary = resolveEmployerSignerName({
+    organization: { ...customer, employer_signatory_user_id: 'other' },
+    profiles: signatoryProfiles,
+    workers: signatoryWorkers,
+    settings: { signatur_navn: 'Kari Person' },
+  });
+  assert.equal(primary, 'Naveed Zafar');
+
+  const explicit = resolveEmployerSignerName({
+    organization: { ...customer, admin_user_id: '', admin_email: '' },
+    profiles: signatoryProfiles,
+    workers: signatoryWorkers,
+    settings: { signatur_navn: 'Kari Person' },
+  });
+  assert.equal(explicit, 'Kari Person');
+});
+
+test('the customer admin name satisfies the signature requirement without using the contact', () => {
   const missing = missingEmploymentFields({
     worker: worker(['team2']),
-    settings: { ...settings, selskap: '', org_nr: '', signatur_navn: '', signatur_stilling: '' },
+    settings: { ...settings, selskap: '', org_nr: '', signatur_navn: 'Kari Person', signatur_stilling: '' },
     organizationName: 'Butikkdrift Nas AS',
     organizationOrgNumber: '912345678',
-    ownerFullName: 'Naveed Zafar',
+    signerName: 'Naveed Zafar',
     workplace: {
       workplace_address: 'Firmaadresse 1',
       apningstid_fra: '08:00',
@@ -148,13 +217,13 @@ test('owner name satisfies the signature requirement without using the contact',
   assert.equal(missing.includes('Signaturberettiget navn'), false);
 });
 
-test('a missing owner name is required when no explicit signatory is set', () => {
+test('a missing signer name is required when no admin or explicit signatory is known', () => {
   const missing = missingEmploymentFields({
     worker: worker(['team2']),
     settings: { ...settings, signatur_navn: '' },
     organizationName: 'Butikkdrift Nas AS',
     organizationOrgNumber: '912345678',
-    ownerFullName: '',
+    signerName: '',
     workplace: {
       workplace_address: 'Firmaadresse 1',
       apningstid_fra: '08:00',

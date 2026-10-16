@@ -13,6 +13,7 @@ import { useOrg } from '@/hooks/useOrg';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import { releaseUpcomingShifts } from '@/utils/workerLifecycle';
 import { canSeeWageCosts } from '@/utils/wageAccess';
+import { resolveEmployerSignerName } from '@/contracts/employment';
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', color: 'bg-purple-100 text-purple-700' },
@@ -382,7 +383,12 @@ export default function Workers() {
             workplace={workplace}
             organizationName={myOrg?.name || ''}
             organizationOrgNumber={myOrg?.org_number || ''}
-            ownerFullName={user?.id && myOrg?.admin_user_id === user.id ? (user.full_name || '') : null}
+            signerName={myOrg ? resolveEmployerSignerName({
+              organization: myOrg,
+              profiles: user && !users.some((row) => row.id === user.id) ? [user, ...users] : users,
+              workers: allWorkers,
+              settings: employerRows[0] || null,
+            }) : null}
           />
           </div>
         </DialogContent>
