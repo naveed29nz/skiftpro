@@ -50,6 +50,36 @@ export function suggestPercentage(timerPerUke, alminnelig) {
  * Returns Norwegian labels. Wage fields are only required when the caller
  * may read wages; a store manager never gets that far.
  */
+function filled(value) {
+  return String(value || '').trim();
+}
+
+/** First team on the worker, when it is team1–team10. */
+export function contractTeamKey(worker) {
+  const first = Array.isArray(worker?.teams) ? worker.teams[0] : '';
+  return /^team(10|[1-9])$/.test(first || '') ? first : '';
+}
+
+/**
+ * Workplace text for an agreement. The worker's own store wins.
+ * Empty store fields fall back to the company-wide workplace.
+ */
+export function storeFieldsForWorker(worker, workplace) {
+  const team = contractTeamKey(worker);
+  const teamAddress = team ? filled(workplace?.[`${team}_address`]) : '';
+  const teamName = team ? filled(workplace?.[`${team}_name`]) : '';
+  const teamFrom = team ? filled(workplace?.[`${team}_apningstid_fra`]) : '';
+  const teamTo = team ? filled(workplace?.[`${team}_apningstid_til`]) : '';
+  return {
+    team,
+    sted: teamAddress || filled(workplace?.workplace_address) || filled(workplace?.workplace_name) || teamName,
+    apningstid_fra: teamFrom || filled(workplace?.apningstid_fra),
+    apningstid_til: teamTo || filled(workplace?.apningstid_til),
+    apningstider: team ? filled(workplace?.[`${team}_apningstider`]) : '',
+    notater: team ? filled(workplace?.[`${team}_notes`]) : '',
+  };
+}
+
 export function missingEmploymentFields({ worker, settings, workplace, checklist, showWages }) {
   const missing = [];
   const type = worker?.ansettelsestype || 'fast';
@@ -88,10 +118,10 @@ export function missingEmploymentFields({ worker, settings, workplace, checklist
   need(String(settings?.signatur_navn || '').trim(), 'Signaturberettiget navn');
   need(String(settings?.signatur_stilling || '').trim(), 'Signaturberettiget stilling');
   need(settings?.alminnelig_ukentlig_arbeidstid, 'Alminnelig ukentlig arbeidstid');
-  const sted = workplace?.workplace_address || workplace?.workplace_name;
-  need(String(sted || '').trim(), 'Arbeidssted');
-  need(workplace?.apningstid_fra, 'Åpningstid fra');
-  need(workplace?.apningstid_til, 'Åpningstid til');
+  const store = storeFieldsForWorker(worker, workplace);
+  need(store.sted, 'Arbeidssted');
+  need(store.apningstid_fra, 'Åpningstid fra');
+  need(store.apningstid_til, 'Åpningstid til');
 
   if (type === 'butikksjef_ledende') {
     const unanswered = BUTIKKSJEF_CHECKLIST.filter((item) => checklist?.[item.key] !== true);

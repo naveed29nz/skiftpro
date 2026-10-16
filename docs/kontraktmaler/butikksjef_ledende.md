@@ -28,6 +28,9 @@ Arbeidstakeren er i ansettelsesperioden forpliktet til å anvende sin arbeidskra
 Arbeidstid
 
 Den alminnelige arbeidstiden er gjennomsnittlig på {{timer_per_uke}} timer per uke. Den gjennomsnittlige daglige arbeidstiden er {{timer_per_dag}} timer i kioskens åpningstid som for tiden er mellom klokken {{apningstid_fra}} og {{apningstid_til}}.
+{{#apningstider}}
+Nærmere om åpningstidene: {{apningstider}}.
+{{/apningstider}}
 
 Nærmere plassering av daglig og ukentlig arbeidstid følger av gjeldende arbeidsplan.
 

@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MapPin, Navigation, Save, Users, Lock, Plus, Trash2 } from 'lucide-react';
 import { useOrg } from '@/hooks/useOrg';
@@ -28,6 +29,11 @@ const generateDefaults = () => {
     d[`team${i}_holiday_extra_amount`] = 0;
     d[`team${i}_latitude`] = '';
     d[`team${i}_longitude`] = '';
+    d[`team${i}_address`] = '';
+    d[`team${i}_apningstid_fra`] = '';
+    d[`team${i}_apningstid_til`] = '';
+    d[`team${i}_apningstider`] = '';
+    d[`team${i}_notes`] = '';
     d[`team${i}_radius_meters`] = '';
   }
   return d;
@@ -179,6 +185,75 @@ function TeamPaySection({ teamKey, teamName, form, setForm }) {
   );
 }
 
+function StoreContractSection({ teamKey, teamName, form, setForm }) {
+  const setField = (field) => (event) => {
+    setForm((current) => ({ ...current, [`${teamKey}_${field}`]: event.target.value }));
+  };
+
+  return (
+    <div className="border border-slate-100 rounded-lg p-4 space-y-3">
+      <p className="font-medium text-slate-700 text-sm">{teamName}</p>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Adresse</Label>
+        <Input
+          value={form[`${teamKey}_address`] || ''}
+          onChange={setField('address')}
+          placeholder="Gate, postnummer og sted"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Åpningstid fra</Label>
+          <Input type="time" value={form[`${teamKey}_apningstid_fra`] || ''} onChange={setField('apningstid_fra')} />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Åpningstid til</Label>
+          <Input type="time" value={form[`${teamKey}_apningstid_til`] || ''} onChange={setField('apningstid_til')} />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Åpningstider</Label>
+        <Textarea
+          rows={2}
+          value={form[`${teamKey}_apningstider`] || ''}
+          onChange={setField('apningstider')}
+          placeholder="man–fre 07–23, lør 09–21"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Notater</Label>
+        <Textarea
+          rows={2}
+          value={form[`${teamKey}_notes`] || ''}
+          onChange={setField('notes')}
+          placeholder="For eksempel inngang eller etasje"
+        />
+      </div>
+    </div>
+  );
+}
+
+export function StoreWorkplaceCard({ teamKeys, form, setForm }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+      <h2 className="text-base font-semibold text-slate-800">Butikk per avdeling</h2>
+      <p className="text-xs text-slate-400">
+        Arbeidsavtalen bruker adressen og åpningstidene for den ansattes egen avdeling.
+        Tomme felt faller tilbake til arbeidsstedet over. Åpningstider og notater er valgfrie.
+      </p>
+      {teamKeys.map((key) => (
+        <StoreContractSection
+          key={key}
+          teamKey={key}
+          teamName={form[`${key}_name`] || key}
+          form={form}
+          setForm={setForm}
+        />
+      ))}
+    </div>
+  );
+}
+
 const DEFAULTS = generateDefaults();
 
 export default function Settings() {
@@ -301,6 +376,11 @@ export default function Settings() {
       newForm[`${to}_latitude`] = newForm[`${from}_latitude`];
       newForm[`${to}_longitude`] = newForm[`${from}_longitude`];
       newForm[`${to}_radius_meters`] = newForm[`${from}_radius_meters`];
+      newForm[`${to}_address`] = newForm[`${from}_address`];
+      newForm[`${to}_apningstid_fra`] = newForm[`${from}_apningstid_fra`];
+      newForm[`${to}_apningstid_til`] = newForm[`${from}_apningstid_til`];
+      newForm[`${to}_apningstider`] = newForm[`${from}_apningstider`];
+      newForm[`${to}_notes`] = newForm[`${from}_notes`];
     }
     // Clear last slot
     const last = `team${activeCount}`;
@@ -312,6 +392,11 @@ export default function Settings() {
     newForm[`${last}_latitude`] = '';
     newForm[`${last}_longitude`] = '';
     newForm[`${last}_radius_meters`] = '';
+    newForm[`${last}_address`] = '';
+    newForm[`${last}_apningstid_fra`] = '';
+    newForm[`${last}_apningstid_til`] = '';
+    newForm[`${last}_apningstider`] = '';
+    newForm[`${last}_notes`] = '';
     newForm.active_teams_count = activeCount - 1;
     setForm(newForm);
   };
@@ -424,6 +509,8 @@ export default function Settings() {
             </p>
           )}
         </div>
+
+        <StoreWorkplaceCard teamKeys={teamKeys} form={form} setForm={setForm} />
 
         {showWages && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">

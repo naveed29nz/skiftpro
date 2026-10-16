@@ -262,3 +262,11 @@ Do not request fødselsnummer from BankID unless a legal basis has been written 
 
 A store manager sees status for their own store and does not see wages, birth date, contract text, or the PDF. `approve` on `update-contract-status` no longer records a manager as the employee.
 
+## 8. Per-store workplace fields
+
+Migration `20261016120000_store_workplace.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it only after `20261015120000_digital_contracts.sql` and `20261015120100_contract_template_seed.sql`. Do not deploy anything extra for this change; it is schema, template text, and the Settings form.
+
+The migration adds `team1`–`team10` address, opening hours, an opening-hours summary, and notes. A contract uses the worker's first team. Empty address and opening hours fall back to the company-wide workplace. The summary is optional and is left out of the agreement when it is blank.
+
+Until the migration is applied, the app still loads workplace settings. Saving a store address is stored only after the columns exist.
+
