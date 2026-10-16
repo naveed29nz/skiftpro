@@ -135,23 +135,29 @@ export function customerAdminOptions(organization, profiles, workers) {
   return options;
 }
 
+/** Profile name of the admin selected on the customer card, or the primary admin. */
+export function selectedCustomerAdminName(organization, profiles, workers) {
+  const options = customerAdminOptions(organization, profiles, workers);
+  const chosen = options.find((option) => option.id === organization?.employer_signatory_user_id);
+  const primary = options.find((option) => option.primary);
+  return String(chosen?.fullName || primary?.fullName || '').trim();
+}
+
 /**
- * Signature person. Chosen customer admin, then that customer's primary
- * admin, then the explicit employer-settings text. The contact name is not used.
+ * Signature person. The customer-card admin name wins, then the selected
+ * admin's profile name, then the explicit employer-settings text.
+ * The contact name is not used.
  */
-export function employerSignerName({ chosenAdminName, primaryAdminName, explicitName }) {
-  return String(chosenAdminName || '').trim()
-    || String(primaryAdminName || '').trim()
+export function employerSignerName({ cardAdminName, selectedAdminName, explicitName }) {
+  return String(cardAdminName || '').trim()
+    || String(selectedAdminName || '').trim()
     || String(explicitName || '').trim();
 }
 
 export function resolveEmployerSignerName({ organization, profiles, workers, settings }) {
-  const options = customerAdminOptions(organization, profiles, workers);
-  const chosen = options.find((option) => option.id === organization?.employer_signatory_user_id);
-  const primary = options.find((option) => option.primary);
   return employerSignerName({
-    chosenAdminName: chosen?.fullName,
-    primaryAdminName: primary?.fullName,
+    cardAdminName: organization?.admin_signerer_navn,
+    selectedAdminName: selectedCustomerAdminName(organization, profiles, workers),
     explicitName: settings?.signatur_navn,
   });
 }

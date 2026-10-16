@@ -295,3 +295,17 @@ where o.name = 'Butikkdrift Nas AS'
 
 If the statement updates no row, link Naveed Zafar as that customer's admin before choosing him. Do not point the column at a platform super-admin or at another customer's admin.
 
+## 11. Admin name on the customer card
+
+Migration `20261016233000_customer_card_admin_name.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it after `20261016220000_customer_admin_signatory.sql`. Do not re-apply the earlier contract migrations.
+
+The customer card has no admin-name field. `contact_name` is the contact person (for Butikkdrift Nas AS that value has been ZAS) and is not the signer. The new field is `organizations.admin_signerer_navn`, labeled **Admin / signerer (navn)**. An empty field is prefilled in the form from the selected admin. The signature line uses that card name, then the selected admin's profile name, then `employer_settings.signatur_navn`.
+
+After this migration is applied, set the card name for Butikkdrift Nas AS. This update is not part of the migration:
+
+```sql
+update public.organizations
+set admin_signerer_navn = 'Naveed Zafar'
+where name = 'Butikkdrift Nas AS';
+```
+

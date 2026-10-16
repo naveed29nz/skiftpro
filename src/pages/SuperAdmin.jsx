@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Building2, Plus, Users, Settings, Trash2, Send, LogIn } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
-import { customerAdminOptions, resolveEmployerSignerName } from '@/contracts/employment';
+import { customerAdminOptions, resolveEmployerSignerName, selectedCustomerAdminName } from '@/contracts/employment';
 
 const STATUS_COLORS = {
   active: 'bg-emerald-100 text-emerald-700',
@@ -40,6 +40,7 @@ export function OrgForm({ org, profiles = [], workers = [], onSubmit, onCancel }
     contact_phone: org?.contact_phone || '',
     admin_email: org?.admin_email || '',
     employer_signatory_user_id: org?.employer_signatory_user_id || '',
+    admin_signerer_navn: String(org?.admin_signerer_navn || '').trim() || selectedCustomerAdminName(org || {}, profiles, workers),
     status: org?.status || 'active',
     plan: org?.plan || 'basic',
     notes: org?.notes || '',
@@ -57,7 +58,11 @@ export function OrgForm({ org, profiles = [], workers = [], onSubmit, onCancel }
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit({ ...form, employer_signatory_user_id: selectedId || null });
+    onSubmit({
+      ...form,
+      employer_signatory_user_id: selectedId || null,
+      admin_signerer_navn: String(form.admin_signerer_navn || '').trim() || null,
+    });
   };
 
   return (
@@ -113,7 +118,13 @@ export function OrgForm({ org, profiles = [], workers = [], onSubmit, onCancel }
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Signerer for arbeidsgiver</Label>
           {candidates.length > 0 ? (
-            <Select value={selectedId} onValueChange={(value) => setForm({ ...form, employer_signatory_user_id: value })}>
+            <Select value={selectedId} onValueChange={(value) => setForm({
+              ...form,
+              employer_signatory_user_id: value,
+              admin_signerer_navn: String(form.admin_signerer_navn || '').trim()
+                ? form.admin_signerer_navn
+                : (candidates.find((candidate) => candidate.id === value)?.fullName || ''),
+            })}>
               <SelectTrigger><SelectValue placeholder="Velg kundens admin" /></SelectTrigger>
               <SelectContent>
                 {candidates.map((candidate) => (
@@ -126,7 +137,16 @@ export function OrgForm({ org, profiles = [], workers = [], onSubmit, onCancel }
           ) : (
             <p className="text-sm text-slate-500">Ingen adminbruker på kunden ennå. Standard blir kundens første admin.</p>
           )}
-          <p className="text-xs text-slate-500">Signaturlinjen blir «For {form.name || 'selskapet'}: {signerName || '–'}». Kontaktpersonen brukes ikke.</p>
+          <p className="text-xs text-slate-500">Velg hvem som er admin. Kontaktpersonen brukes ikke.</p>
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>Admin / signerer (navn)</Label>
+          <Input
+            value={form.admin_signerer_navn || ''}
+            onChange={(e) => setForm({ ...form, admin_signerer_navn: e.target.value })}
+            placeholder="Tomt felt bruker navnet til valgt admin"
+          />
+          <p className="text-xs text-slate-500">Signaturlinjen blir «For {form.name || 'selskapet'}: {signerName || '–'}». Dette navnet på kundekortet brukes foran profilnavnet.</p>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Notater</Label>
@@ -371,6 +391,7 @@ export default function SuperAdmin() {
             <DialogTitle>{editing ? 'Rediger kunde' : 'Ny kunde'}</DialogTitle>
           </DialogHeader>
           <OrgForm
+            key={editing?.id || 'new'}
             org={editing}
             profiles={profiles}
             workers={allWorkers}

@@ -75,6 +75,7 @@ psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/202610151201
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261016120000_store_workplace.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261016210000_employer_company_signatory.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261016220000_customer_admin_signatory.sql"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261016233000_customer_card_admin_name.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/rls_isolation.sql" | tee /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/contract_signing.sql" | tee -a /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/store_workplace.sql" | tee -a /tmp/rls-test.out
