@@ -1,5 +1,5 @@
 import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.ts";
-import { sendEmail } from "../_shared/email.ts";
+import { sendContractReminder } from "../_shared/contractMail.ts";
 import { sendPendingNotifications } from "../_shared/push.ts";
 
 Deno.serve(async (req) => {
@@ -24,12 +24,7 @@ Deno.serve(async (req) => {
     const reminders = data?.reminders || [];
     let emailed = 0;
     for (const row of reminders) {
-      if (!row?.email || row.kind === "expired" || row.status === "signert_ansatt") continue;
-      const result = await sendEmail({
-        to: row.email,
-        subject: "Påminnelse: arbeidsavtale venter på signering",
-        text: "Du har en arbeidsavtale i SkiftPro som venter på signering. Logg inn og åpne avtalen for å lese og signere.",
-      });
+      const result = await sendContractReminder(row);
       if (result.sent) emailed += 1;
     }
     const sent = await sendPendingNotifications();

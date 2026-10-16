@@ -38,7 +38,14 @@ export default function Contracts() {
   });
 
   const handleSend = async (contractId) => {
-    await base44.functions.invoke('updateContractStatus', { contract_id: contractId, action: 'send' });
+    try {
+      const res = await base44.functions.invoke('updateContractStatus', { contract_id: contractId, action: 'send' });
+      if (res?.data?.emailed === false) {
+        alert(res.data.email_error || 'Avtalen er sendt, men e-posten til den ansatte ble ikke sendt.');
+      }
+    } catch (err) {
+      alert(err?.message || 'Kunne ikke sende avtalen');
+    }
     queryClient.invalidateQueries({ queryKey: ['contracts'] });
   };
 

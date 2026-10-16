@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contractTeamKey, customerAdminOptions, employerCompanyName, employerOrgNumber, employerSignerName, missingEmploymentFields, resolveEmployerSignerName, storeFieldsForWorker } from './employment.js';
+import { contractTeamKey, customerAdminOptions, employerCompanyName, employerContractAddress, employerOrgNumber, employerSignerName, missingEmploymentFields, resolveEmployerSignerName, storeFieldsForWorker } from './employment.js';
 
 const settings = {
   selskap: 'Kiosk AS',
@@ -85,6 +85,55 @@ test('opening hours fall back one side at a time', () => {
   });
   assert.equal(fields.apningstid_fra, '10:00');
   assert.equal(fields.apningstid_til, '16:00');
+});
+
+test('employer address is the store address, then the settings address', () => {
+  assert.equal(employerContractAddress(worker(['team2']), {
+    workplace_address: 'Firmaadresse 1',
+    workplace_name: 'Kiosk',
+    team2_name: 'Butikk 2',
+    team2_address: 'Butikkveien 2',
+  }, settings), 'Butikkveien 2');
+  assert.equal(employerContractAddress(worker(['team2']), {
+    workplace_address: 'Firmaadresse 1',
+    team2_address: '  ',
+  }, settings), 'Firma 1');
+  assert.equal(employerContractAddress(worker(['team2']), {
+    workplace_name: 'Kiosk',
+    workplace_address: 'Firmaadresse 1',
+    team2_name: 'Butikk 2',
+  }, { adresse: '' }), '');
+});
+
+test('a store address satisfies the contract when employer settings have no address', () => {
+  const missing = missingEmploymentFields({
+    worker: worker(['team2']),
+    settings: { ...settings, adresse: '' },
+    workplace: {
+      team2_address: 'Butikkveien 2',
+      team2_apningstid_fra: '10:00',
+      team2_apningstid_til: '22:00',
+    },
+    showWages: true,
+  });
+  assert.equal(missing.includes('Arbeidsgivers adresse'), false);
+});
+
+test('workplace name is not arbeidsgivers adresse', () => {
+  const missing = missingEmploymentFields({
+    worker: worker(['team1']),
+    settings: { ...settings, adresse: '  ' },
+    workplace: {
+      workplace_name: 'Kiosk',
+      workplace_address: 'Firmaadresse 1',
+      apningstid_fra: '08:00',
+      apningstid_til: '16:00',
+      team1_address: '',
+    },
+    showWages: true,
+  });
+  assert.equal(missing.includes('Arbeidsgivers adresse'), true);
+  assert.equal(missing.includes('Arbeidssted'), false);
 });
 
 test('address falls back through company name and then the team name', () => {

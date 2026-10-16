@@ -1,5 +1,6 @@
 import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.ts";
 import { buildSnapshotPdf, bytesToBase64, sha256Hex } from "../_shared/contractPdf.ts";
+import { otpMessage, signedCopyRecipient, signedEmployeeMessage, signedEmployerMessage } from "../_shared/contractMail.ts";
 import { sendEmail } from "../_shared/email.ts";
 import { resolveProvider } from "../_shared/signing/index.ts";
 
@@ -32,13 +33,13 @@ async function archiveSignedPdf(contractId: string) {
   const fields = (contract.field_values || {}) as { selskap?: string; signatur_navn?: string };
   const { data: organization } = await admin
     .from("organizations")
-    .select("name")
+    .select("name, signert_kopi_epost, admin_email, contact_email")
     .eq("id", contract.org_id)
     .maybeSingle();
   const orgName = String(fields.selskap || "").trim()
     || String(organization?.name || "").trim()
     || contract.org_name
-    || null;
+    || "";
   const employerName = String(fields.signatur_navn || "").trim() || null;
 
   const bytes = buildSnapshotPdf({
@@ -48,7 +49,7 @@ async function archiveSignedPdf(contractId: string) {
     templateVersion: contract.template_version,
     contentSha256: contract.content_sha256,
     workerName: contract.worker_name,
-    orgName,
+    orgName: orgName || null,
     employeeSignedAt: contract.employee_signed_at,
     employeeSignedBy: contract.employee_signed_by,
     employerSignedAt: contract.employer_signed_at,
@@ -77,12 +78,113 @@ async function archiveSignedPdf(contractId: string) {
     .select("email, name")
     .eq("id", contract.worker_id)
     .maybeSingle();
-  await sendEmail({
-    to: worker?.email,
-    subject: "Signert arbeidsavtale",
-    text: `Hei ${worker?.name || ""}. Avtalen er signert av begge parter. PDF-kopien ligger vedlagt. Dokument ${contract.id}. SHA-256 av PDF-filen: ${pdfSha}.`,
-    attachments: [{ filename: `arbeidsavtale-${contract.id}.pdf`, content: bytesToBase64(bytes) }],
+  const workerEmail = String(worker?.email || "").trim();
+  const workerName = String(worker?.name || contract.worker_name || "").trim();
+  const attachment = [{ filename: `arbeidsavtale-${contract.id}.pdf`, content: bytesToBase64(bytes) }];
+  const employeeMail = signedEmployeeMessage({
+    navn: workerName,
+    selskap: orgName,
+    dokument: contract.id,
+    sha: pdfSha,
   });
+  await sendEmail({
+    to: workerEmail,
+    subject: employeeMail.subject,
+    text: employeeMail.text,
+    attachments: attachment,
+  });
+  const employerEmail = signedCopyRecipient(organization || {});
+  if (employerEmail && employerEmail.toLowerCase() !== workerEmail.toLowerCase()) {
+    const employerMail = signedEmployerMessage({
+      navn: workerName,
+      selskap: orgName,
+      dokument: contract.id,
+      sha: pdfSha,
+    });
+    await sendEmail({
+      to: employerEmail,
+      subject: employerMail.subject,
+      text: employerMail.text,
+      attachments: attachment,
+    });
+  }
+}
+
+async function handleGuest(req: Request, body: Record<string, unknown>) {
+  const contractId = String(body.contract_id || "");
+  const token = String(body.access_token || "");
+  const action = String(body.action || "");
+  if (!contractId || !action) return json({ error: "Mangler contract_id eller action" }, 400);
+  if (body.role === "arbeidsgiver") {
+    return json({ error: "Arbeidsgiver må logge inn for å motsignere" }, 403);
+  }
+  const admin = adminClient();
+  const ip = clientIp(req);
+  const userAgent = req.headers.get("user-agent");
+
+  if (action === "open") {
+    const opened = await admin.rpc("open_guest_contract", {
+      p_contract_id: contractId,
+      p_token: token,
+      p_ip: ip,
+      p_user_agent: userAgent,
+    });
+    if (opened.error) return json({ error: opened.error.message }, 400);
+    if (opened.data?.ok === false) return json({ error: opened.data.error || "Kunne ikke åpne" }, 400);
+    return json({ status: opened.data?.status, document: opened.data });
+  }
+
+  if (action === "request_otp") {
+    const issued = await admin.rpc("issue_guest_contract_otp", {
+      p_contract_id: contractId,
+      p_token: token,
+      p_ip: ip,
+      p_user_agent: userAgent,
+    });
+    if (issued.error) return json({ error: issued.error.message }, 400);
+    if (!issued.data?.ok) return json({ error: issued.data?.error || "Kunne ikke sende kode" }, 400);
+    const otp = otpMessage(String(issued.data.code || ""));
+    const mailed = await sendEmail({
+      to: issued.data.email,
+      subject: otp.subject,
+      text: otp.text,
+    });
+    const dev = Deno.env.get("SIGNING_DEV_OTP") === "true";
+    return json({
+      ok: true,
+      sent: mailed.sent,
+      email: issued.data.email,
+      ...(dev ? { dev_code: issued.data.code } : {}),
+    });
+  }
+
+  if (action === "verify") {
+    const { data, error } = await admin.rpc("complete_guest_contract_signature", {
+      p_contract_id: contractId,
+      p_token: token,
+      p_code: String(body.code || "").trim(),
+      p_ip: ip,
+      p_user_agent: userAgent,
+    });
+    if (error) return json({ error: error.message }, 400);
+    if (data?.status === "signert") await archiveSignedPdf(contractId);
+    return json(data);
+  }
+
+  if (action === "reject") {
+    const { data, error } = await admin.rpc("reject_guest_contract", {
+      p_contract_id: contractId,
+      p_token: token,
+      p_reason: String(body.reason || ""),
+      p_ip: ip,
+      p_user_agent: userAgent,
+    });
+    if (error) return json({ error: error.message }, 400);
+    if (data?.ok === false) return json({ error: data.error || "Kunne ikke avvise" }, 400);
+    return json(data);
+  }
+
+  return json({ error: "Ukjent handling" }, 400);
 }
 
 Deno.serve(async (req) => {
@@ -91,9 +193,11 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
+    const body = await req.json().catch(() => ({}));
+    if (body?.access_token) return await handleGuest(req, body);
+
     const auth = await requireUser(req);
     if (auth instanceof Response) return auth;
-    const body = await req.json().catch(() => ({}));
     const contractId = body.contract_id;
     const action = body.action;
     if (!contractId || !action) return json({ error: "Mangler contract_id eller action" }, 400);
@@ -132,10 +236,11 @@ Deno.serve(async (req) => {
       });
       if (issued.error) return json({ error: issued.error.message }, 500);
       const code = String(issued.data || "");
+      const otp = otpMessage(code);
       const mailed = await sendEmail({
         to: ctx.data.email,
-        subject: "Engangskode for signering i SkiftPro",
-        text: `Koden din er ${code}. Den er gyldig i 10 minutter og kan brukes fem ganger.`,
+        subject: otp.subject,
+        text: otp.text,
       });
       const dev = Deno.env.get("SIGNING_DEV_OTP") === "true";
       return json({

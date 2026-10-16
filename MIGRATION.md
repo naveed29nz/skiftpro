@@ -309,3 +309,15 @@ set admin_signerer_navn = 'Naveed Zafar'
 where name = 'Butikkdrift Nas AS';
 ```
 
+## 12. Store address and signing emails
+
+Migration `20261016240000_store_address_and_contract_mail.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it after `20261016233000_customer_card_admin_name.sql`. Do not re-apply the earlier contract migrations. Do not deploy the edge functions until this migration is applied, and do not deploy them just to open the pull request.
+
+`{{adresse}}` (Arbeidsgivers adresse) is the address of the worker's first store (`team1_address` … `team10_address`). `employer_settings.adresse` is used only when that store address is empty. The company name, the contact name, and the workplace name are not this address. An empty settings address no longer blocks the contract when the store has an address. The company name and organization number at the top stay on the customer card.
+
+Sending a contract (`Send avtale`, `Send til signering`, or `Send arbeidsavtale til signering`) emails the employee from `RESEND_FROM_EMAIL`. The link is `https://skiftpro.com/signer/<avtale>?tilgang=<token>`. The token is stored only as a SHA-256 hash and is valid until the signing deadline. Opening the link does not sign the contract. The employee still requests a one-time code, which is sent to the email on the contract, and the signature is recorded only when that code is entered. No user account is created. An employee who already has an account can still sign while logged in; the link works without one.
+
+The customer card field **Kopi av signerte avtaler til** is `organizations.signert_kopi_epost`. When both parties have signed, the PDF is emailed to the employee and to that address. An empty field uses `admin_email`, then `contact_email`. If that address is the same as the employee's, one email is sent.
+
+The Norwegian subjects and bodies live in `supabase/functions/_shared/contractEmails.js`. Edit that file before any send. Nothing in this migration emails existing employees. `contracts.signing_email_sent_at` stays null until a send after the migration claims it, and reminder emails are skipped while it is null. There is no backfill.
+
