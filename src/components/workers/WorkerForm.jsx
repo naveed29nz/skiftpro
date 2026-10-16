@@ -33,6 +33,7 @@ export default function WorkerForm({
   showWages = false,
   employerSettings = null,
   workplace = null,
+  organizationName = '',
 }) {
   const isNew = !worker?.id;
   const [missing, setMissing] = useState([]);
@@ -117,6 +118,7 @@ export default function WorkerForm({
         workplace,
         checklist,
         showWages,
+        organizationName,
       });
       setMissing(gaps);
       if (gaps.length) return;

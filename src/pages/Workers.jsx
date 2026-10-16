@@ -50,7 +50,7 @@ function InviteButton({ worker }) {
 export default function Workers() {
   const { user, worker: me, myTeams } = useCurrentWorker();
   const showWages = canSeeWageCosts(user, me);
-  const { orgId, isSuperAdmin: superAdmin } = useOrg();
+  const { orgId, myOrg, isSuperAdmin: superAdmin } = useOrg();
   const isAdmin = user?.role === 'admin';
   const [showForm, setShowForm] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
@@ -380,6 +380,7 @@ export default function Workers() {
             showWages={showWages}
             employerSettings={employerRows[0] || null}
             workplace={workplace}
+            organizationName={myOrg?.name || ''}
           />
           </div>
         </DialogContent>

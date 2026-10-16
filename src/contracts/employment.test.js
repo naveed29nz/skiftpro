@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contractTeamKey, missingEmploymentFields, storeFieldsForWorker } from './employment.js';
+import { contractTeamKey, employerSignerName, missingEmploymentFields, storeFieldsForWorker } from './employment.js';
 
 const settings = {
   selskap: 'Kiosk AS',
@@ -114,6 +114,34 @@ test('a filled store satisfies the missing-field check without a company workpla
     showWages: true,
   });
   assert.deepEqual(missing, []);
+});
+
+test('the employer signer is the legal company name', () => {
+  assert.equal(
+    employerSignerName({ selskap: 'Butikkdrift Nas AS', signatur_navn: 'Kari' }, 'ZAS'),
+    'Butikkdrift Nas AS',
+  );
+  assert.equal(
+    employerSignerName({ selskap: '  ', signatur_navn: 'Kari' }, 'Butikkdrift Nas AS'),
+    'Butikkdrift Nas AS',
+  );
+  assert.equal(employerSignerName({ signatur_navn: 'ZAS' }, ''), '');
+});
+
+test('a person signatory is not required when the company name is known', () => {
+  const missing = missingEmploymentFields({
+    worker: worker(['team2']),
+    settings: { ...settings, selskap: '', signatur_navn: '', signatur_stilling: '' },
+    organizationName: 'Butikkdrift Nas AS',
+    workplace: {
+      workplace_address: 'Firmaadresse 1',
+      apningstid_fra: '08:00',
+      apningstid_til: '16:00',
+    },
+    showWages: true,
+  });
+  assert.equal(missing.includes('Arbeidsgivers juridiske navn'), false);
+  assert.equal(missing.some((label) => /signatur/i.test(label)), false);
 });
 
 test('missing workplace is reported when neither the team nor the company has it', () => {

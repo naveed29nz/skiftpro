@@ -80,7 +80,12 @@ export function storeFieldsForWorker(worker, workplace) {
   };
 }
 
-export function missingEmploymentFields({ worker, settings, workplace, checklist, showWages }) {
+/** Legal company name that signs as the employer. A person name is not used. */
+export function employerSignerName(settings, organizationName) {
+  return String(settings?.selskap || '').trim() || String(organizationName || '').trim();
+}
+
+export function missingEmploymentFields({ worker, settings, workplace, checklist, showWages, organizationName }) {
   const missing = [];
   const type = worker?.ansettelsestype || 'fast';
   const need = (ok, label) => { if (!ok) missing.push(label); };
@@ -112,11 +117,9 @@ export function missingEmploymentFields({ worker, settings, workplace, checklist
     }
   }
 
-  need(String(settings?.selskap || '').trim(), 'Arbeidsgivers juridiske navn');
+  need(employerSignerName(settings, organizationName), 'Arbeidsgivers juridiske navn');
   need(String(settings?.org_nr || '').trim(), 'Organisasjonsnummer');
   need(String(settings?.adresse || '').trim(), 'Arbeidsgivers adresse');
-  need(String(settings?.signatur_navn || '').trim(), 'Signaturberettiget navn');
-  need(String(settings?.signatur_stilling || '').trim(), 'Signaturberettiget stilling');
   need(settings?.alminnelig_ukentlig_arbeidstid, 'Alminnelig ukentlig arbeidstid');
   const store = storeFieldsForWorker(worker, workplace);
   need(store.sted, 'Arbeidssted');

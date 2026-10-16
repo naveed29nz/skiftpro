@@ -29,15 +29,20 @@ async function archiveSignedPdf(contractId: string) {
     .eq("contract_id", contractId)
     .order("created_at", { ascending: true });
 
-  let employerName: string | null = null;
-  if (contract.employer_signed_by) {
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("full_name, email")
-      .eq("id", contract.employer_signed_by)
-      .maybeSingle();
-    employerName = profile?.full_name || profile?.email || null;
-  }
+  const { data: employerSettings } = await admin
+    .from("employer_settings")
+    .select("selskap")
+    .eq("org_id", contract.org_id)
+    .maybeSingle();
+  const { data: organization } = await admin
+    .from("organizations")
+    .select("name")
+    .eq("id", contract.org_id)
+    .maybeSingle();
+  const employerName = String(employerSettings?.selskap || "").trim()
+    || String(organization?.name || "").trim()
+    || contract.org_name
+    || null;
 
   const bytes = buildSnapshotPdf({
     id: contract.id,

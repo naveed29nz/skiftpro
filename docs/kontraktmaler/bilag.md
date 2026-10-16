@@ -22,8 +22,7 @@ Signatur
 Bilaget signeres elektronisk i SkiftPro.
 
 For {{selskap}}
-Navn: {{signatur_navn}}
-Stilling: {{signatur_stilling}}
+{{signatur_navn}}
 
 Arbeidstaker
 Navn: {{navn}}

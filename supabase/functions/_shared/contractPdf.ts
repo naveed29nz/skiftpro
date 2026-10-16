@@ -108,7 +108,7 @@ export function buildSnapshotPdf(input: ContractPdfInput): Uint8Array {
   write(`Bruker-id: ${input.employeeSignedBy || "-"}`, 9, false, 1);
   write(`Metode: e-postkode (simple_otp). Tid: ${osloStamp(input.employeeSignedAt)}`, 9, false, 4);
   write(`Arbeidsgiver: ${input.employerName || input.orgName || "-"}`, 10, true, 1);
-  write(`Bruker-id: ${input.employerSignedBy || "-"}`, 9, false, 1);
+  write(`Motsignert av bruker-id: ${input.employerSignedBy || "-"}`, 9, false, 1);
   write(`Metode: e-postkode (simple_otp). Tid: ${osloStamp(input.employerSignedAt)}`, 9, false, 6);
 
   write("Hendelseslogg", 13, true, 3);

@@ -96,8 +96,7 @@ Signatur
 Avtalen signeres elektronisk i SkiftPro. Signeringssertifikatet følger den signerte PDF-en.
 
 For {{selskap}}
-Navn: {{signatur_navn}}
-Stilling: {{signatur_stilling}}
+{{signatur_navn}}
 Sted: {{sted}}
 
 Arbeidstaker

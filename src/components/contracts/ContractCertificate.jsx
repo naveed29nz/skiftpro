@@ -80,9 +80,9 @@ export default function ContractCertificate({
             </div>
             <div className="rounded-lg border border-slate-200 p-3">
               <p className="text-xs text-slate-500">Arbeidsgiver</p>
-              <p className="font-semibold">{employerName}</p>
-              <p>{employerEmail}</p>
-              <p className="text-xs text-slate-500 mt-2">Rolle: arbeidsgiver</p>
+              <p className="font-semibold">{employerName || '–'}</p>
+              {employerEmail ? <p>{employerEmail}</p> : null}
+              <p className="text-xs text-slate-500 mt-2">Admin som motsignet</p>
               <p className="text-xs mt-1">{formatStamp(employerSignedAt)}</p>
               <p className="text-xs text-slate-500 break-all">Bruker-id {employerSignedBy || '–'}</p>
             </div>
