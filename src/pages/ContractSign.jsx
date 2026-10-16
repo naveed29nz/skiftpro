@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { supabase } from '@/api/supabaseClient';
+import { toast } from '@/components/ui/use-toast';
 import ContractSignPanel from '@/components/contracts/ContractSignPanel';
 import ContractCertificate from '@/components/contracts/ContractCertificate';
+import { countersignerIdentity, employerCountersignDestination } from '@/contracts/countersign';
 
 export default function ContractSign() {
   const { contractId } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [params] = useSearchParams();
   const role = params.get('rolle') === 'arbeidsgiver' ? 'arbeidsgiver' : 'ansatt';
   const [document, setDocument] = useState(null);
@@ -27,7 +31,7 @@ export default function ContractSign() {
     queryFn: async () => {
       const { data, error: eventsError } = await supabase
         .from('contract_events')
-        .select('id, event_type, actor_id, actor_role, ip, user_agent, created_at')
+        .select('id, event_type, actor_id, actor_role, ip, user_agent, payload, created_at')
         .eq('contract_id', contractId)
         .order('created_at', { ascending: true });
       if (eventsError) return [];
@@ -85,8 +89,16 @@ export default function ContractSign() {
         role,
         code,
       });
-      setStatus(res?.data?.status || null);
-      setMessage(res?.data?.status === 'signert'
+      const nextStatus = res?.data?.status || null;
+      const destination = employerCountersignDestination(role, nextStatus);
+      if (destination) {
+        queryClient.invalidateQueries({ queryKey: ['contracts'] });
+        toast({ title: destination.toast });
+        navigate(destination.path);
+        return;
+      }
+      setStatus(nextStatus);
+      setMessage(nextStatus === 'signert'
         ? 'Avtalen er signert av begge parter.'
         : 'Signaturen er registrert. Arbeidsgiver må motsignere.');
       const { data } = await supabase.rpc('contract_document', { p_id: contractId });
@@ -122,6 +134,7 @@ export default function ContractSign() {
 
   if (currentStatus === 'signert' || currentStatus === 'godkjent') {
     const fields = document?.field_values || {};
+    const countersigner = countersignerIdentity({ document, contract, events });
     return (
       <div className="max-w-3xl mx-auto space-y-4">
         <Link to="/WorkerPortal" className="text-sm text-blue-700">Tilbake</Link>
@@ -135,10 +148,12 @@ export default function ContractSign() {
           workerEmail={fields.epost || fields.email}
           companyName={String(fields.selskap || contract?.org_name || '').trim()}
           signatoryName={String(fields.signatur_navn || '').trim()}
-          employeeSignedAt={contract?.employee_signed_at || contract?.approved_at}
-          employeeSignedBy={contract?.employee_signed_by || contract?.approved_by_worker_id}
-          employerSignedAt={contract?.employer_signed_at}
-          employerSignedBy={contract?.employer_signed_by}
+          employeeSignedAt={document?.employee_signed_at || contract?.employee_signed_at || contract?.approved_at}
+          employeeSignedBy={document?.employee_signed_by || contract?.employee_signed_by || contract?.approved_by_worker_id}
+          employerSignedAt={countersigner.signedAt}
+          employerSignedBy={countersigner.userId}
+          countersignerName={countersigner.name}
+          countersignerEmail={countersigner.email}
           events={events}
         />
       </div>

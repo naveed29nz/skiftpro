@@ -112,7 +112,9 @@ export default function ContractScreensPreview() {
             employeeSignedAt="2026-10-15T09:15:11.000Z"
             employeeSignedBy="user-kari"
             employerSignedAt="2026-10-15T10:02:40.000Z"
-            employerSignedBy="admin-1"
+            employerSignedBy="11111111-1111-1111-1111-111111111111"
+            countersignerName="Naveed Zafar"
+            countersignerEmail="naveed@example.com"
             events={SAMPLE_EVENTS}
           />
         </div>

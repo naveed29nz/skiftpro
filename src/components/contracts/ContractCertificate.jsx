@@ -40,6 +40,8 @@ export default function ContractCertificate({
   employeeSignedBy,
   employerSignedAt,
   employerSignedBy,
+  countersignerName,
+  countersignerEmail,
   events = [],
 }) {
   return (
@@ -86,6 +88,8 @@ export default function ContractCertificate({
               <p>For {companyName || employerName || '–'}: {signatoryName || '–'}</p>
               {employerEmail ? <p>{employerEmail}</p> : null}
               <p className="text-xs text-slate-500 mt-2">Admin som motsignet</p>
+              <p className="font-semibold">{countersignerName || '–'}</p>
+              <p className="break-all">{countersignerEmail || '–'}</p>
               <p className="text-xs mt-1">{formatStamp(employerSignedAt)}</p>
               <p className="text-xs text-slate-500 break-all">Bruker-id {employerSignedBy || '–'}</p>
             </div>

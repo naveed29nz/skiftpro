@@ -321,3 +321,11 @@ The customer card field **Kopi av signerte avtaler til** is `organizations.signe
 
 The Norwegian subjects and bodies live in `supabase/functions/_shared/contractEmails.js`. Edit that file before any send. Nothing in this migration emails existing employees. `contracts.signing_email_sent_at` stays null until a send after the migration claims it, and reminder emails are skipped while it is null. There is no backfill.
 
+## 13. Countersigner on the certificate
+
+Migration `20261016250000_countersigner_identity.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it after `20261016240000_store_address_and_contract_mail.sql`. Do not re-apply the earlier contract migrations, and do not rewrite contracts that are already signed.
+
+After an admin countersigns, SkiftPro returns to Kontrakter and shows the toast «Avtalen er signert av begge parter». The contract list is where that agreement is viewed and downloaded.
+
+`contracts.employer_signed_by` remains the countersigning admin's user id. The `motsignert` event also stores that id plus the admin's name and email from `profiles` at the moment of signing. The certificate and the sealed PDF show all three. This migration does not backfill an already countersigned contract. Redeploy `sign-contract` and `generate-contract-pdf` after the migration so new PDFs include the name and email. The redirect itself is in the web app.
+

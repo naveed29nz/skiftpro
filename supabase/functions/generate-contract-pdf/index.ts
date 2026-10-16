@@ -1,5 +1,6 @@
 import { jsPDF } from "npm:jspdf@4.0.0";
 import { adminClient, corsHeaders, handleOptions, json, requireUser } from "../_shared/auth.ts";
+import { countersignerIdentity } from "../_shared/countersigner.ts";
 import { buildSnapshotPdf } from "../_shared/contractPdf.ts";
 
 // Port of base44/functions/generateContractPDF.
@@ -85,9 +86,14 @@ async function loadSealedPdf(client: any, contractId: string): Promise<Uint8Arra
   if (!doc.data.body_snapshot) return null;
   const events = await client
     .from("contract_events")
-    .select("event_type, actor_id, actor_role, ip, user_agent, created_at")
+    .select("event_type, actor_id, actor_role, ip, user_agent, payload, created_at")
     .eq("contract_id", contractId)
     .order("created_at", { ascending: true });
+  const signer = await countersignerIdentity(
+    adminClient(),
+    events.data || [],
+    doc.data.employer_signed_by,
+  );
   return buildSnapshotPdf({
     id: contractId,
     body: doc.data.body_snapshot,
@@ -97,8 +103,12 @@ async function loadSealedPdf(client: any, contractId: string): Promise<Uint8Arra
     workerName: doc.data.field_values?.navn || doc.data.field_values?.ansatt_navn,
     orgName: doc.data.field_values?.selskap,
     employerName: doc.data.field_values?.signatur_navn,
-    employeeSignedAt: null,
-    employerSignedAt: null,
+    employeeSignedAt: doc.data.employee_signed_at || null,
+    employeeSignedBy: doc.data.employee_signed_by || null,
+    employerSignedAt: doc.data.employer_signed_at || null,
+    employerSignedBy: doc.data.employer_signed_by || signer.userId,
+    employerSignerName: doc.data.employer_signed_name || signer.name,
+    employerSignerEmail: doc.data.employer_signed_email || signer.email,
     events: events.data || [],
   });
 }

@@ -54,6 +54,8 @@ export interface ContractPdfInput {
   employeeSignedBy?: string | null;
   employerSignedAt?: string | null;
   employerSignedBy?: string | null;
+  employerSignerName?: string | null;
+  employerSignerEmail?: string | null;
   employerName?: string | null;
   events?: {
     event_type?: string;
@@ -109,6 +111,8 @@ export function buildSnapshotPdf(input: ContractPdfInput): Uint8Array {
   write(`Metode: e-postkode (simple_otp). Tid: ${osloStamp(input.employeeSignedAt)}`, 9, false, 4);
   write(`Arbeidsgiver: ${input.orgName || "-"}`, 10, true, 1);
   write(`Signatur: For ${input.orgName || "-"}: ${input.employerName || "-"}`, 10, true, 1);
+  write(`Motsignert av: ${input.employerSignerName || "-"}`, 10, true, 1);
+  write(`E-post: ${input.employerSignerEmail || "-"}`, 9, false, 1);
   write(`Motsignert av bruker-id: ${input.employerSignedBy || "-"}`, 9, false, 1);
   write(`Metode: e-postkode (simple_otp). Tid: ${osloStamp(input.employerSignedAt)}`, 9, false, 6);
 
