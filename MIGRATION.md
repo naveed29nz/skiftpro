@@ -270,9 +270,9 @@ The migration adds `team1`–`team10` address, opening hours, an opening-hours s
 
 Until the migration is applied, the app still loads workplace settings. Saving a store address is stored only after the columns exist.
 
-## 9. Company name as employer signatory
+## 9. Company party and owner signature
 
 Migration `20261016210000_employer_company_signatory.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it after `20261016120000_store_workplace.sql`.
 
-The employer on the agreement and on the signing certificate is `employer_settings.selskap`, or `organizations.name` when that company field is empty. A person name and the customer-card contact name are not the signer. The admin who countersigns is still stored in `contracts.employer_signed_by` and in `contract_events`.
+The party at the top of the agreement is `organizations.name` and `organizations.org_number` from the customer card. Employer settings supply those values only when the card is empty. The signature line is `For [selskap]: [navn]`. The name is `employer_settings.signatur_navn` when that is set, otherwise the organization owner's full name (`admin_user_id`, then `admin_email`). `organizations.contact_name` is not used. The admin who countersigns is still stored in `contracts.employer_signed_by` and in `contract_events`.
 

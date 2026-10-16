@@ -2,6 +2,9 @@ AVTALE OM MERARBEID / TILLEGGSTIMER
 
 mellom
 {{selskap}}
+{{#org_nr}}
+Org.nr {{org_nr}}
+{{/org_nr}}
 (Arbeidsgiveren)
 og
 {{navn}}
@@ -34,8 +37,7 @@ Signatur
 
 Avtalen signeres elektronisk i SkiftPro.
 
-For {{selskap}}
-{{signatur_navn}}
+For {{selskap}}: {{signatur_navn}}
 
 Arbeidstaker
 Navn: {{navn}}

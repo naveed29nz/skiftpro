@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contractTeamKey, employerSignerName, missingEmploymentFields, storeFieldsForWorker } from './employment.js';
+import { contractTeamKey, employerCompanyName, employerOrgNumber, employerSignerName, missingEmploymentFields, storeFieldsForWorker } from './employment.js';
 
 const settings = {
   selskap: 'Kiosk AS',
@@ -116,23 +116,26 @@ test('a filled store satisfies the missing-field check without a company workpla
   assert.deepEqual(missing, []);
 });
 
-test('the employer signer is the legal company name', () => {
-  assert.equal(
-    employerSignerName({ selskap: 'Butikkdrift Nas AS', signatur_navn: 'Kari' }, 'ZAS'),
-    'Butikkdrift Nas AS',
-  );
-  assert.equal(
-    employerSignerName({ selskap: '  ', signatur_navn: 'Kari' }, 'Butikkdrift Nas AS'),
-    'Butikkdrift Nas AS',
-  );
-  assert.equal(employerSignerName({ signatur_navn: 'ZAS' }, ''), '');
+test('the contract party is the customer-card company and organization number', () => {
+  assert.equal(employerCompanyName({ selskap: 'Annet AS' }, 'Butikkdrift Nas AS'), 'Butikkdrift Nas AS');
+  assert.equal(employerCompanyName({ selskap: 'Annet AS' }, '  '), 'Annet AS');
+  assert.equal(employerOrgNumber({ org_nr: '000' }, '912 345 678'), '912 345 678');
+  assert.equal(employerOrgNumber({ org_nr: '999999999' }, ''), '999999999');
 });
 
-test('a person signatory is not required when the company name is known', () => {
+test('the signature line is the explicit signatory or the owner, never the contact', () => {
+  assert.equal(employerSignerName({ signatur_navn: 'Kari Person' }, 'Naveed Zafar'), 'Kari Person');
+  assert.equal(employerSignerName({ signatur_navn: '  ' }, 'Naveed Zafar'), 'Naveed Zafar');
+  assert.equal(employerSignerName({ signatur_navn: '' }, ''), '');
+});
+
+test('owner name satisfies the signature requirement without using the contact', () => {
   const missing = missingEmploymentFields({
     worker: worker(['team2']),
-    settings: { ...settings, selskap: '', signatur_navn: '', signatur_stilling: '' },
+    settings: { ...settings, selskap: '', org_nr: '', signatur_navn: '', signatur_stilling: '' },
     organizationName: 'Butikkdrift Nas AS',
+    organizationOrgNumber: '912345678',
+    ownerFullName: 'Naveed Zafar',
     workplace: {
       workplace_address: 'Firmaadresse 1',
       apningstid_fra: '08:00',
@@ -141,7 +144,25 @@ test('a person signatory is not required when the company name is known', () => 
     showWages: true,
   });
   assert.equal(missing.includes('Arbeidsgivers juridiske navn'), false);
-  assert.equal(missing.some((label) => /signatur/i.test(label)), false);
+  assert.equal(missing.includes('Organisasjonsnummer'), false);
+  assert.equal(missing.includes('Signaturberettiget navn'), false);
+});
+
+test('a missing owner name is required when no explicit signatory is set', () => {
+  const missing = missingEmploymentFields({
+    worker: worker(['team2']),
+    settings: { ...settings, signatur_navn: '' },
+    organizationName: 'Butikkdrift Nas AS',
+    organizationOrgNumber: '912345678',
+    ownerFullName: '',
+    workplace: {
+      workplace_address: 'Firmaadresse 1',
+      apningstid_fra: '08:00',
+      apningstid_til: '16:00',
+    },
+    showWages: true,
+  });
+  assert.equal(missing.includes('Signaturberettiget navn'), true);
 });
 
 test('missing workplace is reported when neither the team nor the company has it', () => {

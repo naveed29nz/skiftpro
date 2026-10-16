@@ -32,6 +32,8 @@ export default function ContractCertificate({
   pdfSha256,
   workerName,
   workerEmail,
+  companyName,
+  signatoryName,
   employerName,
   employerEmail,
   employeeSignedAt,
@@ -80,7 +82,8 @@ export default function ContractCertificate({
             </div>
             <div className="rounded-lg border border-slate-200 p-3">
               <p className="text-xs text-slate-500">Arbeidsgiver</p>
-              <p className="font-semibold">{employerName || '–'}</p>
+              <p className="font-semibold">{companyName || employerName || '–'}</p>
+              <p>For {companyName || employerName || '–'}: {signatoryName || '–'}</p>
               {employerEmail ? <p>{employerEmail}</p> : null}
               <p className="text-xs text-slate-500 mt-2">Admin som motsignet</p>
               <p className="text-xs mt-1">{formatStamp(employerSignedAt)}</p>

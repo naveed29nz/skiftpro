@@ -381,6 +381,8 @@ export default function Workers() {
             employerSettings={employerRows[0] || null}
             workplace={workplace}
             organizationName={myOrg?.name || ''}
+            organizationOrgNumber={myOrg?.org_number || ''}
+            ownerFullName={user?.id && myOrg?.admin_user_id === user.id ? (user.full_name || '') : null}
           />
           </div>
         </DialogContent>

@@ -2,6 +2,9 @@ BILAG
 MIDLERTIDIG ANSETTELSESAVTALE (arbeidstidsskjema)
 
 Arbeidsgiver: {{selskap}}
+{{#org_nr}}
+Org.nr {{org_nr}}
+{{/org_nr}}
 Arbeidstaker: {{navn}}
 Tiltredelse: {{tiltredelsesdato}}
 Opphørsdato: {{opphorsdato}}
@@ -21,8 +24,7 @@ Signatur
 
 Bilaget signeres elektronisk i SkiftPro.
 
-For {{selskap}}
-{{signatur_navn}}
+For {{selskap}}: {{signatur_navn}}
 
 Arbeidstaker
 Navn: {{navn}}

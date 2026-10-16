@@ -80,12 +80,34 @@ export function storeFieldsForWorker(worker, workplace) {
   };
 }
 
-/** Legal company name that signs as the employer. A person name is not used. */
-export function employerSignerName(settings, organizationName) {
-  return String(settings?.selskap || '').trim() || String(organizationName || '').trim();
+/** Customer-card company name, then the employer-settings company name. */
+export function employerCompanyName(settings, organizationName) {
+  return String(organizationName || '').trim() || String(settings?.selskap || '').trim();
 }
 
-export function missingEmploymentFields({ worker, settings, workplace, checklist, showWages, organizationName }) {
+/** Customer-card organization number, then the employer-settings number. */
+export function employerOrgNumber(settings, organizationOrgNumber) {
+  return String(organizationOrgNumber || '').trim() || String(settings?.org_nr || '').trim();
+}
+
+/**
+ * Person on the signature line. An explicit signatory wins.
+ * Otherwise the organization owner's full name. The contact name is not used.
+ */
+export function employerSignerName(settings, ownerFullName) {
+  return String(settings?.signatur_navn || '').trim() || String(ownerFullName || '').trim();
+}
+
+export function missingEmploymentFields({
+  worker,
+  settings,
+  workplace,
+  checklist,
+  showWages,
+  organizationName,
+  organizationOrgNumber,
+  ownerFullName,
+}) {
   const missing = [];
   const type = worker?.ansettelsestype || 'fast';
   const need = (ok, label) => { if (!ok) missing.push(label); };
@@ -117,9 +139,10 @@ export function missingEmploymentFields({ worker, settings, workplace, checklist
     }
   }
 
-  need(employerSignerName(settings, organizationName), 'Arbeidsgivers juridiske navn');
-  need(String(settings?.org_nr || '').trim(), 'Organisasjonsnummer');
+  need(employerCompanyName(settings, organizationName), 'Arbeidsgivers juridiske navn');
+  need(employerOrgNumber(settings, organizationOrgNumber), 'Organisasjonsnummer');
   need(String(settings?.adresse || '').trim(), 'Arbeidsgivers adresse');
+  if (ownerFullName != null) need(employerSignerName(settings, ownerFullName), 'Signaturberettiget navn');
   need(settings?.alminnelig_ukentlig_arbeidstid, 'Alminnelig ukentlig arbeidstid');
   const store = storeFieldsForWorker(worker, workplace);
   need(store.sted, 'Arbeidssted');

@@ -105,15 +105,21 @@ export default function EmployerSettingsCard({ orgId }) {
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Juridisk navn</Label>
           <Input value={form.selskap || ''} onChange={(e) => setField('selskap', e.target.value)} />
-          <p className="text-xs text-slate-500">Dette selskapsnavnet står som arbeidsgiver på avtalen og på signeringssertifikatet. Tomt felt bruker navnet på kundekortet.</p>
+          <p className="text-xs text-slate-500">Brukes på avtalen bare når kundekortet mangler selskapsnavn. Parten øverst er navnet og org.nr fra kundekortet.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Organisasjonsnummer</Label>
           <Input value={form.org_nr || ''} onChange={(e) => setField('org_nr', e.target.value)} />
+          <p className="text-xs text-slate-500">Brukes bare når kundekortet mangler organisasjonsnummer.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Adresse</Label>
           <Input value={form.adresse || ''} onChange={(e) => setField('adresse', e.target.value)} />
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>Signatur, fullt navn</Label>
+          <Input value={form.signatur_navn || ''} onChange={(e) => setField('signatur_navn', e.target.value)} placeholder="Tomt felt bruker eierens fulle navn" />
+          <p className="text-xs text-slate-500">Vises som «For [selskapsnavn]: [navn]». Kontaktpersonen på kundekortet brukes ikke.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Alminnelig ukentlig arbeidstid</Label>

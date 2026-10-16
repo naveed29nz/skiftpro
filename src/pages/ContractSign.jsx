@@ -133,7 +133,8 @@ export default function ContractSign() {
           pdfSha256={document?.pdf_sha256 || contract?.pdf_sha256}
           workerName={contract?.worker_name}
           workerEmail={fields.epost || fields.email}
-          employerName={String(fields.selskap || contract?.org_name || '').trim()}
+          companyName={String(fields.selskap || contract?.org_name || '').trim()}
+          signatoryName={String(fields.signatur_navn || '').trim()}
           employeeSignedAt={contract?.employee_signed_at || contract?.approved_at}
           employeeSignedBy={contract?.employee_signed_by || contract?.approved_by_worker_id}
           employerSignedAt={contract?.employer_signed_at}
