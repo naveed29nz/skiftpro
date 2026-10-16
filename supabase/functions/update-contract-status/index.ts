@@ -1,4 +1,5 @@
 import { handleOptions, json, requireUser } from "../_shared/auth.ts";
+import { sendSigningInvite } from "../_shared/contractMail.ts";
 
 // Sending stays with an admin. The employee's signature can only be given
 // by the employee, with a one-time code, in sign-contract. A manager must
@@ -33,7 +34,14 @@ Deno.serve(async (req) => {
         return json({ error: error.message }, status);
       }
       if (data && data.ok === false) return json({ error: data.error || "Kunne ikke sende" }, 400);
-      return json({ status: "sent", contract_id: contractId });
+      const mailed = await sendSigningInvite(auth.client, contractId);
+      return json({
+        status: "sent",
+        contract_id: contractId,
+        emailed: Boolean(mailed.sent),
+        already_sent: Boolean(mailed.already_sent),
+        email_error: mailed.ok ? undefined : (mailed.error || "E-posten ble ikke sendt"),
+      });
     }
 
     if (action === "reject") {

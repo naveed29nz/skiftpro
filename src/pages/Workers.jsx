@@ -22,6 +22,17 @@ const ROLE_OPTIONS = [
   { value: 'user', label: 'Ansatt', color: 'bg-slate-100 text-slate-600' },
 ];
 
+async function emailSigningLink(contractId, setPageNotice) {
+  try {
+    const res = await base44.functions.invoke('contract-mail', { contract_id: contractId });
+    if (res?.data?.ok === false || (res?.data?.sent === false && !res?.data?.already_sent)) {
+      setPageNotice(res?.data?.error || 'Avtalen er sendt i SkiftPro, men e-posten til den ansatte ble ikke sendt.');
+    }
+  } catch (err) {
+    setPageNotice(err?.message || 'Avtalen er sendt i SkiftPro, men e-posten til den ansatte ble ikke sendt.');
+  }
+}
+
 function InviteButton({ worker }) {
   const [status, setStatus] = useState('idle');
   if (!worker.email) return null;
@@ -60,6 +71,7 @@ export default function Workers() {
   const [teamDefaultSet, setTeamDefaultSet] = useState(false);
   const [savingRole, setSavingRole] = useState(null);
   const [formError, setFormError] = useState('');
+  const [pageNotice, setPageNotice] = useState('');
   const [preview, setPreview] = useState(null);
   const queryClient = useQueryClient();
 
@@ -188,6 +200,7 @@ export default function Workers() {
           setEditing(null);
           return;
         }
+        await emailSigningLink(created.id, setPageNotice);
       }
       setShowForm(false);
       setEditing(null);
@@ -203,6 +216,7 @@ export default function Workers() {
       setFormError(error?.message || data?.error || 'Kunne ikke sende');
       return;
     }
+    await emailSigningLink(preview.id, setPageNotice);
     setPreview(null);
   };
 
@@ -230,6 +244,7 @@ export default function Workers() {
 
   return (
     <div className="space-y-6">
+      {pageNotice && <p className="text-sm text-red-600">{pageNotice}</p>}
       <div className="flex justify-between items-center flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <p className="text-sm text-slate-500">{displayWorkers.length} worker{displayWorkers.length !== 1 ? 's' : ''}</p>

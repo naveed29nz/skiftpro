@@ -115,6 +115,7 @@ export default function EmployerSettingsCard({ orgId }) {
         <div className="space-y-1.5">
           <Label>Adresse</Label>
           <Input value={form.adresse || ''} onChange={(e) => setField('adresse', e.target.value)} />
+          <p className="text-xs text-slate-500">Arbeidsgivers adresse på avtalen er adressen til avdelingen der den ansatte jobber. Denne brukes bare når avdelingen ikke har adresse.</p>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Signatur, fullt navn</Label>

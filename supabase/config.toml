@@ -60,6 +60,9 @@ verify_jwt = false
 [functions.sign-contract]
 verify_jwt = true
 
+[functions.contract-mail]
+verify_jwt = true
+
 [functions.contract-reminders]
 verify_jwt = true
 

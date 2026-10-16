@@ -61,6 +61,17 @@ export function contractTeamKey(worker) {
 }
 
 /**
+ * Arbeidsgivers adresse. The worker's own store address wins.
+ * Employer settings are used only when that store has no address.
+ * Workplace name, company name, and contact name are not an address.
+ */
+export function employerContractAddress(worker, workplace, settings) {
+  const team = contractTeamKey(worker);
+  const teamAddress = team ? filled(workplace?.[`${team}_address`]) : '';
+  return teamAddress || filled(settings?.adresse);
+}
+
+/**
  * Workplace text for an agreement. The worker's own store wins.
  * Empty store fields fall back to the company-wide workplace.
  */
@@ -205,7 +216,7 @@ export function missingEmploymentFields({
 
   need(employerCompanyName(settings, organizationName), 'Arbeidsgivers juridiske navn');
   need(employerOrgNumber(settings, organizationOrgNumber), 'Organisasjonsnummer');
-  need(String(settings?.adresse || '').trim(), 'Arbeidsgivers adresse');
+  need(employerContractAddress(worker, workplace, settings), 'Arbeidsgivers adresse');
   if (signerName != null) need(String(signerName).trim(), 'Signaturberettiget navn');
   need(settings?.alminnelig_ukentlig_arbeidstid, 'Alminnelig ukentlig arbeidstid');
   const store = storeFieldsForWorker(worker, workplace);

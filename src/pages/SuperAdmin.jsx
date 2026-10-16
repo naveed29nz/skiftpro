@@ -10,6 +10,7 @@ import { Building2, Plus, Users, Settings, Trash2, Send, LogIn } from 'lucide-re
 import { useNavigate } from 'react-router-dom';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { customerAdminOptions, resolveEmployerSignerName, selectedCustomerAdminName } from '@/contracts/employment';
+import { signedCopyRecipient } from '../../supabase/functions/_shared/contractEmails.js';
 
 const STATUS_COLORS = {
   active: 'bg-emerald-100 text-emerald-700',
@@ -41,6 +42,7 @@ export function OrgForm({ org, profiles = [], workers = [], onSubmit, onCancel }
     admin_email: org?.admin_email || '',
     employer_signatory_user_id: org?.employer_signatory_user_id || '',
     admin_signerer_navn: String(org?.admin_signerer_navn || '').trim() || selectedCustomerAdminName(org || {}, profiles, workers),
+    signert_kopi_epost: signedCopyRecipient(org),
     status: org?.status || 'active',
     plan: org?.plan || 'basic',
     notes: org?.notes || '',
@@ -62,6 +64,7 @@ export function OrgForm({ org, profiles = [], workers = [], onSubmit, onCancel }
       ...form,
       employer_signatory_user_id: selectedId || null,
       admin_signerer_navn: String(form.admin_signerer_navn || '').trim() || null,
+      signert_kopi_epost: String(form.signert_kopi_epost || '').trim() || null,
     });
   };
 
@@ -147,6 +150,17 @@ export function OrgForm({ org, profiles = [], workers = [], onSubmit, onCancel }
             placeholder="Tomt felt bruker navnet til valgt admin"
           />
           <p className="text-xs text-slate-500">Signaturlinjen blir «For {form.name || 'selskapet'}: {signerName || '–'}». Dette navnet på kundekortet brukes foran profilnavnet.</p>
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor="signert-kopi-epost">Kopi av signerte avtaler til</Label>
+          <Input
+            id="signert-kopi-epost"
+            type="email"
+            value={form.signert_kopi_epost || ''}
+            onChange={(e) => setForm({ ...form, signert_kopi_epost: e.target.value })}
+            placeholder="admin@kunde.no"
+          />
+          <p className="text-xs text-slate-500">PDF-kopi når avtalen er signert av begge parter. Tomt felt bruker admin-e-posten, deretter kontakt-e-posten.</p>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Notater</Label>
