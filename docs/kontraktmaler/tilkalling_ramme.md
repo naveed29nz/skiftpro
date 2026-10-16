@@ -1,6 +1,9 @@
 Rammeavtale for tilkallingsvikar
 mellom
 {{selskap}}
+{{#org_nr}}
+Org.nr {{org_nr}}
+{{/org_nr}}
 (Arbeidsgiveren)
 og
 {{navn}}
@@ -83,9 +86,7 @@ Signatur
 
 Avtalen signeres elektronisk i SkiftPro. Signeringssertifikatet følger den signerte PDF-en.
 
-For {{selskap}}
-Navn: {{signatur_navn}}
-Stilling: {{signatur_stilling}}
+For {{selskap}}: {{signatur_navn}}
 Sted: {{sted}}
 
 Arbeidstaker

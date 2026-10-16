@@ -270,3 +270,28 @@ The migration adds `team1`–`team10` address, opening hours, an opening-hours s
 
 Until the migration is applied, the app still loads workplace settings. Saving a store address is stored only after the columns exist.
 
+## 9. Company party and owner signature
+
+Migration `20261016210000_employer_company_signatory.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it after `20261016120000_store_workplace.sql`.
+
+The party at the top of the agreement is `organizations.name` and `organizations.org_number` from the customer card. Employer settings supply those values only when the card is empty. Apply the next migration as well. It replaces who appears on the signature line. The admin who countersigns is still stored in `contracts.employer_signed_by` and in `contract_events`.
+
+## 10. Customer admin on the signature line
+
+Migration `20261016220000_customer_admin_signatory.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it after `20261016210000_employer_company_signatory.sql`.
+
+The customer card has **Signerer for arbeidsgiver**. The list is that customer's primary admin and department admins (`admin` / `sub_admin`). The default is the customer's primary admin (`admin_user_id`, then `admin_email`). The signature line is `For [selskap]: [navn]`, in this order: the chosen admin, the customer's primary admin, then `employer_settings.signatur_navn`. `organizations.contact_name` is not used. A platform super-admin, or an admin of another customer, is not used.
+
+After both migrations are applied on the live project, set the signer for Butikkdrift Nas AS to Naveed Zafar. This update is not part of the migration. In Kundeoversikt, open Butikkdrift Nas AS, choose Naveed Zafar under Signerer for arbeidsgiver, and save. Or run this once, only if that profile is an admin of that customer:
+
+```sql
+update public.organizations o
+set employer_signatory_user_id = p.id
+from public.profiles p
+where o.name = 'Butikkdrift Nas AS'
+  and btrim(p.full_name) = 'Naveed Zafar'
+  and public.customer_admin_name(o.id, p.id) = 'Naveed Zafar';
+```
+
+If the statement updates no row, link Naveed Zafar as that customer's admin before choosing him. Do not point the column at a platform super-admin or at another customer's admin.
+

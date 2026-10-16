@@ -13,6 +13,7 @@ import { useOrg } from '@/hooks/useOrg';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import { releaseUpcomingShifts } from '@/utils/workerLifecycle';
 import { canSeeWageCosts } from '@/utils/wageAccess';
+import { resolveEmployerSignerName } from '@/contracts/employment';
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', color: 'bg-purple-100 text-purple-700' },
@@ -50,7 +51,7 @@ function InviteButton({ worker }) {
 export default function Workers() {
   const { user, worker: me, myTeams } = useCurrentWorker();
   const showWages = canSeeWageCosts(user, me);
-  const { orgId, isSuperAdmin: superAdmin } = useOrg();
+  const { orgId, myOrg, isSuperAdmin: superAdmin } = useOrg();
   const isAdmin = user?.role === 'admin';
   const [showForm, setShowForm] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
@@ -380,6 +381,14 @@ export default function Workers() {
             showWages={showWages}
             employerSettings={employerRows[0] || null}
             workplace={workplace}
+            organizationName={myOrg?.name || ''}
+            organizationOrgNumber={myOrg?.org_number || ''}
+            signerName={myOrg ? resolveEmployerSignerName({
+              organization: myOrg,
+              profiles: user && !users.some((row) => row.id === user.id) ? [user, ...users] : users,
+              workers: allWorkers,
+              settings: employerRows[0] || null,
+            }) : null}
           />
           </div>
         </DialogContent>

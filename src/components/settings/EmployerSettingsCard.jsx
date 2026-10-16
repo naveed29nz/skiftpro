@@ -105,22 +105,21 @@ export default function EmployerSettingsCard({ orgId }) {
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Juridisk navn</Label>
           <Input value={form.selskap || ''} onChange={(e) => setField('selskap', e.target.value)} />
+          <p className="text-xs text-slate-500">Brukes på avtalen bare når kundekortet mangler selskapsnavn. Parten øverst er navnet og org.nr fra kundekortet.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Organisasjonsnummer</Label>
           <Input value={form.org_nr || ''} onChange={(e) => setField('org_nr', e.target.value)} />
+          <p className="text-xs text-slate-500">Brukes bare når kundekortet mangler organisasjonsnummer.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Adresse</Label>
           <Input value={form.adresse || ''} onChange={(e) => setField('adresse', e.target.value)} />
         </div>
-        <div className="space-y-1.5">
-          <Label>Signaturberettiget navn</Label>
-          <Input value={form.signatur_navn || ''} onChange={(e) => setField('signatur_navn', e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Signaturberettiget stilling</Label>
-          <Input value={form.signatur_stilling || ''} onChange={(e) => setField('signatur_stilling', e.target.value)} />
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>Signatur, fullt navn</Label>
+          <Input value={form.signatur_navn || ''} onChange={(e) => setField('signatur_navn', e.target.value)} placeholder="Brukes bare når kunden mangler et adminnavn" />
+          <p className="text-xs text-slate-500">Siste reserveløsning. Signaturlinjen er ellers «For [selskapsnavn]: [valgt admin]». Kontaktpersonen brukes ikke.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Alminnelig ukentlig arbeidstid</Label>

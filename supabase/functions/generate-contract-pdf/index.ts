@@ -96,6 +96,7 @@ async function loadSealedPdf(client: any, contractId: string): Promise<Uint8Arra
     contentSha256: doc.data.content_sha256,
     workerName: doc.data.field_values?.navn || doc.data.field_values?.ansatt_navn,
     orgName: doc.data.field_values?.selskap,
+    employerName: doc.data.field_values?.signatur_navn,
     employeeSignedAt: null,
     employerSignedAt: null,
     events: events.data || [],

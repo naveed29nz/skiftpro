@@ -124,6 +124,12 @@ function withoutStoreWorkplaceColumns(payload) {
   return next;
 }
 
+function withoutEmployerSignatory(payload) {
+  const next = { ...payload };
+  delete next.employer_signatory_user_id;
+  return next;
+}
+
 function workplaceColumns() {
   const cols = ['id', 'org_id', 'workplace_name', 'workplace_address', 'apningstid_fra', 'apningstid_til', 'latitude', 'longitude', 'radius_meters', 'full_time_hours_per_week', 'active_teams_count'];
   for (let i = 1; i <= 10; i += 1) {
@@ -347,8 +353,13 @@ async function writeRow(table, payload, run) {
   try {
     return await runRead(table, (columns) => run(columns, payload));
   } catch (error) {
-    if (table !== 'workplace_settings' || !isMissingColumn(error)) throw error;
-    return runRead(table, (columns) => run(columns, withoutStoreWorkplaceColumns(payload)));
+    if (table === 'workplace_settings' && isMissingColumn(error)) {
+      return runRead(table, (columns) => run(columns, withoutStoreWorkplaceColumns(payload)));
+    }
+    if (table === 'organizations' && isMissingColumn(error) && Object.prototype.hasOwnProperty.call(payload, 'employer_signatory_user_id')) {
+      return runRead(table, (columns) => run(columns, withoutEmployerSignatory(payload)));
+    }
+    throw error;
   }
 }
 

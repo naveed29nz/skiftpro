@@ -17,7 +17,7 @@ async function archiveSignedPdf(contractId: string) {
   const admin = adminClient();
   const { data: contract, error } = await admin
     .from("contracts")
-    .select("id, org_id, worker_id, worker_name, org_name, template_key, template_version, body_snapshot, content_sha256, employee_signed_at, employee_signed_by, employer_signed_at, employer_signed_by, status, pdf_path")
+    .select("id, org_id, worker_id, worker_name, org_name, template_key, template_version, body_snapshot, field_values, content_sha256, employee_signed_at, employee_signed_by, employer_signed_at, employer_signed_by, status, pdf_path")
     .eq("id", contractId)
     .maybeSingle();
   if (error || !contract || contract.status !== "signert" || contract.pdf_path) return;
@@ -29,15 +29,17 @@ async function archiveSignedPdf(contractId: string) {
     .eq("contract_id", contractId)
     .order("created_at", { ascending: true });
 
-  let employerName: string | null = null;
-  if (contract.employer_signed_by) {
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("full_name, email")
-      .eq("id", contract.employer_signed_by)
-      .maybeSingle();
-    employerName = profile?.full_name || profile?.email || null;
-  }
+  const fields = (contract.field_values || {}) as { selskap?: string; signatur_navn?: string };
+  const { data: organization } = await admin
+    .from("organizations")
+    .select("name")
+    .eq("id", contract.org_id)
+    .maybeSingle();
+  const orgName = String(fields.selskap || "").trim()
+    || String(organization?.name || "").trim()
+    || contract.org_name
+    || null;
+  const employerName = String(fields.signatur_navn || "").trim() || null;
 
   const bytes = buildSnapshotPdf({
     id: contract.id,
@@ -46,7 +48,7 @@ async function archiveSignedPdf(contractId: string) {
     templateVersion: contract.template_version,
     contentSha256: contract.content_sha256,
     workerName: contract.worker_name,
-    orgName: contract.org_name,
+    orgName,
     employeeSignedAt: contract.employee_signed_at,
     employeeSignedBy: contract.employee_signed_by,
     employerSignedAt: contract.employer_signed_at,

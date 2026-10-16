@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Building2, Plus, Users, Settings, Trash2, Send, LogIn } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
+import { customerAdminOptions, resolveEmployerSignerName } from '@/contracts/employment';
 
 const STATUS_COLORS = {
   active: 'bg-emerald-100 text-emerald-700',
@@ -30,7 +31,7 @@ const PLAN_LIMITS = {
   ultimate:   { workers: 100, departments: 10, label: 'Ultimate',   desc: '31–100 ansatte · 10 avdelinger' },
 };
 
-function OrgForm({ org, onSubmit, onCancel }) {
+export function OrgForm({ org, profiles = [], workers = [], onSubmit, onCancel }) {
   const [form, setForm] = useState({
     name: org?.name || '',
     org_number: org?.org_number || '',
@@ -38,14 +39,25 @@ function OrgForm({ org, onSubmit, onCancel }) {
     contact_email: org?.contact_email || '',
     contact_phone: org?.contact_phone || '',
     admin_email: org?.admin_email || '',
+    employer_signatory_user_id: org?.employer_signatory_user_id || '',
     status: org?.status || 'active',
     plan: org?.plan || 'basic',
     notes: org?.notes || '',
   });
+  const draftOrg = { ...(org || {}), ...form, id: org?.id };
+  const candidates = customerAdminOptions(draftOrg, profiles, workers);
+  const selectedId = candidates.some((candidate) => candidate.id === form.employer_signatory_user_id)
+    ? form.employer_signatory_user_id
+    : (candidates.find((candidate) => candidate.primary)?.id || '');
+  const signerName = resolveEmployerSignerName({
+    organization: { ...draftOrg, employer_signatory_user_id: selectedId },
+    profiles,
+    workers,
+  });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(form);
+    onSubmit({ ...form, employer_signatory_user_id: selectedId || null });
   };
 
   return (
@@ -99,6 +111,24 @@ function OrgForm({ org, onSubmit, onCancel }) {
           </Select>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
+          <Label>Signerer for arbeidsgiver</Label>
+          {candidates.length > 0 ? (
+            <Select value={selectedId} onValueChange={(value) => setForm({ ...form, employer_signatory_user_id: value })}>
+              <SelectTrigger><SelectValue placeholder="Velg kundens admin" /></SelectTrigger>
+              <SelectContent>
+                {candidates.map((candidate) => (
+                  <SelectItem key={candidate.id} value={candidate.id}>
+                    {(candidate.fullName || candidate.email)}{candidate.primary ? ' (kundens admin)' : ' (avdelingsadmin)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-sm text-slate-500">Ingen adminbruker på kunden ennå. Standard blir kundens første admin.</p>
+          )}
+          <p className="text-xs text-slate-500">Signaturlinjen blir «For {form.name || 'selskapet'}: {signerName || '–'}». Kontaktpersonen brukes ikke.</p>
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
           <Label>Notater</Label>
           <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Interne notater..." />
         </div>
@@ -127,6 +157,11 @@ export default function SuperAdmin() {
   const { data: allWorkers = [] } = useQuery({
     queryKey: ['workers'],
     queryFn: () => base44.entities.Worker.list(),
+  });
+
+  const { data: profiles = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => base44.entities.User.list(),
   });
 
   // SuperAdmin er en egen plattform-bruker – holdes helt adskilt fra kundedata.
@@ -265,6 +300,7 @@ export default function SuperAdmin() {
 
               <div className="mt-3 space-y-1 text-sm text-slate-500">
                 {org.contact_name && <p className="font-medium text-slate-700">👤 {org.contact_name}</p>}
+                <p className="text-slate-700">Signerer: {resolveEmployerSignerName({ organization: org, profiles, workers: allWorkers }) || 'kundens admin'}</p>
                 {org.contact_email && <p className="truncate">📧 {org.contact_email}</p>}
                 {org.contact_phone && <p>📞 {org.contact_phone}</p>}
                 <div className="flex items-center justify-between pt-1">
@@ -336,6 +372,8 @@ export default function SuperAdmin() {
           </DialogHeader>
           <OrgForm
             org={editing}
+            profiles={profiles}
+            workers={allWorkers}
             onSubmit={handleSubmit}
             onCancel={() => { setShowForm(false); setEditing(null); }}
           />
