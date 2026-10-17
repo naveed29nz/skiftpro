@@ -6,7 +6,9 @@ import { supabase } from '@/api/supabaseClient';
 import { toast } from '@/components/ui/use-toast';
 import ContractSignPanel from '@/components/contracts/ContractSignPanel';
 import ContractCertificate from '@/components/contracts/ContractCertificate';
+import EmployeeSignedThanks from '@/components/contracts/EmployeeSignedThanks';
 import { countersignerIdentity, employerCountersignDestination } from '@/contracts/countersign';
+import { mapSigningError } from '@/contracts/signingErrors';
 
 export default function ContractSign() {
   const { contractId } = useParams();
@@ -72,8 +74,10 @@ export default function ContractSign() {
       const sent = res?.data?.sent ? `Koden er sendt til ${res.data.email || 'e-posten din'}.` : 'E-post er ikke satt opp. Be admin sjekke RESEND_API_KEY.';
       const dev = res?.data?.dev_code ? ` Utviklerkode: ${res.data.dev_code}.` : '';
       setMessage(sent + dev);
+      return true;
     } catch (err) {
       setError(err.message || 'Kunne ikke sende kode');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -97,6 +101,10 @@ export default function ContractSign() {
         navigate(destination.path);
         return;
       }
+      if (role === 'ansatt' && nextStatus !== 'signert') {
+        navigate(`/kontrakt/${contractId}/takk`);
+        return;
+      }
       setStatus(nextStatus);
       setMessage(nextStatus === 'signert'
         ? 'Avtalen er signert av begge parter.'
@@ -104,7 +112,7 @@ export default function ContractSign() {
       const { data } = await supabase.rpc('contract_document', { p_id: contractId });
       if (data) setDocument(data);
     } catch (err) {
-      setError(err.message || 'Signeringen feilet');
+      setError(mapSigningError(err.message));
     } finally {
       setBusy(false);
     }
@@ -130,6 +138,10 @@ export default function ContractSign() {
 
   if (isLoading && !contract) {
     return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" /></div>;
+  }
+
+  if (role === 'ansatt' && currentStatus === 'signert_ansatt') {
+    return <EmployeeSignedThanks />;
   }
 
   if (currentStatus === 'signert' || currentStatus === 'godkjent') {

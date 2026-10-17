@@ -1,5 +1,7 @@
 /** Employment-contract field rules shared by the worker form. */
 
+import { fodselsnummerValid } from './fodselsnummer.js';
+
 export const ANSETTELSESTYPER = [
   { value: 'fast', label: 'Fast ansettelse (heltid/deltid)', template: 'fast' },
   { value: 'midlertidig_vikar', label: 'Midlertidig vikar (aml. § 14-9 (2) b)', template: 'midlertidig_vikar' },
@@ -190,6 +192,9 @@ export function missingEmploymentFields({
   need(String(worker?.name || '').trim(), 'Fullt navn');
   need(String(worker?.email || '').trim(), 'E-post');
   need(worker?.birth_date, 'Fødselsdato');
+  need(fodselsnummerValid(worker?.fodselsnummer), 'Fødselsnummer');
+  need(String(worker?.address || '').trim(), 'Adresse');
+  need(String(worker?.phone || '').trim(), 'Mobilnummer');
   need(worker?.tiltredelsesdato, 'Tiltredelsesdato');
   if (type === 'midlertidig_vikar') need(worker?.opphorsdato, 'Opphørsdato');
 
@@ -221,8 +226,6 @@ export function missingEmploymentFields({
   need(settings?.alminnelig_ukentlig_arbeidstid, 'Alminnelig ukentlig arbeidstid');
   const store = storeFieldsForWorker(worker, workplace);
   need(store.sted, 'Arbeidssted');
-  need(store.apningstid_fra, 'Åpningstid fra');
-  need(store.apningstid_til, 'Åpningstid til');
 
   if (type === 'butikksjef_ledende') {
     const unanswered = BUTIKKSJEF_CHECKLIST.filter((item) => checklist?.[item.key] !== true);

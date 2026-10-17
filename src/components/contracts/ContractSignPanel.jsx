@@ -43,7 +43,8 @@ export default function ContractSignPanel({
 
   const askForCode = async () => {
     if (!accepted || !onRequestCode) return;
-    await onRequestCode();
+    const result = await onRequestCode();
+    if (result === false) return;
     setCodeSent(true);
   };
 
@@ -85,7 +86,7 @@ export default function ContractSignPanel({
 
       <div className="flex flex-wrap gap-3">
         <Button type="button" disabled={!accepted || busy} onClick={askForCode}>
-          Send engangskode
+          {busy && !codeSent ? 'Sender…' : 'Send engangskode'}
         </Button>
       </div>
 
@@ -111,7 +112,7 @@ export default function ContractSignPanel({
             className="max-w-[160px] tracking-[0.3em] font-mono"
           />
           <p className="text-xs text-slate-500">Koden er gyldig i 10 minutter. Du har maks fem forsøk.</p>
-          <Button type="submit" disabled={code.length !== 6 || busy}>Signer med kode</Button>
+          <Button type="submit" disabled={code.length !== 6 || busy}>{busy ? 'Signerer…' : 'Signer med kode'}</Button>
         </form>
       )}
 

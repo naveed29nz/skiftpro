@@ -44,22 +44,14 @@ async function archiveSignedPdf(contractId: string) {
     || "";
   const employerName = String(fields.signatur_navn || "").trim() || null;
 
-  const bytes = buildSnapshotPdf({
+  const bytes = await buildSnapshotPdf({
     id: contract.id,
     body: contract.body_snapshot,
-    templateKey: contract.template_key,
-    templateVersion: contract.template_version,
-    contentSha256: contract.content_sha256,
     workerName: contract.worker_name,
-    orgName: orgName || null,
     employeeSignedAt: contract.employee_signed_at,
-    employeeSignedBy: contract.employee_signed_by,
+    orgName: orgName || null,
+    employerName: signer.name || employerName,
     employerSignedAt: contract.employer_signed_at,
-    employerSignedBy: signer.userId || contract.employer_signed_by,
-    employerSignerName: signer.name,
-    employerSignerEmail: signer.email,
-    employerName,
-    events: events || [],
   });
   const pdfSha = await sha256Hex(bytes);
   const path = `${contract.org_id}/${contract.worker_id}/${contract.id}.pdf`;

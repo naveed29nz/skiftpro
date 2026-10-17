@@ -20,6 +20,7 @@ import SuperAdminBilling from '@/pages/SuperAdminBilling';
 import SuperAdminAuditLog from '@/pages/SuperAdminAuditLog';
 import Contracts from '@/pages/Contracts';
 import ContractSign from '@/pages/ContractSign';
+import EmployeeSignedThanks from '@/components/contracts/EmployeeSignedThanks';
 import ResetPassword from '@/pages/ResetPassword';
 import Resultat from '@/pages/Resultat';
 
@@ -66,6 +67,7 @@ export default function AuthenticatedApp() {
           <Route path="/SuperAdmin/Billing" element={<SuperAdminBilling />} />
           <Route path="/SuperAdmin/AuditLog" element={<SuperAdminAuditLog />} />
           <Route path="/Contracts" element={<Contracts />} />
+          <Route path="/kontrakt/:contractId/takk" element={<EmployeeSignedThanks />} />
           <Route path="/kontrakt/:contractId" element={<ContractSign />} />
           <Route path="/Resultat" element={<Resultat />} />
         </Route>

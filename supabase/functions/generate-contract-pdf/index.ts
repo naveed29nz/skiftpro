@@ -1,7 +1,7 @@
 import { jsPDF } from "npm:jspdf@4.0.0";
 import { adminClient, corsHeaders, handleOptions, json, requireUser } from "../_shared/auth.ts";
 import { countersignerIdentity } from "../_shared/countersigner.ts";
-import { buildSnapshotPdf } from "../_shared/contractPdf.ts";
+import { buildSigningProofPdf, buildSnapshotPdf } from "../_shared/contractPdf.ts";
 
 // Port of base44/functions/generateContractPDF.
 // The caller must be allowed to read the contract (worker on the contract,
@@ -19,6 +19,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const contractId = body.contract_id;
     if (!contractId) return json({ error: "Missing contract_id" }, 400);
+    if (body.kind === "signeringsbevis") return await signingProofResponse(auth.client, contractId);
 
     const sealed = await loadSealedPdf(auth.client, contractId);
     if (sealed instanceof Response) return sealed;
@@ -94,13 +95,36 @@ async function loadSealedPdf(client: any, contractId: string): Promise<Uint8Arra
     events.data || [],
     doc.data.employer_signed_by,
   );
+  const workerName = doc.data.field_values?.navn || doc.data.field_values?.ansatt_navn;
+  const orgName = doc.data.field_values?.selskap;
   return buildSnapshotPdf({
     id: contractId,
     body: doc.data.body_snapshot,
+    workerName,
+    employeeSignedAt: doc.data.employee_signed_at || null,
+    orgName,
+    employerName: doc.data.employer_signed_name || signer.name || doc.data.field_values?.signatur_navn,
+    employerSignedAt: doc.data.employer_signed_at || null,
+  });
+}
+
+async function signingProofResponse(client: any, contractId: string): Promise<Response> {
+  const doc = await client.rpc("contract_document", { p_id: contractId });
+  if (doc.error) return json({ error: doc.error.message }, 500);
+  if (!doc.data) return json({ error: "Du har ikke tilgang til signeringsbeviset" }, 403);
+  const events = await client
+    .from("contract_events")
+    .select("event_type, actor_id, actor_role, ip, user_agent, payload, created_at")
+    .eq("contract_id", contractId)
+    .order("created_at", { ascending: true });
+  const signer = await countersignerIdentity(adminClient(), events.data || [], doc.data.employer_signed_by);
+  const bytes = await buildSigningProofPdf({
+    id: contractId,
     templateKey: doc.data.template_key,
     templateVersion: doc.data.template_version,
     contentSha256: doc.data.content_sha256,
-    workerName: doc.data.field_values?.navn || doc.data.field_values?.ansatt_navn,
+    pdfSha256: doc.data.pdf_sha256,
+    workerName: doc.data.field_values?.navn,
     orgName: doc.data.field_values?.selskap,
     employerName: doc.data.field_values?.signatur_navn,
     employeeSignedAt: doc.data.employee_signed_at || null,
@@ -110,6 +134,14 @@ async function loadSealedPdf(client: any, contractId: string): Promise<Uint8Arra
     employerSignerName: doc.data.employer_signed_name || signer.name,
     employerSignerEmail: doc.data.employer_signed_email || signer.email,
     events: events.data || [],
+  });
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="signeringsbevis-${contractId}.pdf"`,
+    },
   });
 }
 

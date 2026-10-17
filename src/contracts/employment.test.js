@@ -23,6 +23,9 @@ function worker(teams) {
     timer_per_dag: 7.5,
     hourly_rate: 200,
     provetid_mnd: 6,
+    address: 'Gate 1, 0001 Oslo',
+    phone: '900 00 000',
+    fodselsnummer: '15059000060',
     teams,
   };
 }
@@ -307,7 +310,20 @@ test('missing workplace is reported when neither the team nor the company has it
     showWages: true,
   });
   assert.ok(missing.includes('Arbeidssted'));
-  assert.ok(missing.includes('Åpningstid fra'));
-  assert.ok(missing.includes('Åpningstid til'));
+  assert.equal(missing.includes('Åpningstid fra'), false);
+  assert.equal(missing.includes('Åpningstid til'), false);
   assert.equal(missing.some((label) => /åpningstider/i.test(label)), false);
+});
+
+test('fødselsnummer, address and mobile are required', () => {
+  const missing = missingEmploymentFields({
+    worker: { ...worker(['team1']), fodselsnummer: '12345678901', address: ' ', phone: '' },
+    settings,
+    workplace: { workplace_address: 'Firmaadresse 1' },
+    showWages: true,
+  });
+  assert.ok(missing.includes('Fødselsnummer'));
+  assert.ok(missing.includes('Adresse'));
+  assert.ok(missing.includes('Mobilnummer'));
+  assert.equal(missing.includes('Åpningstid fra'), false);
 });
