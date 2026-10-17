@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { base44 } from '@/api/base44Client';
+
 const EVENT_LABELS = {
   opprettet: 'Opprettet',
   sendt: 'Sendt',
@@ -40,14 +44,50 @@ export default function ContractCertificate({
   employeeSignedBy,
   employerSignedAt,
   employerSignedBy,
+  countersignerName,
+  countersignerEmail,
   events = [],
 }) {
+  const [proofError, setProofError] = useState('');
+  const [proofBusy, setProofBusy] = useState(false);
+
+  const downloadProof = async () => {
+    if (!documentId) return;
+    setProofBusy(true);
+    setProofError('');
+    try {
+      const res = await base44.functions.invoke('generateContractPDF', {
+        contract_id: documentId,
+        kind: 'signeringsbevis',
+      });
+      const blob = res?.data instanceof Blob
+        ? res.data
+        : new Blob([res?.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `signeringsbevis-${documentId}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setProofError(err?.message || 'Kunne ikke laste ned signeringsbeviset');
+    } finally {
+      setProofBusy(false);
+    }
+  };
+
   return (
     <article className="bg-white text-slate-900 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <header className="px-6 py-5 border-b border-slate-200 bg-slate-50">
-        <p className="text-xs uppercase tracking-wide text-slate-500">Signeringssertifikat</p>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Signeringsbevis</p>
         <h1 className="text-xl font-bold mt-1">Signert arbeidsavtale</h1>
         <p className="text-sm text-slate-600 mt-1">Dokument-id {documentId}</p>
+        <Button type="button" variant="outline" className="mt-3" disabled={proofBusy} onClick={downloadProof}>
+          {proofBusy ? 'Laster…' : 'Last ned signeringsbevis'}
+        </Button>
+        {proofError ? <p className="text-sm text-red-600 mt-2">{proofError}</p> : null}
       </header>
       <div className="px-6 py-5 space-y-5 text-sm">
         <dl className="grid sm:grid-cols-2 gap-4">
@@ -86,6 +126,8 @@ export default function ContractCertificate({
               <p>For {companyName || employerName || '–'}: {signatoryName || '–'}</p>
               {employerEmail ? <p>{employerEmail}</p> : null}
               <p className="text-xs text-slate-500 mt-2">Admin som motsignet</p>
+              <p className="font-semibold">{countersignerName || '–'}</p>
+              <p className="break-all">{countersignerEmail || '–'}</p>
               <p className="text-xs mt-1">{formatStamp(employerSignedAt)}</p>
               <p className="text-xs text-slate-500 break-all">Bruker-id {employerSignedBy || '–'}</p>
             </div>

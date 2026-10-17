@@ -145,21 +145,44 @@ export default function Workers() {
     if (!editing?.id || !showWages) return;
     let cancelled = false;
     supabase.rpc('worker_contract_fields', { p_worker_id: editing.id }).then(({ data }) => {
-      if (cancelled || !data?.birth_date) return;
-      setEditing(current => current && current.id === editing.id ? { ...current, birth_date: data.birth_date, address: data.address ?? current.address } : current);
+      if (cancelled || !data) return;
+      setEditing(current => current && current.id === editing.id ? {
+        ...current,
+        birth_date: data.birth_date || current.birth_date,
+        address: data.address ?? current.address,
+      } : current);
+    });
+    supabase.rpc('worker_fodselsnummer', { p_worker_id: editing.id }).then(({ data, error }) => {
+      if (cancelled || error || data == null || data === '') return;
+      setEditing(current => current && current.id === editing.id ? { ...current, fodselsnummer: data } : current);
     });
     return () => { cancelled = true; };
   }, [editing?.id, showWages]);
+
+  const { data: fodselsnummerMasks = [] } = useQuery({
+    queryKey: ['fodselsnummer-masks', orgId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('worker_fodselsnummer_masks');
+      if (error) return [];
+      return data || [];
+    },
+    enabled: showWages && orgId !== undefined,
+  });
+  const fodselsnummerMask = Object.fromEntries(
+    fodselsnummerMasks.filter((row) => row?.masked).map((row) => [row.id, row.masked]),
+  );
 
   const handleSubmit = async (data) => {
     setFormError('');
     const sendContract = Boolean(data.send_arbeidsavtale);
     const previewFirst = Boolean(data.preview_first);
     const checklist = data.checklist || {};
+    const fodselsnummer = data.fodselsnummer ?? '';
     const workerFields = { ...data };
     delete workerFields.send_arbeidsavtale;
     delete workerFields.preview_first;
     delete workerFields.checklist;
+    delete workerFields.fodselsnummer;
     try {
       let saved;
       if (editing) {
@@ -179,6 +202,14 @@ export default function Workers() {
         }
       } else {
         saved = await createMut.mutateAsync({ ...workerFields, org_id: orgId });
+      }
+      if (showWages) {
+        const { error: numberError } = await supabase.rpc('set_worker_fodselsnummer', {
+          p_worker_id: saved.id,
+          p_value: fodselsnummer,
+        });
+        if (numberError) throw new Error(numberError.message);
+        queryClient.invalidateQueries({ queryKey: ['fodselsnummer-masks'] });
       }
       if (sendContract) {
         const { data: created, error } = await supabase.rpc('create_employment_contract', {
@@ -311,6 +342,12 @@ export default function Workers() {
                   <span className="font-semibold text-slate-800">{worker.hourly_rate?.toFixed(2)} kr</span>
                 </div>
                 )}
+                {showWages && fodselsnummerMask[worker.id] && (
+                <div className="flex items-center justify-between">
+                  <span>Fødselsnummer</span>
+                  <span className="font-semibold text-slate-800">{fodselsnummerMask[worker.id]}</span>
+                </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span>Stillingsprosent</span>
                   <span className="font-semibold text-slate-800">{worker.employment_percentage ?? 100}%</span>
@@ -388,7 +425,7 @@ export default function Workers() {
           <div className="overflow-y-auto flex-1 pr-1">
           {formError && <p className="text-sm text-red-600 mb-3">{formError}</p>}
           <WorkerForm
-            key={`${editing?.id || 'new'}-${editing?.birth_date || ''}`}
+            key={`${editing?.id || 'new'}-${editing?.birth_date || ''}-${editing?.fodselsnummer ? 'fn' : ''}`}
             worker={editing}
             onSubmit={handleSubmit}
             onCancel={() => { setShowForm(false); setEditing(null); setFormError(''); }}

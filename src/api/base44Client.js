@@ -67,6 +67,22 @@ function apiError(message, status = 400) {
   return err;
 }
 
+async function readInvokeError(error) {
+  let message = error?.message || '';
+  const context = error?.context;
+  if (context && typeof context.json === 'function') {
+    try {
+      const body = await context.clone().json();
+      if (body && typeof body.error === 'string' && body.error.trim()) {
+        message = body.error;
+      }
+    } catch {
+      /* the function body was not JSON */
+    }
+  }
+  return message;
+}
+
 function toError(error, status = 400) {
   if (!error) return apiError('Forespørselen feilet', status);
   if (error instanceof Error && error.status) return error;
@@ -544,7 +560,8 @@ export const base44 = {
       const name = FUNCTION_NAMES[functionName] || functionName;
       const { data, error } = await supabase.functions.invoke(name, { body: payload ?? {} });
       if (error) {
-        const err = apiError(error.message || `Funksjonen ${functionName} feilet`, 500);
+        const message = await readInvokeError(error);
+        const err = apiError(message || `Funksjonen ${functionName} feilet`, 500);
         if (error.context && typeof error.context.status === 'number') {
           err.status = error.context.status;
         }

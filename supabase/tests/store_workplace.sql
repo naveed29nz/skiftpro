@@ -84,8 +84,8 @@ begin
   insert into rls_results values (
     'missing workplace is reported when neither team nor company has it',
     'Arbeidssted' = any(missing)
-      and 'Åpningstid fra' = any(missing)
-      and 'Åpningstid til' = any(missing),
+      and not ('Åpningstid fra' = any(missing))
+      and not ('Åpningstid til' = any(missing)),
     array_to_string(missing, ', ')
   );
 
@@ -105,8 +105,10 @@ begin
   order by version desc
   limit 1;
   insert into rls_results values (
-    'fast template includes the optional opening-hours summary',
-    body like '%{{#apningstider}}%' and body like '%{{apningstider}}%',
+    'fast template refers to the store opening hours without clock times',
+    body like '%butikkens åpningstider%'
+      and body not like '%{{#apningstider}}%'
+      and body not like '%mellom klokken%',
     left(body, 80)
   );
 
@@ -116,9 +118,9 @@ begin
   order by version desc
   limit 1;
   insert into rls_results values (
-    'tilkalling template includes the optional opening-hours summary',
-    body like '%{{#apningstider}}%',
-    case when body like '%{{#apningstider}}%' then 'yes' else 'no' end
+    'tilkalling template refers to the store opening hours without clock times',
+    body like '%butikkens åpningstider%' and body not like '%{{#apningstider}}%',
+    case when body like '%butikkens åpningstider%' then 'yes' else 'no' end
   );
 end;
 $do$;

@@ -1,4 +1,5 @@
 import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.ts";
+import { countersignerIdentity } from "../_shared/countersigner.ts";
 import { buildSnapshotPdf, bytesToBase64, sha256Hex } from "../_shared/contractPdf.ts";
 import { otpMessage, signedCopyRecipient, signedEmployeeMessage, signedEmployerMessage } from "../_shared/contractMail.ts";
 import { sendEmail } from "../_shared/email.ts";
@@ -26,9 +27,10 @@ async function archiveSignedPdf(contractId: string) {
 
   const { data: events } = await admin
     .from("contract_events")
-    .select("event_type, actor_id, actor_role, ip, user_agent, created_at")
+    .select("event_type, actor_id, actor_role, ip, user_agent, payload, created_at")
     .eq("contract_id", contractId)
     .order("created_at", { ascending: true });
+  const signer = await countersignerIdentity(admin, events || [], contract.employer_signed_by);
 
   const fields = (contract.field_values || {}) as { selskap?: string; signatur_navn?: string };
   const { data: organization } = await admin
@@ -42,20 +44,14 @@ async function archiveSignedPdf(contractId: string) {
     || "";
   const employerName = String(fields.signatur_navn || "").trim() || null;
 
-  const bytes = buildSnapshotPdf({
+  const bytes = await buildSnapshotPdf({
     id: contract.id,
     body: contract.body_snapshot,
-    templateKey: contract.template_key,
-    templateVersion: contract.template_version,
-    contentSha256: contract.content_sha256,
     workerName: contract.worker_name,
-    orgName: orgName || null,
     employeeSignedAt: contract.employee_signed_at,
-    employeeSignedBy: contract.employee_signed_by,
+    orgName: orgName || null,
+    employerName: signer.name || employerName,
     employerSignedAt: contract.employer_signed_at,
-    employerSignedBy: contract.employer_signed_by,
-    employerName,
-    events: events || [],
   });
   const pdfSha = await sha256Hex(bytes);
   const path = `${contract.org_id}/${contract.worker_id}/${contract.id}.pdf`;

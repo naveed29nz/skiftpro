@@ -78,12 +78,16 @@ psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/202610162200
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261016233000_customer_card_admin_name.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261016240000_store_address_and_contract_mail.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261016245000_contract_delete_revoke_tokens.sql"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261016250000_countersigner_identity.sql"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261016260000_contract_text_and_fodselsnummer.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/rls_isolation.sql" | tee /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/contract_signing.sql" | tee -a /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/store_workplace.sql" | tee -a /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/employer_signatory.sql" | tee -a /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/store_address_mail.sql" | tee -a /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/contract_delete.sql" | tee -a /tmp/rls-test.out
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/countersigner_identity.sql" | tee -a /tmp/rls-test.out
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/contract_text.sql" | tee -a /tmp/rls-test.out
 if grep -E 'FAIL|[[:space:]]+[1-9][0-9]* \|[[:space:]]+[0-9]+' /tmp/rls-test.out | head -n 1 | grep -q FAIL; then
   echo "RLS tests failed" >&2
   exit 1

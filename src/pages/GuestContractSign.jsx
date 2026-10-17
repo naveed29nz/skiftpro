@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ContractSignPanel from '@/components/contracts/ContractSignPanel';
+import EmployeeSignedThanks from '@/components/contracts/EmployeeSignedThanks';
+import { mapSigningError } from '@/contracts/signingErrors';
 
 const TOKEN_KEY = 'skiftpro.contractAccess';
 
@@ -40,6 +42,7 @@ async function guestCall(payload) {
 
 export default function GuestContractSign() {
   const { contractId } = useParams();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const devPreview = import.meta.env.DEV && params.get('forhandsvis') === '1';
   const [token, setToken] = useState('');
@@ -107,8 +110,10 @@ export default function GuestContractSign() {
         : 'E-post er ikke satt opp. Be admin sjekke at e-postutsending virker.';
       const dev = data.dev_code ? ` Utviklerkode: ${data.dev_code}.` : '';
       setMessage(sent + dev);
+      return true;
     } catch (err) {
       setError(err.message || 'Kunne ikke sende kode');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -130,12 +135,14 @@ export default function GuestContractSign() {
         role: 'ansatt',
         code,
       });
+      if (data.status !== 'signert') {
+        navigate(`/signer/${contractId}/takk`);
+        return;
+      }
       setStatus(data.status || null);
-      setMessage(data.status === 'signert'
-        ? 'Avtalen er signert av begge parter. En kopi blir sendt på e-post.'
-        : 'Signaturen er registrert. Arbeidsgiver må motsignere.');
+      setMessage('Avtalen er signert av begge parter. En kopi blir sendt på e-post.');
     } catch (err) {
-      setError(err.message || 'Signeringen feilet');
+      setError(mapSigningError(err.message));
     } finally {
       setBusy(false);
     }
@@ -189,6 +196,10 @@ export default function GuestContractSign() {
     return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" /></div>;
   }
 
+  if (status === 'signert_ansatt') {
+    return <EmployeeSignedThanks />;
+  }
+
   if (status === 'signert') {
     return (
       <div className="max-w-3xl mx-auto p-4">
@@ -229,11 +240,8 @@ export default function GuestContractSign() {
         error={error}
         onRequestCode={status === 'signert_ansatt' ? undefined : requestCode}
         onVerify={status === 'signert_ansatt' ? undefined : verify}
-        onReject={status === 'signert_ansatt' ? undefined : reject}
+        onReject={reject}
       />
-      {status === 'signert_ansatt' && (
-        <p className="max-w-3xl mx-auto text-sm text-slate-600">Signaturen er registrert. Arbeidsgiver må motsignere.</p>
-      )}
     </div>
   );
 }

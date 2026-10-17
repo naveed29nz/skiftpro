@@ -16,6 +16,7 @@ import {
   missingEmploymentFields,
   suggestPercentage,
 } from '@/contracts/employment';
+import { fodselsnummerValid } from '@/contracts/fodselsnummer';
 
 const COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'];
 
@@ -55,6 +56,7 @@ export default function WorkerForm({
     disabled_extras: worker?.disabled_extras || [],
     can_see_resultat: worker?.can_see_resultat || false,
     birth_date: worker?.birth_date || '',
+    fodselsnummer: worker?.fodselsnummer || '',
     address: worker?.address || '',
     ansettelsestype: worker?.ansettelsestype || 'fast',
     tiltredelsesdato: worker?.tiltredelsesdato || '',
@@ -104,6 +106,7 @@ export default function WorkerForm({
     else {
       delete payload.hourly_rate;
       delete payload.birth_date;
+      delete payload.fodselsnummer;
       delete payload.address;
       delete payload.send_arbeidsavtale;
     }
@@ -113,6 +116,10 @@ export default function WorkerForm({
   const handleSubmit = (event, previewFirst = false) => {
     event.preventDefault();
     const payload = buildPayload();
+    if (showWages && String(form.fodselsnummer || '').trim() && !fodselsnummerValid(form.fodselsnummer)) {
+      setMissing(['Fødselsnummer må være 11 gyldige sifre']);
+      return;
+    }
     if (showWages && form.send_arbeidsavtale) {
       const gaps = missingEmploymentFields({
         worker: payload,
@@ -255,7 +262,19 @@ export default function WorkerForm({
             <div className="space-y-1.5">
               <Label>Fødselsdato</Label>
               <Input type="date" value={form.birth_date || ''} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} />
-              <p className="text-xs text-slate-400">Brukes for regler under 18 år. Fødselsnummer samles ikke inn.</p>
+              <p className="text-xs text-slate-400">Brukes for regler under 18 år.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="fodselsnummer">Fødselsnummer</Label>
+              <Input
+                id="fodselsnummer"
+                inputMode="numeric"
+                autoComplete="off"
+                value={form.fodselsnummer}
+                onChange={(e) => setForm({ ...form, fodselsnummer: e.target.value })}
+                placeholder="11 siffer"
+              />
+              <p className="text-xs text-slate-400">11 siffer. Synlig bare for admin. Ligger på arbeidsavtalen, ikke i e-post.</p>
             </div>
             <div className="space-y-1.5">
               <Label>Adresse</Label>

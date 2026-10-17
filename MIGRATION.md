@@ -323,9 +323,34 @@ The Norwegian subjects and bodies live in `supabase/functions/_shared/contractEm
 
 ## 13. Deleting a contract revokes the signing link
 
-Migration `20261016245000_contract_delete_revoke_tokens.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it after `20261016240000_store_address_and_contract_mail.sql`. Do not re-apply the earlier contract migrations. No edge function changes with this migration.
+Migration `20261016245000_contract_delete_revoke_tokens.sql` is applied to the live project `iobsolszrmigdmdydfbe` with pull request 12 (`18b8552`). Do not re-apply it. It follows `20261016240000_store_address_and_contract_mail.sql`. No edge function changes with this migration.
 
 `DELETE` on `contracts` as `authenticated` fails when the statement uses `RETURNING *`, because table-level `SELECT` is revoked. The row stays. The app now deletes without asking for the row back. A sent contract, including one the employee has already signed (`signert_ansatt`), can still be withdrawn. A fully signed contract (`signert`) stays blocked.
 
 The delete trigger is `security definer`. It sets `contract_access_tokens.revoked_at` and consumes unused `contract_otp` rows. It does not delete `contract_events`. After the row is gone, the signing link no longer opens the contract.
+
+## 14. Countersigner on the certificate
+
+Migration `20261016250000_countersigner_identity.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it after `20261016245000_contract_delete_revoke_tokens.sql`, which is already live. Do not re-apply the earlier contract migrations, and do not rewrite contracts that are already signed.
+
+After an admin countersigns, SkiftPro returns to Kontrakter and shows the toast «Avtalen er signert av begge parter». The contract list is where that agreement is viewed and downloaded.
+
+`contracts.employer_signed_by` remains the countersigning admin's user id. The `motsignert` event also stores that id plus the admin's name and email from `profiles` at the moment of signing. The in-app Signeringsbevis shows all three. The contract PDF keeps a short electronic signature line and uses that admin's name on the employer line. A separate signeringsbevis download keeps the full identity and the event log. This migration does not backfill an already countersigned contract. Redeploy `sign-contract` and `generate-contract-pdf` after the migration so new files include the name and email. The redirect itself is in the web app.
+
+## 15. Contract text version 2 and fødselsnummer
+
+Migration `20261016260000_contract_text_and_fodselsnummer.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. `20261016245000` is already live. `20261016250000` and `20261016260000` are not.
+
+Apply order:
+
+1. `20261016240000_store_address_and_contract_mail.sql` is already live.
+2. `20261016245000_contract_delete_revoke_tokens.sql` is already live with pull request 12.
+3. `20261016250000_countersigner_identity.sql` (this pull request).
+4. `20261016260000_contract_text_and_fodselsnummer.sql` (this pull request). It does not depend on `20261016245000`.
+
+Redeploy `sign-contract` and `generate-contract-pdf` after `20261016250000` and `20261016260000`. Do not deploy them only to open the pull request. Already emailed PDFs stay as they were sent. There is no backfill of contract `6d36da3c-c98e-4d8d-a35c-ac957a6ca62b`.
+
+Version 2 replaces the active text for `fast`, `midlertidig_vikar`, `tilkalling_ramme`, `butikksjef_ledende`, and `bilag`. Version 1 of those keys stays in the table and is inactive. `merarbeid` version 1 stays active. New contracts use the active template. A contract that already has `body_snapshot` keeps that text and its `template_version`.
+
+`workers.fodselsnummer` is `bytea`, encrypted with a key that lives only in `private.sensitive_keys`. The column is not in the SELECT grant. Super-admin and department admins read it through `worker_fodselsnummer` and write it through `set_worker_fodselsnummer`. Lists use `worker_fodselsnummer_masks` (seven bullets and the last four digits). The employee does not get the number from those functions. `contract_field_values` returns the digits for the contract text and is not executable by `authenticated`. The number is printed on the contract PDF because the agreement requires it. It is not added to email subjects, email bodies, or event payloads.
 

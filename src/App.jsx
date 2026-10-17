@@ -14,6 +14,7 @@ import Landing from '@/pages/Landing';
 
 const AuthenticatedApp = lazy(() => import('./AuthenticatedApp'));
 const GuestContractSign = lazy(() => import('@/pages/GuestContractSign'));
+const EmployeeSignedThanks = lazy(() => import('@/components/contracts/EmployeeSignedThanks'));
 const ContractScreensPreview = import.meta.env.DEV
   ? lazy(() => import('@/pages/ContractScreensPreview'))
   : null;
@@ -74,6 +75,11 @@ function App() {
             <Route path="/personvern" element={<Personvern />} />
             <Route path="/vilkar" element={<Vilkar />} />
             <Route path="/databehandleravtale" element={<Databehandleravtale />} />
+            <Route path="/signer/:contractId/takk" element={(
+              <Suspense fallback={<OpeningSplash />}>
+                <EmployeeSignedThanks />
+              </Suspense>
+            )} />
             <Route path="/signer/:contractId" element={(
               <Suspense fallback={<OpeningSplash />}>
                 <GuestContractSign />

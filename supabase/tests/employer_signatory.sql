@@ -222,11 +222,11 @@ begin
   order by version desc
   limit 1;
   insert into rls_results values (
-    'fast template prints the company, org number, and signature line',
-    body like '%' || E'For {{selskap}}: {{signatur_navn}}' || '%'
-      and body like '%Org.nr {{org_nr}}%'
+    'fast template prints the company and org number without a paper signature block',
+    body like E'%{{selskap}}\nOrg.nr {{org_nr}}\n%'
+      and body not like '%For {{selskap}}: {{signatur_navn}}%'
       and body not like '%Stilling: {{signatur_stilling}}%',
-    case when body like '%Org.nr {{org_nr}}%' then 'owner line' else 'org.nr missing' end
+    case when body like '%Org.nr {{org_nr}}%' then 'party block' else 'org.nr missing' end
   );
 
   detail := public._rls_exec(
