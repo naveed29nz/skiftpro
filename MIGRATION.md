@@ -321,3 +321,11 @@ The customer card field **Kopi av signerte avtaler til** is `organizations.signe
 
 The Norwegian subjects and bodies live in `supabase/functions/_shared/contractEmails.js`. Edit that file before any send. Nothing in this migration emails existing employees. `contracts.signing_email_sent_at` stays null until a send after the migration claims it, and reminder emails are skipped while it is null. There is no backfill.
 
+## 13. Deleting a contract revokes the signing link
+
+Migration `20261016245000_contract_delete_revoke_tokens.sql` is in the repo and is **not** applied to the live project `iobsolszrmigdmdydfbe` by this change. Apply it after `20261016240000_store_address_and_contract_mail.sql`. Do not re-apply the earlier contract migrations. No edge function changes with this migration.
+
+`DELETE` on `contracts` as `authenticated` fails when the statement uses `RETURNING *`, because table-level `SELECT` is revoked. The row stays. The app now deletes without asking for the row back. A sent contract, including one the employee has already signed (`signert_ansatt`), can still be withdrawn. A fully signed contract (`signert`) stays blocked.
+
+The delete trigger is `security definer`. It sets `contract_access_tokens.revoked_at` and consumes unused `contract_otp` rows. It does not delete `contract_events`. After the row is gone, the signing link no longer opens the contract.
+
