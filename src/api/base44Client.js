@@ -1,4 +1,5 @@
 import { supabase } from '@/api/supabaseClient';
+import { deleteMatchedNothing } from '@/contracts/contractActions';
 import { applyClauses, compileFilter, parseSort } from '@/api/entityQuery';
 
 /**
@@ -414,10 +415,14 @@ function entityApi(table) {
       return normalizeRow(row);
     },
     async delete(id) {
-      const { data, error } = await supabase.from(table).delete().eq('id', id).select('id').maybeSingle();
+      // No .select(). return=representation makes PostgREST emit RETURNING <columns>.
+      // contracts has table SELECT revoked, so RETURNING * is "permission denied for
+      // table contracts", the row stays, and the caller saw a click with no result.
+      // count=exact uses RETURNING 1, which does not need those column grants.
+      const { error, count } = await supabase.from(table).delete({ count: 'exact' }).eq('id', id);
       if (error) throw toError(error);
-      if (!data) throw apiError(`${table} ${id} not found`, 404);
-      return { id: data.id };
+      if (deleteMatchedNothing(count)) throw apiError(`${table} ${id} not found`, 404);
+      return { id };
     },
     async bulkCreate(rows) {
       const payload = (rows || []).map((row) => withImpersonatedOrg(table, sanitizeWrite(row, { isUpdate: false })));
@@ -459,11 +464,11 @@ function entityApi(table) {
       if (compiled.clauses.length === 0) {
         throw apiError('deleteMany requires a filter');
       }
-      let query = supabase.from(table).delete();
+      let query = supabase.from(table).delete({ count: 'exact' });
       query = applyClauses(query, compiled.clauses);
-      const { data, error } = await query.select('id');
+      const { error, count } = await query;
       if (error) throw toError(error);
-      return { deleted: (data || []).length };
+      return { deleted: typeof count === 'number' ? count : null };
     },
   };
 }

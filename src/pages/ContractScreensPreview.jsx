@@ -3,6 +3,51 @@ import { useSearchParams } from 'react-router-dom';
 import WorkerForm from '@/components/workers/WorkerForm';
 import ContractSignPanel from '@/components/contracts/ContractSignPanel';
 import ContractCertificate from '@/components/contracts/ContractCertificate';
+import Contracts from '@/pages/Contracts';
+
+const PREVIEW_PDF = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]/Contents 4 0 R>>endobj\n4 0 obj<</Length 68>>stream\nBT /F1 18 Tf 40 80 Td (SkiftPro kontrakt) Tj ET\nendstream\nendobj\ntrailer<</Root 1 0 R>>\n%%EOF\n';
+
+const PREVIEW_CONTRACTS = [
+  {
+    id: 'c-preview-sendt',
+    worker_name: 'TEST Naveed Zafar',
+    org_name: 'Butikkdrift Nas AS',
+    contract_type: 'fast',
+    status: 'sendt',
+    start_date: '2026-11-01',
+    end_date: '2026-12-31',
+    weekly_hours: '18.75',
+    overtime_hours: '2,5',
+    hourly_rate: 200,
+    employment_percentage: 50,
+    week_number: 44,
+    year: 2026,
+    reason: 'sesong',
+    generated_automatically: false,
+    approved_at: 'ikke-en-dato',
+  },
+  {
+    id: 'c-preview-ansatt',
+    worker_name: 'Kari Nordmann',
+    org_name: 'Butikkdrift Nas AS',
+    contract_type: 'fast',
+    status: 'signert_ansatt',
+    start_date: '2026-11-01',
+    end_date: null,
+    weekly_hours: 37.5,
+    overtime_hours: 0,
+    hourly_rate: 220,
+    employment_percentage: 100,
+    week_number: 44,
+    year: 2026,
+    reason: 'sesong',
+    generated_automatically: false,
+  },
+];
+
+function previewPdf() {
+  return new Blob([PREVIEW_PDF], { type: 'application/pdf' });
+}
 
 const SAMPLE_BODY = `ANSETTELSESAVTALE
 mellom
@@ -96,6 +141,9 @@ export default function ContractScreensPreview() {
           onVerify={() => {}}
           onReject={() => {}}
         />
+      )}
+      {screen === 'liste' && (
+        <Contracts fixture={PREVIEW_CONTRACTS} wagesVisible loadPdf={previewPdf} />
       )}
       {screen === 'sertifikat' && (
         <div className="max-w-3xl mx-auto">

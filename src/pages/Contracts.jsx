@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useOrg } from '@/hooks/useOrg';
@@ -7,28 +7,43 @@ import { canSeeWageCosts } from '@/utils/wageAccess';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Download, Send, Trash2, Eye, Search } from 'lucide-react';
-import { format } from 'date-fns';
-import { nb } from 'date-fns/locale';
 import { Link } from 'react-router-dom';
+import { toast } from '@/components/ui/use-toast';
 import { contractStatus, contractType } from '@/contracts/labels';
+import {
+  contractPdfName,
+  downloadBlob,
+  formatContractDateTime,
+  formatContractDay,
+  formatHours,
+  pdfBlobFromInvoke,
+} from '@/contracts/contractActions';
 
-export default function Contracts() {
+export default function Contracts({ fixture = null, wagesVisible = null, loadPdf = null }) {
+  const preview = import.meta.env.DEV && Array.isArray(fixture);
   const queryClient = useQueryClient();
   const { orgId } = useOrg();
   const { user, worker } = useCurrentWorker();
-  const showWages = canSeeWageCosts(user, worker);
+  const showWages = preview && wagesVisible != null ? wagesVisible : canSeeWageCosts(user, worker);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [viewingContract, setViewingContract] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
+  const [previewRows, setPreviewRows] = useState(() => (preview ? fixture : []));
 
-  const { data: contracts = [], isLoading } = useQuery({
+  useEffect(() => {
+    if (preview) setPreviewRows(fixture);
+  }, [preview, fixture]);
+
+  const { data: loadedContracts = [], isLoading } = useQuery({
     queryKey: ['contracts', orgId],
+    enabled: !preview,
     queryFn: () => orgId
       ? base44.entities.Contract.filter({ org_id: orgId }, '-created_date', 200)
       : base44.entities.Contract.list('-created_date', 200),
   });
+  const contracts = preview ? previewRows : loadedContracts;
 
   const filtered = contracts.filter(c => {
     const matchSearch = !search || c.worker_name?.toLowerCase().includes(search.toLowerCase());
@@ -50,25 +65,42 @@ export default function Contracts() {
   };
 
   const handleDelete = async (contractId) => {
-    await base44.entities.Contract.delete(contractId);
-    queryClient.invalidateQueries({ queryKey: ['contracts'] });
+    if (!window.confirm('Slette avtalen?')) return;
+    try {
+      if (preview) {
+        setPreviewRows((rows) => rows.filter((row) => row.id !== contractId));
+      } else {
+        await base44.entities.Contract.delete(contractId);
+        queryClient.invalidateQueries({ queryKey: ['contracts'] });
+      }
+      setViewingContract((current) => (current?.id === contractId ? null : current));
+      toast({ title: 'Avtalen er slettet' });
+    } catch (err) {
+      toast({
+        title: 'Kunne ikke slette avtalen',
+        description: err?.message || 'Prøv igjen.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDownloadPdf = async (contract) => {
     setPdfLoading(contract.id);
     try {
-      const res = await base44.functions.invoke('generateContractPDF', { contract_id: contract.id });
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `kontrakt-${contract.worker_name}-${contract.start_date}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      alert('Kunne ikke generere PDF');
+      const res = preview && loadPdf
+        ? { data: await loadPdf(contract) }
+        : await base44.functions.invoke('generateContractPDF', { contract_id: contract.id });
+      downloadBlob(pdfBlobFromInvoke(res?.data), contractPdfName(contract));
+      toast({ title: 'PDF lastet ned' });
+    } catch (err) {
+      toast({
+        title: 'Kunne ikke laste ned PDF',
+        description: err?.message || 'Prøv igjen.',
+        variant: 'destructive',
+      });
+    } finally {
+      setPdfLoading(null);
     }
-    setPdfLoading(null);
   };
 
   if (isLoading) return (
@@ -187,19 +219,18 @@ export default function Contracts() {
                     <div className="flex items-center gap-4 shrink-0">
                       <div className="text-right hidden sm:block">
                         <p className="text-xs text-slate-400">
-                          {contract.start_date && format(new Date(contract.start_date + 'T00:00:00'), 'd. MMM', { locale: nb })}
-                          {' – '}
-                          {contract.end_date && format(new Date(contract.end_date + 'T00:00:00'), 'd. MMM', { locale: nb })}
+                          {[formatContractDay(contract.start_date), formatContractDay(contract.end_date)].filter(Boolean).join(' – ')}
                         </p>
-                        <p className="text-sm font-medium text-slate-600">{contract.weekly_hours?.toFixed(1)}t{showWages ? ` · ${contract.hourly_rate} kr/t` : ''}</p>
+                        <p className="text-sm font-medium text-slate-600">{formatHours(contract.weekly_hours)}{showWages ? ` · ${contract.hourly_rate} kr/t` : ''}</p>
                       </div>
                       <div className="flex items-center gap-1">
                         {contract.status === 'utkast' && showWages && (
-                          <Button variant="ghost" size="sm" onClick={() => handleSend(contract.id)} className="text-blue-600 hover:text-blue-700" title="Send til ansatt">
+                          <Button type="button" variant="ghost" size="sm" onClick={() => handleSend(contract.id)} className="text-blue-600 hover:text-blue-700" title="Send til ansatt">
                             <Send className="w-4 h-4" />
                           </Button>
                         )}
                         {showWages && <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDownloadPdf(contract)}
@@ -213,7 +244,7 @@ export default function Contracts() {
                             <Download className="w-4 h-4" />
                           )}
                         </Button>}
-                        <Button variant="ghost" size="sm" onClick={() => setViewingContract(contract)} className="text-slate-500 hover:text-slate-700" title="Vis detaljer">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setViewingContract(contract)} className="text-slate-500 hover:text-slate-700" title="Vis detaljer">
                           <Eye className="w-4 h-4" />
                         </Button>
                         {showWages && contract.status === 'signert_ansatt' && (
@@ -222,7 +253,7 @@ export default function Contracts() {
                           </Button>
                         )}
                         {contract.status !== 'signert' && showWages && (
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(contract.id)} className="text-red-400 hover:text-red-600" title="Slett">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => handleDelete(contract.id)} className="text-red-400 hover:text-red-600" title="Slett">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                         )}
@@ -238,12 +269,12 @@ export default function Contracts() {
 
       {/* Detail modal */}
       {viewingContract && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setViewingContract(null)}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40" onClick={() => setViewingContract(null)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-slate-800">Kontraktdetaljer</h2>
-                <button onClick={() => setViewingContract(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                <button type="button" onClick={() => setViewingContract(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
               </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -270,9 +301,7 @@ export default function Contracts() {
                   <div>
                     <p className="text-xs text-slate-400">Periode</p>
                     <p className="font-semibold text-slate-800">
-                      {viewingContract.start_date && format(new Date(viewingContract.start_date + 'T00:00:00'), 'd. MMM', { locale: nb })}
-                      {' – '}
-                      {viewingContract.end_date && format(new Date(viewingContract.end_date + 'T00:00:00'), 'd. MMM', { locale: nb })}
+                      {[formatContractDay(viewingContract.start_date), formatContractDay(viewingContract.end_date)].filter(Boolean).join(' – ')}
                     </p>
                   </div>
                   <div>
@@ -281,12 +310,12 @@ export default function Contracts() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Timer per uke</p>
-                    <p className="font-semibold text-slate-800">{viewingContract.weekly_hours?.toFixed(1)}t</p>
+                    <p className="font-semibold text-slate-800">{formatHours(viewingContract.weekly_hours)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Ekstratimer</p>
                     <p className={`font-semibold ${viewingContract.overtime_hours > 0 ? 'text-red-600' : 'text-slate-800'}`}>
-                      +{viewingContract.overtime_hours?.toFixed(1)}t
+                      {formatHours(viewingContract.overtime_hours, { plus: true })}
                     </p>
                   </div>
                   {showWages && (
@@ -308,17 +337,17 @@ export default function Contracts() {
                     <p className="font-semibold text-slate-800">{viewingContract.generated_automatically ? 'Ja' : 'Nei'}</p>
                   </div>
                 </div>
-                {viewingContract.approved_at && (
+                {formatContractDateTime(viewingContract.approved_at) && (
                   <div>
                     <p className="text-xs text-slate-400">Godkjent</p>
                     <p className="font-semibold text-emerald-600">
-                      {format(new Date(viewingContract.approved_at), 'd. MMM yyyy HH:mm', { locale: nb })}
+                      {formatContractDateTime(viewingContract.approved_at)}
                     </p>
                   </div>
                 )}
               </div>
               <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
-                {showWages && <Button onClick={() => handleDownloadPdf(viewingContract)} disabled={pdfLoading === viewingContract.id} className="flex-1 gap-2">
+                {showWages && <Button type="button" onClick={() => handleDownloadPdf(viewingContract)} disabled={pdfLoading === viewingContract.id} className="flex-1 gap-2">
                   {pdfLoading === viewingContract.id ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
@@ -327,7 +356,7 @@ export default function Contracts() {
                   Last ned PDF
                 </Button>}
                 {viewingContract.status === 'utkast' && showWages && (
-                  <Button variant="outline" onClick={() => { handleSend(viewingContract.id); setViewingContract(null); }} className="gap-2">
+                  <Button type="button" variant="outline" onClick={() => { handleSend(viewingContract.id); setViewingContract(null); }} className="gap-2">
                     <Send className="w-4 h-4" /> Send til ansatt
                   </Button>
                 )}
