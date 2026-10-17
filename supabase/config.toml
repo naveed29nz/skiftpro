@@ -23,6 +23,7 @@ file_size_limit = "10MiB"
 
 [functions.generate-contract-pdf]
 verify_jwt = true
+static_files = ["./functions/_shared/fonts/*.ttf"]
 
 [functions.update-contract-status]
 verify_jwt = true
@@ -59,6 +60,7 @@ verify_jwt = false
 
 [functions.sign-contract]
 verify_jwt = true
+static_files = ["./functions/_shared/fonts/*.ttf"]
 
 [functions.contract-mail]
 verify_jwt = true
