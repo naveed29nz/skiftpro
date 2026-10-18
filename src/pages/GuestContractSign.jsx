@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ContractSignPanel from '@/components/contracts/ContractSignPanel';
 import EmployeeSignedThanks from '@/components/contracts/EmployeeSignedThanks';
 import { mapSigningError } from '@/contracts/signingErrors';
-import { otpSendOutcome } from '@/contracts/otpCooldown';
+import { otpSendOutcome, otpSentMessage } from '@/contracts/otpCooldown';
 
 const TOKEN_KEY = 'skiftpro.contractAccess';
 const PAGE_CLASS = 'min-h-dvh bg-slate-50 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]';
@@ -119,7 +119,7 @@ export default function GuestContractSign() {
         role: 'ansatt',
       });
       const sent = data.sent
-        ? `Koden er sendt til ${data.email || 'e-postadressen avtalen ble sendt til'}.`
+        ? otpSentMessage(data.email)
         : 'E-post er ikke satt opp. Be admin sjekke at e-postutsending virker.';
       const dev = data.dev_code ? ` Utviklerkode: ${data.dev_code}.` : '';
       setMessage(sent + dev);

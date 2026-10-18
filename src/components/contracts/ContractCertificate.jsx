@@ -16,6 +16,7 @@ const EVENT_LABELS = {
   påminnelse: 'Påminnelse',
   åpnet: 'Åpnet',
   otp_sendt: 'Engangskode sendt',
+  otp_epost_feilet: 'E-post med kode feilet',
   otp_feil: 'Feil kode',
   signert: 'Signert av ansatt',
   motsignert: 'Motsignert av arbeidsgiver',
