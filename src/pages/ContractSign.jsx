@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -8,7 +8,13 @@ import ContractSignPanel from '@/components/contracts/ContractSignPanel';
 import ContractCertificate from '@/components/contracts/ContractCertificate';
 import ContractEmployerStatus from '@/components/contracts/ContractEmployerStatus';
 import EmployeeSignedThanks from '@/components/contracts/EmployeeSignedThanks';
-import { countersignerIdentity, employerCountersignDestination } from '@/contracts/countersign';
+import {
+  countersignerIdentity,
+  employerCountersignDestination,
+  employerShowsSigningForm,
+  freshSigningStatus,
+  isFullySignedStatus,
+} from '@/contracts/countersign';
 import { confirmationTypeLabel, employeeSignedLine, employerPlainTitle, mailedCopyNotice } from '@/contracts/confirmation';
 import { signedCopyRecipient } from '../../supabase/functions/_shared/contractEmails.js';
 import { mapSigningError } from '@/contracts/signingErrors';
@@ -21,16 +27,35 @@ export default function ContractSign() {
   const [params] = useSearchParams();
   const role = params.get('rolle') === 'arbeidsgiver' ? 'arbeidsgiver' : 'ansatt';
   const [document, setDocument] = useState(null);
+  const [contract, setContract] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
+  const [ready, setReady] = useState(false);
+  const refreshTicket = useRef(0);
 
-  const { data: contract, isLoading } = useQuery({
-    queryKey: ['contract-sign', contractId],
-    queryFn: () => base44.entities.Contract.get(contractId),
-    enabled: !!contractId,
-  });
+  const refreshStatus = useCallback(async () => {
+    if (!contractId) return null;
+    const ticket = refreshTicket.current + 1;
+    refreshTicket.current = ticket;
+    const [row, docResult] = await Promise.all([
+      base44.entities.Contract.get(contractId),
+      supabase.rpc('contract_document', { p_id: contractId }),
+    ]);
+    if (ticket !== refreshTicket.current) return null;
+    const doc = docResult.data || null;
+    const nextStatus = freshSigningStatus({
+      documentStatus: doc?.status,
+      contractStatus: row?.status,
+    });
+    if (doc) setDocument(doc);
+    if (row) setContract(row);
+    if (nextStatus) setStatus(nextStatus);
+    setReady(true);
+    queryClient.invalidateQueries({ queryKey: ['contract-events', contractId] });
+    return nextStatus;
+  }, [contractId, queryClient]);
 
   const { data: events = [] } = useQuery({
     queryKey: ['contract-events', contractId],
@@ -47,21 +72,35 @@ export default function ContractSign() {
   });
 
   useEffect(() => {
-    if (!contractId) return;
+    if (!contractId) return undefined;
     let cancelled = false;
     (async () => {
       if (role === 'ansatt') {
         const opened = await base44.functions.invoke('sign-contract', { contract_id: contractId, action: 'open' });
-        if (!cancelled && opened?.data?.document) setDocument(opened.data.document);
-        if (!cancelled && opened?.data?.status) setStatus(opened.data.status);
+        if (cancelled) return;
+        if (opened?.data?.document) setDocument(opened.data.document);
+        if (opened?.data?.status) setStatus(opened.data.status);
       }
-      const { data } = await supabase.rpc('contract_document', { p_id: contractId });
-      if (!cancelled && data) setDocument(data);
+      await refreshStatus();
     })().catch((err) => {
-      if (!cancelled) setError(err.message || 'Kunne ikke åpne avtalen');
+      if (!cancelled) {
+        setReady(true);
+        setError(err.message || 'Kunne ikke åpne avtalen');
+      }
     });
-    return () => { cancelled = true; };
-  }, [contractId, role]);
+    const onFocus = () => {
+      if (window.document.visibilityState === 'hidden') return;
+      refreshStatus().catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
+    window.document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      cancelled = true;
+      refreshTicket.current += 1;
+      window.removeEventListener('focus', onFocus);
+      window.document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [contractId, role, refreshStatus]);
 
   const currentStatus = status || document?.status || contract?.status;
   const pdfArchived = Boolean(document?.pdf_path || document?.pdf_sha256 || contract?.pdf_sha256);
@@ -94,8 +133,12 @@ export default function ContractSign() {
       const sent = res?.data?.sent ? otpSentMessage(res.data.email) : 'E-post er ikke satt opp. Be admin sjekke RESEND_API_KEY.';
       const dev = res?.data?.dev_code ? ` Utviklerkode: ${res.data.dev_code}.` : '';
       setMessage(sent + dev);
+      const latest = await refreshStatus();
+      if (role === 'arbeidsgiver' && isFullySignedStatus(latest)) return false;
       return true;
     } catch (err) {
+      const latest = await refreshStatus().catch(() => null);
+      if (role === 'arbeidsgiver' && isFullySignedStatus(latest)) return false;
       const message = mapSigningError(err.message || 'Kunne ikke sende kode');
       setError(message);
       return otpSendOutcome(message);
@@ -114,7 +157,7 @@ export default function ContractSign() {
         role,
         code,
       });
-      const nextStatus = res?.data?.status || null;
+      const nextStatus = res?.data?.status || await refreshStatus();
       const destination = employerCountersignDestination(role, nextStatus);
       if (destination) {
         queryClient.invalidateQueries({ queryKey: ['contracts'] });
@@ -130,9 +173,13 @@ export default function ContractSign() {
       setMessage(nextStatus === 'signert'
         ? 'Avtalen er signert av begge parter.'
         : 'Signaturen er registrert. Arbeidsgiver må motsignere.');
-      const { data } = await supabase.rpc('contract_document', { p_id: contractId });
-      if (data) setDocument(data);
+      await refreshStatus();
     } catch (err) {
+      const latest = await refreshStatus().catch(() => null);
+      if (role === 'arbeidsgiver' && isFullySignedStatus(latest || currentStatus)) {
+        queryClient.invalidateQueries({ queryKey: ['contracts'] });
+        return;
+      }
       setError(mapSigningError(err.message));
     } finally {
       setBusy(false);
@@ -150,14 +197,16 @@ export default function ContractSign() {
       });
       setStatus('avvist');
       setMessage('Avtalen er avvist. Admin er varslet.');
+      await refreshStatus();
     } catch (err) {
-      setError(err.message || 'Kunne ikke avvise');
+      await refreshStatus().catch(() => {});
+      setError(mapSigningError(err.message || 'Kunne ikke avvise'));
     } finally {
       setBusy(false);
     }
   };
 
-  if (isLoading && !contract) {
+  if (!ready && !contract && !document) {
     return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" /></div>;
   }
 
@@ -211,18 +260,22 @@ export default function ContractSign() {
     );
   }
 
-  const plainTitle = employerBack ? employerPlainTitle(currentStatus) : '';
-  if (plainTitle) {
+  if (employerBack) {
+    const showForm = employerShowsSigningForm(currentStatus);
+    const plainTitle = employerPlainTitle(currentStatus) || (showForm ? '' : 'Venter på at den ansatte signerer');
     return (
-      <div className={`max-w-3xl mx-auto space-y-4 ${currentStatus === 'signert_ansatt' ? '' : 'pb-[calc(env(safe-area-inset-bottom)+5.5rem)] sm:pb-0'}`}>
-        <ContractEmployerStatus
-          title={plainTitle}
-          workerName={contract?.worker_name}
-          typeLabel={confirmationTypeLabel(typeKey)}
-          employeeLine={currentStatus === 'signert_ansatt' ? employeeSignedLine(contract?.worker_name, employeeSignedAt) : ''}
-          countersign={currentStatus === 'signert_ansatt'}
-        />
-        {currentStatus === 'signert_ansatt' && (
+      <div className={`max-w-3xl mx-auto space-y-4 ${showForm ? '' : 'pb-[calc(env(safe-area-inset-bottom)+5.5rem)] sm:pb-0'}`}>
+        {plainTitle ? (
+          <ContractEmployerStatus
+            title={plainTitle}
+            workerName={contract?.worker_name}
+            typeLabel={confirmationTypeLabel(typeKey)}
+            employeeLine={showForm ? employeeSignedLine(contract?.worker_name, employeeSignedAt) : ''}
+            countersign={showForm}
+            notice={showForm ? '' : error}
+          />
+        ) : null}
+        {showForm && (
           <div id="motsigner" className="scroll-mt-24">
             <ContractSignPanel
               title={contract?.worker_name ? `Arbeidsavtale for ${contract.worker_name}` : 'Arbeidsavtale'}

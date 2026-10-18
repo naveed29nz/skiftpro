@@ -8,6 +8,7 @@ export default function ContractEmployerStatus({
   typeLabel,
   employeeLine = '',
   countersign = false,
+  notice = '',
   backHref = '/Contracts',
   backLabel = 'Tilbake til kontrakter',
 }) {
@@ -21,6 +22,7 @@ export default function ContractEmployerStatus({
         <p className="font-semibold text-slate-900">{workerName || '–'}</p>
         {typeLabel ? <p>{typeLabel}</p> : null}
         {employeeLine ? <p>{employeeLine}</p> : null}
+        {notice ? <p role="alert" className="text-red-600">{notice}</p> : null}
       </div>
       <div className="mt-5 flex flex-col sm:flex-row gap-2">
         {countersign ? (

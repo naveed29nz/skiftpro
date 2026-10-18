@@ -8,6 +8,20 @@ export function employerCountersignDestination(role, status) {
   return null;
 }
 
+export function isFullySignedStatus(status) {
+  return status === 'signert' || status === 'godkjent';
+}
+
+/** The code form is only for the step where the employee has signed and the employer has not. */
+export function employerShowsSigningForm(status) {
+  return status === 'signert_ansatt';
+}
+
+/** A refetch replaces whatever the page remembered. The document row wins when both exist. */
+export function freshSigningStatus({ documentStatus, contractStatus } = {}) {
+  return documentStatus || contractStatus || null;
+}
+
 export function countersignerIdentity({ document, contract, events } = {}) {
   const list = Array.isArray(events) ? events : [];
   let payload = {};
