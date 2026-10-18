@@ -136,3 +136,9 @@ html.pwa-standalone .fixed.top-0 {
 html.pwa-standalone .fixed.bottom-0 {
   bottom: env(safe-area-inset-bottom);
 }
+
+[data-testid="shift-card"] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
