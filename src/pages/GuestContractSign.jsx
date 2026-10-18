@@ -5,6 +5,13 @@ import EmployeeSignedThanks from '@/components/contracts/EmployeeSignedThanks';
 import { mapSigningError } from '@/contracts/signingErrors';
 
 const TOKEN_KEY = 'skiftpro.contractAccess';
+const PAGE_CLASS = 'min-h-dvh bg-slate-50 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]';
+const PREVIEW_PARAGRAPH = 'Arbeidsavtale\n\nDette er en forhåndsvisning av signeringslenken. Ingen e-post sendes, og ingen avtale blir signert.';
+
+function previewBody(long) {
+  if (!long) return PREVIEW_PARAGRAPH;
+  return Array.from({ length: 18 }, () => PREVIEW_PARAGRAPH).join('\n\n');
+}
 
 function rememberToken(contractId, token) {
   try {
@@ -174,11 +181,11 @@ export default function GuestContractSign() {
 
   if (devPreview) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4">
+      <div className={PAGE_CLASS}>
         <ContractSignPanel
           title="Arbeidsavtale"
           intro="Du trenger ikke en brukerkonto. Engangskoden sendes til e-postadressen avtalen er sendt til. Avtalen er signert først når du skriver inn koden."
-          body={'Arbeidsavtale\n\nDette er en forhåndsvisning av signeringslenken. Ingen e-post sendes, og ingen avtale blir signert.'}
+          body={previewBody(params.get('fulltekst') === '1')}
           role="ansatt"
           emailHint="e-postadressen avtalen ble sendt til"
           busy={busy}
@@ -228,7 +235,7 @@ export default function GuestContractSign() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4">
+    <div className={PAGE_CLASS}>
       <ContractSignPanel
         title={document?.worker_name ? `Arbeidsavtale for ${document.worker_name}` : 'Arbeidsavtale'}
         intro="Du trenger ikke en brukerkonto. Engangskoden sendes til e-postadressen avtalen er sendt til. Avtalen er signert først når du skriver inn koden."
