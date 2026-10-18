@@ -3,6 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  CONTRACT_SCROLL_END_TOLERANCE_PX,
+  contractReachedEnd,
+  sentinelInView,
+} from '@/contracts/contractScroll';
 
 export default function ContractSignPanel({
   title = 'Arbeidsavtale',
@@ -21,24 +26,86 @@ export default function ContractSignPanel({
   onReject,
 }) {
   const scroller = useRef(null);
+  const endRef = useRef(null);
   const [scrolled, setScrolled] = useState(initialScrolled);
   const [accepted, setAccepted] = useState(initialAccepted);
   const [codeSent, setCodeSent] = useState(initialCodeSent);
   const [code, setCode] = useState('');
   const [reason, setReason] = useState('');
 
-  const markIfComplete = (el) => {
-    if (!el) return;
-    if (el.scrollHeight <= el.clientHeight + 8) setScrolled(true);
-  };
-
   useEffect(() => {
-    markIfComplete(scroller.current);
-  }, [body]);
+    const root = scroller.current;
+    const sentinel = endRef.current;
+    if (!root || initialScrolled) return undefined;
 
-  const onScroll = (event) => {
-    const el = event.currentTarget;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 12) setScrolled(true);
+    const check = () => {
+      if (contractReachedEnd(root) || sentinelInView(root, sentinel)) setScrolled(true);
+    };
+
+    check();
+
+    let frame = 0;
+    let late = 0;
+    const checkAfterScroll = () => {
+      check();
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(check);
+      window.clearTimeout(late);
+      // iOS momentum keeps moving after the last scroll event.
+      late = window.setTimeout(check, 180);
+    };
+
+    root.addEventListener('scroll', checkAfterScroll, { passive: true });
+    root.addEventListener('scrollend', checkAfterScroll);
+    root.addEventListener('touchend', checkAfterScroll, { passive: true });
+    window.addEventListener('touchend', checkAfterScroll, { passive: true });
+    window.addEventListener('pointerup', checkAfterScroll);
+
+    let observer;
+    if (sentinel && typeof IntersectionObserver === 'function') {
+      observer = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setScrolled(true);
+      }, {
+        root,
+        rootMargin: `0px 0px ${CONTRACT_SCROLL_END_TOLERANCE_PX}px 0px`,
+        threshold: 0,
+      });
+      observer.observe(sentinel);
+    }
+
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => check()) : null;
+    resize?.observe(root);
+    if (root.firstElementChild) resize?.observe(root.firstElementChild);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(late);
+      root.removeEventListener('scroll', checkAfterScroll);
+      root.removeEventListener('scrollend', checkAfterScroll);
+      root.removeEventListener('touchend', checkAfterScroll);
+      window.removeEventListener('touchend', checkAfterScroll);
+      window.removeEventListener('pointerup', checkAfterScroll);
+      observer?.disconnect();
+      resize?.disconnect();
+    };
+  }, [body, initialScrolled]);
+
+  const jumpToEnd = () => {
+    const el = scroller.current;
+    const sentinel = endRef.current;
+    const pageX = window.scrollX;
+    const pageY = window.scrollY;
+    if (sentinel && typeof sentinel.scrollIntoView === 'function') {
+      sentinel.scrollIntoView({ block: 'end', inline: 'nearest' });
+    }
+    if (el) el.scrollTop = el.scrollHeight;
+    const pin = () => {
+      if (el) el.scrollTop = el.scrollHeight;
+      window.scrollTo(pageX, pageY);
+    };
+    pin();
+    requestAnimationFrame(pin);
+    setScrolled(true);
   };
 
   const askForCode = async () => {
@@ -49,7 +116,10 @@ export default function ContractSignPanel({
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div
+      data-contract-sign-panel=""
+      className="max-w-3xl mx-auto space-y-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] sm:pb-0"
+    >
       <div>
         <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
         <p className="text-sm text-slate-500 mt-1">
@@ -61,14 +131,24 @@ export default function ContractSignPanel({
 
       <div
         ref={scroller}
-        onScroll={onScroll}
-        className="h-[420px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-800 whitespace-pre-wrap"
+        tabIndex={0}
+        aria-label="Avtaletekst"
+        data-contract-scroller=""
+        className="h-[420px] max-h-[55dvh] overflow-y-auto overscroll-y-contain touch-pan-y rounded-xl border border-slate-200 bg-white"
       >
-        {body}
+        <div className="p-5 text-sm leading-6 text-slate-800 whitespace-pre-wrap">
+          {body}
+          <div ref={endRef} data-contract-end="" aria-hidden="true" className="h-4" />
+        </div>
       </div>
 
       {!scrolled && (
-        <p className="text-sm text-amber-700">Bla til bunnen av avtalen for å fortsette.</p>
+        <div className="space-y-2">
+          <p id="avtalen-ma-leses" className="text-sm text-amber-700">Bla til bunnen av avtalen for å fortsette.</p>
+          <Button type="button" variant="outline" className="min-h-11 w-full sm:w-auto" onClick={jumpToEnd}>
+            Gå til slutten av avtalen
+          </Button>
+        </div>
       )}
 
       <label className="flex items-start gap-3 bg-white rounded-xl border border-slate-200 p-4">
@@ -76,6 +156,7 @@ export default function ContractSignPanel({
           id="har-lest-avtalen"
           checked={accepted}
           disabled={!scrolled}
+          aria-describedby={scrolled ? undefined : 'avtalen-ma-leses'}
           onCheckedChange={(value) => setAccepted(value === true)}
         />
         <span className="text-sm text-slate-800">
