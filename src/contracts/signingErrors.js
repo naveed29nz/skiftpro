@@ -17,5 +17,11 @@ export function mapSigningError(message) {
   if (text.includes('Ny kode kan sendes')) {
     return 'Ny kode kan sendes om 30 sekunder';
   }
+  if (/allerede signert/i.test(text)) {
+    return 'Avtalen er allerede signert av begge parter';
+  }
+  if (text.includes('Venter på at den ansatte signerer') || text.includes('Arbeidsgiver kan motsignere når den ansatte har signert')) {
+    return 'Venter på at den ansatte signerer';
+  }
   return text || 'Signeringen feilet';
 }

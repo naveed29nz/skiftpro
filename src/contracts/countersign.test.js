@@ -5,6 +5,9 @@ import {
   COUNTERSIGN_TOAST,
   countersignerIdentity,
   employerCountersignDestination,
+  employerShowsSigningForm,
+  freshSigningStatus,
+  isFullySignedStatus,
 } from './countersign.js';
 
 test('employer countersign returns to the contract list with the success toast', () => {
@@ -14,6 +17,18 @@ test('employer countersign returns to the contract list with the success toast',
   });
   assert.equal(COUNTERSIGN_TOAST, 'Avtalen er signert av begge parter');
   assert.equal(CONTRACTS_PATH, '/Contracts');
+});
+
+test('a refreshed status replaces the form the page was showing', () => {
+  assert.equal(freshSigningStatus({ documentStatus: 'signert', contractStatus: 'signert_ansatt' }), 'signert');
+  assert.equal(freshSigningStatus({ contractStatus: 'apnet' }), 'apnet');
+  assert.equal(isFullySignedStatus('signert'), true);
+  assert.equal(isFullySignedStatus('godkjent'), true);
+  assert.equal(isFullySignedStatus('signert_ansatt'), false);
+  assert.equal(employerShowsSigningForm('signert_ansatt'), true);
+  assert.equal(employerShowsSigningForm('signert'), false);
+  assert.equal(employerShowsSigningForm('apnet'), false);
+  assert.equal(employerShowsSigningForm('sendt'), false);
 });
 
 test('employee signing and an unfinished employer signature stay on the page', () => {

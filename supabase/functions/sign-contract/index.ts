@@ -252,7 +252,13 @@ async function handleGuest(req: Request, body: Record<string, unknown>) {
       p_user_agent: userAgent,
     });
     if (error) return json({ error: error.message }, 400);
-    if (data?.status === "signert") await archiveSignedPdf(contractId);
+    if (data?.status === "signert") {
+      try {
+        await archiveSignedPdf(contractId);
+      } catch (archiveError) {
+        console.error("contract pdf archive", archiveError instanceof Error ? archiveError.message : archiveError);
+      }
+    }
     return json(data);
   }
 
@@ -360,7 +366,11 @@ Deno.serve(async (req) => {
       });
       if (error) return json({ error: error.message }, 400);
       if (data?.status === "signert") {
-        await archiveSignedPdf(contractId);
+        try {
+          await archiveSignedPdf(contractId);
+        } catch (archiveError) {
+          console.error("contract pdf archive", archiveError instanceof Error ? archiveError.message : archiveError);
+        }
       }
       return json(data);
     }

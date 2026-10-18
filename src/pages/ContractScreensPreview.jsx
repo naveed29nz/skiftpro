@@ -171,6 +171,25 @@ export default function ContractScreensPreview() {
           />
         </div>
       )}
+      {screen === 'motsigner' && (
+        <div className="max-w-3xl mx-auto space-y-4">
+          <ContractEmployerStatus
+            title="Venter på din signatur"
+            workerName="Kari Nordmann"
+            typeLabel="Fast ansettelse"
+            employeeLine={employeeSignedLine('Kari Nordmann', '2026-10-18T14:02:00.000Z')}
+            countersign
+          />
+          <ContractSignPanel
+            title="Arbeidsavtale for Kari Nordmann"
+            body="Kort avtale."
+            role="arbeidsgiver"
+            emailHint="din admin-e-post"
+            onRequestCode={async () => {}}
+            onVerify={() => {}}
+          />
+        </div>
+      )}
       {screen === 'venter-signatur' && (
         <div className="max-w-3xl mx-auto space-y-4">
           <ContractEmployerStatus
@@ -179,6 +198,22 @@ export default function ContractScreensPreview() {
             typeLabel="Fast ansettelse"
             employeeLine={employeeSignedLine('Kari Nordmann', '2026-10-18T14:02:00.000Z')}
             countersign
+          />
+        </div>
+      )}
+      {screen === 'feil' && (
+        <div className="max-w-3xl mx-auto">
+          <ContractSignPanel
+            title="Arbeidsavtale for Kari Nordmann"
+            body="Kort avtale."
+            role="arbeidsgiver"
+            emailHint="din admin-e-post"
+            initialScrolled
+            initialAccepted
+            initialCodeSent
+            error="Avtalen er allerede signert av begge parter"
+            onRequestCode={async () => {}}
+            onVerify={() => {}}
           />
         </div>
       )}
