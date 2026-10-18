@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import WorkerForm from '@/components/workers/WorkerForm';
 import ContractSignPanel from '@/components/contracts/ContractSignPanel';
 import ContractCertificate from '@/components/contracts/ContractCertificate';
+import ContractEmployerStatus from '@/components/contracts/ContractEmployerStatus';
+import { employeeSignedLine } from '@/contracts/confirmation';
 import Contracts from '@/pages/Contracts';
 
 const PREVIEW_PDF = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]/Contents 4 0 R>>endobj\n4 0 obj<</Length 68>>stream\nBT /F1 18 Tf 40 80 Td (SkiftPro kontrakt) Tj ET\nendstream\nendobj\ntrailer<</Root 1 0 R>>\n%%EOF\n';
@@ -150,20 +152,42 @@ export default function ContractScreensPreview() {
           <ContractCertificate
             documentId="c0ffee00-1111-4222-8333-444455556666"
             templateKey="fast"
-            templateVersion={1}
+            templateVersion={2}
+            contractTypeKey="fast"
             contentSha256="6f1d8e0a9c2b4e7d11aa22bb33cc44dd55ee66ff77889900aabbccddeeff0011"
             pdfSha256="ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"
             workerName="Kari Nordmann"
             workerEmail="kari@example.com"
             companyName="Butikkdrift Nas AS"
             signatoryName="Naveed Zafar"
-            employeeSignedAt="2026-10-15T09:15:11.000Z"
+            employeeSignedAt="2026-10-18T14:02:00.000Z"
             employeeSignedBy="user-kari"
-            employerSignedAt="2026-10-15T10:02:40.000Z"
+            employerSignedAt="2026-10-18T16:07:00.000Z"
             employerSignedBy="11111111-1111-1111-1111-111111111111"
             countersignerName="Naveed Zafar"
             countersignerEmail="naveed@example.com"
+            copyNotice="En PDF-kopi er sendt på e-post til kari@example.com og kopi@butikkdrift.no"
             events={SAMPLE_EVENTS}
+          />
+        </div>
+      )}
+      {screen === 'venter-signatur' && (
+        <div className="max-w-3xl mx-auto space-y-4">
+          <ContractEmployerStatus
+            title="Venter på din signatur"
+            workerName="Kari Nordmann"
+            typeLabel="Fast ansettelse"
+            employeeLine={employeeSignedLine('Kari Nordmann', '2026-10-18T14:02:00.000Z')}
+            countersign
+          />
+        </div>
+      )}
+      {screen === 'venter-ansatt' && (
+        <div className="max-w-3xl mx-auto">
+          <ContractEmployerStatus
+            title="Venter på at den ansatte signerer"
+            workerName="Kari Nordmann"
+            typeLabel="Fast ansettelse"
           />
         </div>
       )}
