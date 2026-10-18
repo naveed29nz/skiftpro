@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, Draggable, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,45 @@ import { flushNotifications } from '@/utils/notify';
 import { toast } from '@/components/ui/use-toast';
 import ShiftTouchSheet from '@/components/timesheet/ShiftTouchSheet';
 import { isShiftDropTarget, sameShiftCell, shiftCopyRecord, shiftMoveFields } from '@/timesheet/placeShift';
+import { isCoarsePointer, isTouchLikePointer, pressMovedPast, SHIFT_LONG_PRESS_MS, shiftGestureIsTouch } from '@/timesheet/touchShift';
+
+const SHIFT_NO_CALLOUT = 'select-none [-webkit-touch-callout:none] [-webkit-user-select:none]';
+
+// Registers before DragDropContext's mouse sensor (earlier sibling layout effect)
+// so a finger's synthetic mousedown never starts a drag.
+function TouchDragGuard({ touchPointer, mouseGesture, lastTouchAt }) {
+  useLayoutEffect(() => {
+    const noteTouch = (event) => {
+      const type = event.pointerType;
+      if (type === 'mouse') return;
+      if (type === 'touch' || type === 'pen' || event.touches) {
+        lastTouchAt.current = Date.now();
+        touchPointer.current = true;
+        mouseGesture.current = false;
+      }
+    };
+    const blockSyntheticMouse = (event) => {
+      const recentTouch = Date.now() - lastTouchAt.current < 1000;
+      if (recentTouch || event.pointerType === 'touch' || event.pointerType === 'pen') {
+        event.stopImmediatePropagation();
+        return;
+      }
+      mouseGesture.current = true;
+      touchPointer.current = false;
+    };
+    window.addEventListener('pointerdown', noteTouch, true);
+    window.addEventListener('touchstart', noteTouch, { capture: true, passive: true });
+    window.addEventListener('mousedown', blockSyntheticMouse, true);
+    return () => {
+      window.removeEventListener('pointerdown', noteTouch, true);
+      window.removeEventListener('touchstart', noteTouch, true);
+      window.removeEventListener('mousedown', blockSyntheticMouse, true);
+    };
+  }, [touchPointer, mouseGesture, lastTouchAt]);
+  return null;
+}
+
+const SHIFT_DRAG_SENSORS = [useMouseSensor, useKeyboardSensor];
 
 function calcHours(shift) {
   const [sh, sm] = shift.start_time.split(':').map(Number);
@@ -155,8 +194,16 @@ export default function Timesheet() {
   const [inlineEditData, setInlineEditData] = useState({});
   const [touchSheet, setTouchSheet] = useState(null);
   const [touchPlace, setTouchPlace] = useState(null);
+  const [pressingId, setPressingId] = useState(null);
   const [sheetBusy, setSheetBusy] = useState(false);
   const placeLock = useRef(false);
+  const touchPointer = useRef(false);
+  const mouseGesture = useRef(false);
+  const lastTouchAt = useRef(0);
+  const suppressClick = useRef(false);
+  const pressTimer = useRef(null);
+  const pressOrigin = useRef(null);
+  const pressListeners = useRef(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -543,12 +590,119 @@ export default function Timesheet() {
     handleRefresh();
   };
 
-  useEffect(() => {
-    if (!isMobile) {
-      setTouchSheet(null);
-      setTouchPlace(null);
+  const detachPressListeners = () => {
+    const fns = pressListeners.current;
+    if (!fns) return;
+    window.removeEventListener('pointermove', fns.move);
+    window.removeEventListener('pointerup', fns.up);
+    window.removeEventListener('pointercancel', fns.cancel);
+    window.removeEventListener('touchmove', fns.touchMove);
+    pressListeners.current = null;
+  };
+
+  const clearPressTimer = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
     }
-  }, [isMobile]);
+    pressOrigin.current = null;
+    detachPressListeners();
+    setPressingId(null);
+  };
+
+  useEffect(() => () => clearPressTimer(), []);
+
+  const updateLongPress = (event) => {
+    if (!pressOrigin.current) return;
+    if (!pressMovedPast(pressOrigin.current, { x: event.clientX, y: event.clientY })) return;
+    clearPressTimer();
+    suppressClick.current = true;
+  };
+
+  const finishLongPress = () => {
+    if (!pressTimer.current) {
+      detachPressListeners();
+      return;
+    }
+    clearPressTimer();
+  };
+
+  const beginLongPress = (event, payload) => {
+    clearPressTimer();
+    suppressClick.current = false;
+    pressOrigin.current = { x: event.clientX, y: event.clientY };
+    setPressingId(payload.shift.id);
+    const move = (ev) => updateLongPress(ev);
+    const touchMove = (ev) => {
+      const point = ev.touches?.[0];
+      if (!point) return;
+      updateLongPress({ clientX: point.clientX, clientY: point.clientY });
+    };
+    const up = () => finishLongPress();
+    const cancel = () => {
+      clearPressTimer();
+      suppressClick.current = true;
+    };
+    pressListeners.current = { move, up, cancel, touchMove };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('touchmove', touchMove, { passive: true });
+    pressTimer.current = setTimeout(() => {
+      pressTimer.current = null;
+      pressOrigin.current = null;
+      detachPressListeners();
+      setPressingId(null);
+      suppressClick.current = true;
+      setTouchSheet(payload);
+    }, SHIFT_LONG_PRESS_MS);
+  };
+
+  const gestureFrom = (event) => {
+    const native = event.nativeEvent || event;
+    return shiftGestureIsTouch({
+      pointerType: native.pointerType,
+      sawTouch: touchPointer.current,
+      sawMouse: mouseGesture.current,
+      coarse: isCoarsePointer(),
+    });
+  };
+
+  const activateShift = (event, payload, { dragging = false, readOnly = false } = {}) => {
+    if (readOnly || dragging || touchPlace) return;
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      touchPointer.current = false;
+      mouseGesture.current = false;
+      event.stopPropagation();
+      return;
+    }
+    const fromTouch = gestureFrom(event);
+    event.stopPropagation();
+    touchPointer.current = false;
+    mouseGesture.current = false;
+    if (fromTouch) {
+      setTouchSheet(payload);
+      return;
+    }
+    setModalCell({ worker: payload.worker, day: payload.day });
+  };
+
+  const touchPressProps = (payload, { readOnly = false } = {}) => ({
+    onPointerDown: (event) => {
+      if (!isTouchLikePointer(event) || readOnly || touchPlace) return;
+      touchPointer.current = true;
+      mouseGesture.current = false;
+      beginLongPress(event, payload);
+    },
+    onPointerMove: updateLongPress,
+    onPointerUp: finishLongPress,
+    onPointerCancel: () => {
+      clearPressTimer();
+      suppressClick.current = true;
+    },
+    onContextMenu: (event) => event.preventDefault(),
+  });
 
   const moveFieldsFor = (shift, newWorkerId, newDate) => shiftMoveFields({
     shift,
@@ -700,6 +854,7 @@ export default function Timesheet() {
 
   return (
     <div className={`space-y-6 ${touchPlace ? 'pb-28' : ''}`}>
+      <TouchDragGuard touchPointer={touchPointer} mouseGesture={mouseGesture} lastTouchAt={lastTouchAt} />
       {/* Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -850,7 +1005,7 @@ export default function Timesheet() {
           showWages={showWages}
         />
       ) : sortByLabel ? (
-        <DragDropContext onDragEnd={handleDragEnd}>
+        <DragDropContext onDragEnd={handleDragEnd} enableDefaultSensors={false} sensors={SHIFT_DRAG_SENSORS}>
           <div className="space-y-4">
             {GROUPS.map(group => {
               const stats = getGroupStats(group.label);
@@ -901,13 +1056,19 @@ export default function Timesheet() {
                                         {dayShifts.map((s, si) => {
                                           const w = workers.find(x => x.id === s.worker_id);
                                           return (
-                                            <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={isMobile}>
+                                            <Draggable key={s.id} draggableId={s.id} index={si}>
                                               {(shiftDrag, shiftSnapshot) => (
                                                 <div
-                                                  ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...(isMobile ? {} : shiftDrag.dragHandleProps)}
-                                                  onClick={() => { if (!shiftSnapshot.isDragging && w) setModalCell({ worker: w, day }); }}
-                                                  className={`bg-white rounded border border-slate-200 px-2 py-1.5 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow
+                                                  ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...(shiftDrag.dragHandleProps || {})}
+                                                  draggable={false}
+                                                  data-testid="shift-card"
+                                                  data-shift-id={s.id}
+                                                  {...(w ? touchPressProps({ shift: s, worker: w, day }) : {})}
+                                                  onClick={(e) => { if (w) activateShift(e, { shift: s, worker: w, day }, { dragging: shiftSnapshot.isDragging }); }}
+                                                  className={`bg-white rounded border border-slate-200 px-2 py-1.5 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow ${SHIFT_NO_CALLOUT}
+                                                    ${pressingId === s.id ? 'ring-2 ring-blue-300' : ''}
                                                     ${shiftSnapshot.isDragging ? 'shadow-lg ring-2 ring-blue-400 opacity-90' : ''}`}
+                                                  style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
                                                 >
                                                   <div className="font-semibold text-slate-800 leading-tight truncate">{s.worker_name}</div>
                                                   <div className="text-slate-500 mt-0.5">{s.start_time} – {s.end_time}</div>
@@ -967,7 +1128,7 @@ export default function Timesheet() {
             </div>
           )}
           <div className="overflow-x-auto">
-            <DragDropContext onDragEnd={handleDragEnd}>
+            <DragDropContext onDragEnd={handleDragEnd} enableDefaultSensors={false} sensors={SHIFT_DRAG_SENSORS}>
               <table className={`text-xs border-collapse md:w-full max-md:table-fixed ${mobileSelectMode ? 'max-md:w-[582px]' : 'max-md:w-[514px]'}`}>
                 <colgroup>
                   <col className={nameColClass} />
@@ -1081,27 +1242,24 @@ export default function Timesheet() {
                                                  {cellShifts.map((s, si) => {
                                                    const labelStyle = LABEL_STYLES[s.shift_label];
                                                    return (
-                                                     <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={isReadOnly || isMobile}>
+                                                     <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={isReadOnly}>
                                                        {(shiftDrag, shiftSnapshot) => {
                                                          const card = (
-                                                         <div ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...(isMobile ? {} : shiftDrag.dragHandleProps)}
+                                                         <div ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...(shiftDrag.dragHandleProps || {})}
+                                                           draggable={false}
                                                            data-testid="shift-card"
                                                            data-shift-id={s.id}
+                                                           {...touchPressProps({ shift: s, worker, day }, { readOnly: isReadOnly })}
                                                            onClick={(e) => {
-                                                             if (isReadOnly || shiftSnapshot.isDragging || inlineEditId === s.id) return;
-                                                             if (touchPlace) return;
-                                                             e.stopPropagation();
-                                                             if (isMobile) {
-                                                               setTouchSheet({ shift: s, worker, day });
-                                                               return;
-                                                             }
-                                                             setModalCell({ worker, day });
+                                                             if (inlineEditId === s.id) return;
+                                                             activateShift(e, { shift: s, worker, day }, { dragging: shiftSnapshot.isDragging, readOnly: isReadOnly });
                                                            }}
-                                                           className={`flex flex-col items-center gap-0.5 max-md:gap-0 rounded px-1 py-1 max-md:px-0.5 max-md:py-0.5 text-center transition-shadow ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}
+                                                           className={`flex flex-col items-center gap-0.5 max-md:gap-0 rounded px-1 py-1 max-md:px-0.5 max-md:py-0.5 text-center transition-shadow ${SHIFT_NO_CALLOUT} ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}
                                                              ${labelStyle?.cell || 'bg-slate-50'}
+                                                             ${pressingId === s.id ? 'ring-2 ring-blue-300' : ''}
                                                              ${touchPlace?.shiftId === s.id ? 'ring-2 ring-blue-600' : ''}
                                                              ${shiftSnapshot.isDragging ? 'shadow-2xl ring-2 ring-blue-400' : 'hover:shadow-sm'}`}
-                                                           style={shiftSnapshot.isDragging ? { ...shiftDrag.draggableProps.style, zIndex: 9999, pointerEvents: 'auto' } : shiftDrag.draggableProps.style}>
+                                                           style={shiftSnapshot.isDragging ? { ...shiftDrag.draggableProps.style, zIndex: 9999, pointerEvents: 'auto', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' } : { ...shiftDrag.draggableProps.style, WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}>
                                                          {inlineEditId === s.id ? (
                                                            <div className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()}
                                                              onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) saveInlineEdit(s.id); }}>
@@ -1120,7 +1278,7 @@ export default function Timesheet() {
                                                                start={s.start_time}
                                                                end={s.end_time}
                                                                className="text-xs max-md:text-[10px] text-slate-700 font-medium leading-tight max-md:leading-none max-md:whitespace-nowrap hover:text-blue-600 hover:underline"
-                                                               onClick={e => { if (touchPlace || isMobile || worker.isVirtual) return; startInlineEdit(e, s); }}
+                                                               onClick={e => { if (touchPlace || worker.isVirtual || gestureFrom(e)) return; startInlineEdit(e, s); }}
                                                              />
                                                              {s.shift_label && <span className={`text-[10px] max-md:text-[8px] px-1 max-md:px-0.5 rounded font-medium capitalize leading-none ${labelStyle?.badge || 'bg-slate-100 text-slate-600'}`}>{s.shift_label}</span>}
                                                              {(() => {
@@ -1284,9 +1442,9 @@ export default function Timesheet() {
         </div>
       )}
 
-      {isMobile && touchPlace && (
+      {touchPlace && (
         <div
-          className="fixed inset-x-0 bottom-0 z-[150] flex items-center gap-2 bg-blue-600 px-3 py-3 text-white md:hidden"
+          className="fixed inset-x-0 bottom-0 z-[150] flex items-center gap-2 bg-blue-600 px-3 py-3 text-white"
           style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
           data-testid="shift-place-banner"
           role="status"
@@ -1299,7 +1457,7 @@ export default function Timesheet() {
         </div>
       )}
 
-      {isMobile && touchSheet && (
+      {touchSheet && (
         <ShiftTouchSheet
           shift={touchSheet.shift}
           worker={touchSheet.worker}

@@ -27,7 +27,7 @@ export default function ShiftTouchSheet({ shift, worker, day, busy, onClose, onM
   const dayLabel = format(day, 'EEEE d. MMM', { locale: nb });
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] md:hidden" role="dialog" aria-modal="true" aria-labelledby="shift-touch-sheet-title" data-testid="shift-touch-sheet">
+    <div className="fixed inset-0 z-[200]" role="dialog" aria-modal="true" aria-labelledby="shift-touch-sheet-title" data-testid="shift-touch-sheet">
       <button type="button" className="absolute inset-0 bg-black/40" aria-label="Lukk" onClick={onClose} />
       <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-white px-4 pt-3 shadow-2xl" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200" />
