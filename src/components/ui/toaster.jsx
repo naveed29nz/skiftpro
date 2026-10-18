@@ -10,12 +10,19 @@ import {
 
 export function Toaster() {
   const { toasts } = useToast();
+  if (toasts.length === 0) return null;
 
   return (
     <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, ...props }) {
+      {toasts.map(function ({ id, title, description, action, open, onOpenChange, duration, ...props }) {
+        const closed = open === false;
         return (
-          <Toast key={id} {...props}>
+          <Toast
+            key={id}
+            {...props}
+            data-state={closed ? "closed" : "open"}
+            className={closed ? "pointer-events-none" : "pointer-events-auto"}
+          >
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
@@ -23,7 +30,7 @@ export function Toaster() {
               )}
             </div>
             {action}
-            <ToastClose />
+            <ToastClose onClick={() => onOpenChange?.(false)} />
           </Toast>
         );
       })}

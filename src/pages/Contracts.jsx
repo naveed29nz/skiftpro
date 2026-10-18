@@ -74,7 +74,6 @@ export default function Contracts({ fixture = null, wagesVisible = null, loadPdf
         queryClient.invalidateQueries({ queryKey: ['contracts'] });
       }
       setViewingContract((current) => (current?.id === contractId ? null : current));
-      toast({ title: 'Avtalen er slettet' });
     } catch (err) {
       toast({
         title: 'Kunne ikke slette avtalen',
@@ -91,7 +90,6 @@ export default function Contracts({ fixture = null, wagesVisible = null, loadPdf
         ? { data: await loadPdf(contract) }
         : await base44.functions.invoke('generateContractPDF', { contract_id: contract.id });
       downloadBlob(pdfBlobFromInvoke(res?.data), contractPdfName(contract));
-      toast({ title: 'PDF lastet ned' });
     } catch (err) {
       toast({
         title: 'Kunne ikke laste ned PDF',
