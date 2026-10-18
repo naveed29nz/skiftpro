@@ -8,6 +8,7 @@ import {
   contractReachedEnd,
   sentinelInView,
 } from '@/contracts/contractScroll';
+import { otpCooldownLabel, otpCooldownSeconds, otpDigits } from '@/contracts/otpCooldown';
 
 export default function ContractSignPanel({
   title = 'Arbeidsavtale',
@@ -27,11 +28,19 @@ export default function ContractSignPanel({
 }) {
   const scroller = useRef(null);
   const endRef = useRef(null);
+  const codeRef = useRef(null);
+  const sendLock = useRef(false);
+  const verifyLock = useRef(false);
   const [scrolled, setScrolled] = useState(initialScrolled);
   const [accepted, setAccepted] = useState(initialAccepted);
   const [codeSent, setCodeSent] = useState(initialCodeSent);
-  const [code, setCode] = useState('');
   const [reason, setReason] = useState('');
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [sentAt, setSentAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const [localError, setLocalError] = useState('');
+  const alertRef = useRef(null);
 
   useEffect(() => {
     const root = scroller.current;
@@ -90,6 +99,21 @@ export default function ContractSignPanel({
     };
   }, [body, initialScrolled]);
 
+  useEffect(() => {
+    if (sentAt <= 0 || otpCooldownSeconds(sentAt, Date.now()) <= 0) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [sentAt, now]);
+
+  const cooldownLeft = otpCooldownSeconds(sentAt, now);
+  const shownError = localError || error;
+
+  useEffect(() => {
+    if (!shownError) return undefined;
+    alertRef.current?.scrollIntoView({ block: 'nearest' });
+    return undefined;
+  }, [shownError]);
+
   const jumpToEnd = () => {
     const el = scroller.current;
     const sentinel = endRef.current;
@@ -109,10 +133,37 @@ export default function ContractSignPanel({
   };
 
   const askForCode = async () => {
-    if (!accepted || !onRequestCode) return;
-    const result = await onRequestCode();
-    if (result === false) return;
-    setCodeSent(true);
+    if (!accepted || !onRequestCode || sendLock.current || sending || cooldownLeft > 0) return;
+    sendLock.current = true;
+    setSending(true);
+    setLocalError('');
+    try {
+      const result = await onRequestCode();
+      if (result === false) return;
+      setCodeSent(true);
+      setSentAt(Date.now());
+    } finally {
+      sendLock.current = false;
+      setSending(false);
+    }
+  };
+
+  const submitCode = async () => {
+    if (verifyLock.current || verifying || !onVerify) return;
+    const value = otpDigits(codeRef.current?.value);
+    if (value.length !== 6) {
+      setLocalError('Skriv inn den sekssifrede koden fra e-post.');
+      return;
+    }
+    verifyLock.current = true;
+    setVerifying(true);
+    setLocalError('');
+    try {
+      await onVerify(value);
+    } finally {
+      verifyLock.current = false;
+      setVerifying(false);
+    }
   };
 
   return (
@@ -166,8 +217,13 @@ export default function ContractSignPanel({
       </label>
 
       <div className="flex flex-wrap gap-3">
-        <Button type="button" disabled={!accepted || busy} onClick={askForCode}>
-          {busy && !codeSent ? 'Sender…' : 'Send engangskode'}
+        <Button
+          type="button"
+          className="min-h-11 w-full sm:w-auto"
+          disabled={!accepted || sending || verifying || busy || cooldownLeft > 0}
+          onClick={askForCode}
+        >
+          {sending ? 'Sender…' : cooldownLeft > 0 ? otpCooldownLabel(cooldownLeft) : 'Send engangskode'}
         </Button>
       </div>
 
@@ -176,26 +232,47 @@ export default function ContractSignPanel({
           className="bg-white rounded-xl border border-slate-200 p-4 space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
-            if (onVerify) onVerify(code);
+            submitCode();
           }}
         >
           <label className="block text-sm font-medium text-slate-700" htmlFor="engangskode">
             Sekssifret kode fra e-post
           </label>
           <Input
+            ref={codeRef}
             id="engangskode"
+            name="engangskode"
             inputMode="numeric"
             autoComplete="one-time-code"
+            enterKeyHint="done"
             maxLength={6}
-            value={code}
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            onInput={(event) => {
+              const next = otpDigits(event.currentTarget.value);
+              if (event.currentTarget.value !== next) event.currentTarget.value = next;
+            }}
             placeholder="000000"
-            className="max-w-[160px] tracking-[0.3em] font-mono"
+            className="max-w-[160px] tracking-[0.3em] font-mono text-base"
           />
           <p className="text-xs text-slate-500">Koden er gyldig i 10 minutter. Du har maks fem forsøk.</p>
-          <Button type="submit" disabled={code.length !== 6 || busy}>{busy ? 'Signerer…' : 'Signer med kode'}</Button>
+          <Button
+            type="button"
+            className="min-h-11 w-full sm:w-auto"
+            disabled={verifying || busy}
+            aria-busy={verifying}
+            onTouchEnd={(event) => {
+              event.preventDefault();
+              submitCode();
+            }}
+            onClick={submitCode}
+          >
+            {verifying ? 'Signerer…' : 'Signer med kode'}
+          </Button>
         </form>
       )}
+
+      {shownError ? (
+        <p ref={alertRef} role="alert" className="text-sm text-red-600">{shownError}</p>
+      ) : null}
 
       {role === 'ansatt' && (
         <form
@@ -214,14 +291,13 @@ export default function ContractSignPanel({
             onChange={(event) => setReason(event.target.value)}
             placeholder="Skriv en kort grunn. Admin får beskjed."
           />
-          <Button type="submit" variant="outline" disabled={!reason.trim() || busy} className="text-red-600">
+          <Button type="submit" variant="outline" disabled={!reason.trim() || verifying || sending} className="text-red-600 min-h-11">
             Avvis avtalen
           </Button>
         </form>
       )}
 
       {message && <p className="text-sm text-emerald-700">{message}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

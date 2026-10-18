@@ -12,6 +12,7 @@ import { countersignerIdentity, employerCountersignDestination } from '@/contrac
 import { confirmationTypeLabel, employeeSignedLine, employerPlainTitle, mailedCopyNotice } from '@/contracts/confirmation';
 import { signedCopyRecipient } from '../../supabase/functions/_shared/contractEmails.js';
 import { mapSigningError } from '@/contracts/signingErrors';
+import { otpSendOutcome } from '@/contracts/otpCooldown';
 
 export default function ContractSign() {
   const { contractId } = useParams();
@@ -95,8 +96,9 @@ export default function ContractSign() {
       setMessage(sent + dev);
       return true;
     } catch (err) {
-      setError(err.message || 'Kunne ikke sende kode');
-      return false;
+      const message = mapSigningError(err.message || 'Kunne ikke sende kode');
+      setError(message);
+      return otpSendOutcome(message);
     } finally {
       setBusy(false);
     }

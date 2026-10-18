@@ -205,7 +205,7 @@ begin
   end;
   insert into rls_results values (
     'the signing link cannot sign without the emailed code',
-    detail like '%Feil engangskode%'
+    detail like '%Feil kode%forsøk igjen%'
       and (select status = 'apnet' from public.contracts where id = 'c-guest'),
     detail
   );
@@ -232,6 +232,51 @@ begin
     opened ->> 'status' = 'signert_ansatt'
       and signer = '55555555-5555-5555-5555-555555555555',
     coalesce(signer, '')
+  );
+
+  insert into public.contracts (
+    id, org_id, worker_id, worker_name, contract_type, status, org_name,
+    template_key, body_snapshot, sent_at, expires_at, content_sha256, reason
+  ) values (
+    'c-otp-keep', 'org-a', 'w-other-a', 'Other A', 'fast', 'sendt', org_name,
+    'fast', 'Kort avtale', now(), now() + interval '14 days', 'hash-otp-keep', null
+  );
+  prepared := public.prepare_contract_signing_mail('c-otp-keep');
+  perform public.open_guest_contract('c-otp-keep', prepared ->> 'token', null, null);
+  again := public.issue_guest_contract_otp('c-otp-keep', prepared ->> 'token', null, null);
+  code := again ->> 'code';
+  opened := public.issue_guest_contract_otp('c-otp-keep', prepared ->> 'token', null, null);
+  insert into rls_results values (
+    'a second code within 30 seconds is refused and the first code stays valid',
+    again ->> 'ok' = 'true'
+      and opened ->> 'ok' = 'false'
+      and opened ->> 'error' like '%Ny kode kan sendes om 30 sekunder%'
+      and (select count(*) = 1 from public.contract_otp o
+            where o.contract_id = 'c-otp-keep' and o.consumed_at is null),
+    coalesce(opened ->> 'error', opened::text)
+  );
+  update public.contract_otp
+    set created_at = now() - interval '31 seconds'
+    where contract_id = 'c-otp-keep';
+  opened := public.issue_guest_contract_otp('c-otp-keep', prepared ->> 'token', null, null);
+  insert into rls_results values (
+    'a later code does not consume the earlier unexpired code',
+    opened ->> 'ok' = 'true'
+      and (select count(*) = 2 from public.contract_otp o
+            where o.contract_id = 'c-otp-keep'
+              and o.consumed_at is null
+              and o.expires_at > now()),
+    coalesce(opened ->> 'code', opened::text)
+  );
+  again := public.complete_guest_contract_signature(
+    'c-otp-keep', prepared ->> 'token', code, null, null
+  );
+  insert into rls_results values (
+    'verification accepts an earlier unexpired code after a resend',
+    again ->> 'status' = 'signert_ansatt'
+      and (select count(*) = 0 from public.contract_otp o
+            where o.contract_id = 'c-otp-keep' and o.consumed_at is null),
+    coalesce(again ->> 'status', again::text)
   );
 
   n := (

@@ -15,6 +15,22 @@ function roleOf(value: unknown): "ansatt" | "arbeidsgiver" {
   return value === "arbeidsgiver" ? "arbeidsgiver" : "ansatt";
 }
 
+// Resend is not given an Idempotency-Key, and the two messages contain
+// different codes, so a second call is not a deduped retry. A non-2xx
+// (often 429 when two messages leave close together) used to be returned
+// to the browser as success with sent:false, after the previous code had
+// already been invalidated. Surface the failure instead.
+function otpDeliveryError(reason?: string): string {
+  console.error("sign-contract otp email", reason || "unknown");
+  if (!reason || reason === "email_not_configured") {
+    return "E-post er ikke satt opp. Be admin sjekke at e-postutsending virker.";
+  }
+  if (reason.includes("429") || /rate limit|too many requests/i.test(reason)) {
+    return "E-posttjeneren tok ikke imot en ny kode nå. Bruk koden du allerede har fått, eller vent et øyeblikk.";
+  }
+  return "E-posten med koden kom ikke fram. Prøv igjen om litt. En kode du allerede har fått, virker fortsatt.";
+}
+
 async function archiveSignedPdf(contractId: string) {
   const admin = adminClient();
   const { data: contract, error } = await admin
@@ -145,10 +161,11 @@ async function handleGuest(req: Request, body: Record<string, unknown>) {
       subject: otp.subject,
       text: otp.text,
     });
+    if (!mailed.sent) return json({ error: otpDeliveryError(mailed.reason), sent: false }, 502);
     const dev = Deno.env.get("SIGNING_DEV_OTP") === "true";
     return json({
       ok: true,
-      sent: mailed.sent,
+      sent: true,
       email: issued.data.email,
       ...(dev ? { dev_code: issued.data.code } : {}),
     });
@@ -238,10 +255,11 @@ Deno.serve(async (req) => {
         subject: otp.subject,
         text: otp.text,
       });
+      if (!mailed.sent) return json({ error: otpDeliveryError(mailed.reason), sent: false }, 502);
       const dev = Deno.env.get("SIGNING_DEV_OTP") === "true";
       return json({
         ok: true,
-        sent: mailed.sent,
+        sent: true,
         email: ctx.data.email,
         ...(dev ? { dev_code: code } : {}),
       });

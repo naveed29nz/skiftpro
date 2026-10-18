@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ContractSignPanel from '@/components/contracts/ContractSignPanel';
 import EmployeeSignedThanks from '@/components/contracts/EmployeeSignedThanks';
 import { mapSigningError } from '@/contracts/signingErrors';
+import { otpSendOutcome } from '@/contracts/otpCooldown';
 
 const TOKEN_KEY = 'skiftpro.contractAccess';
 const PAGE_CLASS = 'min-h-dvh bg-slate-50 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]';
@@ -33,15 +34,20 @@ async function guestCall(payload) {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !anonKey) throw new Error('Signering er ikke satt opp.');
-  const response = await fetch(`${url}/functions/v1/sign-contract`, {
-    method: 'POST',
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${anonKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  let response;
+  try {
+    response = await fetch(`${url}/functions/v1/sign-contract`, {
+      method: 'POST',
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error('Kunne ikke kontakte serveren. Sjekk nettverket og prøv igjen.');
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.error) throw new Error(data.error || 'Kunne ikke åpne avtalen');
   return data;
@@ -119,8 +125,9 @@ export default function GuestContractSign() {
       setMessage(sent + dev);
       return true;
     } catch (err) {
-      setError(err.message || 'Kunne ikke sende kode');
-      return false;
+      const message = mapSigningError(err.message || 'Kunne ikke sende kode');
+      setError(message);
+      return otpSendOutcome(message);
     } finally {
       setBusy(false);
     }
@@ -143,6 +150,7 @@ export default function GuestContractSign() {
         code,
       });
       if (data.status !== 'signert') {
+        setStatus('signert_ansatt');
         navigate(`/signer/${contractId}/takk`);
         return;
       }
