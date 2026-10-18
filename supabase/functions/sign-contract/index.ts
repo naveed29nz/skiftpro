@@ -1,3 +1,8 @@
+// contractPdf.js loads jsPDF through a dynamic import whose specifier is a
+// variable. The deploy bundler does not follow that, so jsPDF was left out
+// of the bundle. Countersign PDF archiving then failed with HTTP 500 and
+// no signed copies were sent. This static import keeps the package in.
+import "npm:jspdf@4.0.0";
 import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.ts";
 import { countersignerIdentity } from "../_shared/countersigner.ts";
 import { buildSnapshotPdf, bytesToBase64, sha256Hex } from "../_shared/contractPdf.ts";
