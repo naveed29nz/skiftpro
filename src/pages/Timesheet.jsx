@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -17,6 +17,10 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import DayGantt from '@/components/timesheet/DayGantt';
 import { LEDIG_WORKER_ID, LEDIG_WORKER_NAME } from '@/utils/workerLifecycle';
+import { flushNotifications } from '@/utils/notify';
+import { toast } from '@/components/ui/use-toast';
+import ShiftTouchSheet from '@/components/timesheet/ShiftTouchSheet';
+import { isShiftDropTarget, sameShiftCell, shiftCopyRecord, shiftMoveFields } from '@/timesheet/placeShift';
 
 function calcHours(shift) {
   const [sh, sm] = shift.start_time.split(':').map(Number);
@@ -149,6 +153,10 @@ export default function Timesheet() {
     : 'max-md:w-[80px] max-md:max-w-[80px] max-md:min-w-0 max-md:overflow-hidden';
   const [inlineEditId, setInlineEditId] = useState(null);
   const [inlineEditData, setInlineEditData] = useState({});
+  const [touchSheet, setTouchSheet] = useState(null);
+  const [touchPlace, setTouchPlace] = useState(null);
+  const [sheetBusy, setSheetBusy] = useState(false);
+  const placeLock = useRef(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -535,6 +543,23 @@ export default function Timesheet() {
     handleRefresh();
   };
 
+  useEffect(() => {
+    if (!isMobile) {
+      setTouchSheet(null);
+      setTouchPlace(null);
+    }
+  }, [isMobile]);
+
+  const moveFieldsFor = (shift, newWorkerId, newDate) => shiftMoveFields({
+    shift,
+    newWorkerId,
+    newDate,
+    newWorker: workers.find(w => w.id === newWorkerId),
+    filterTeam,
+    ledigWorkerId: LEDIG_WORKER_ID,
+    ledigWorkerName: LEDIG_WORKER_NAME,
+  });
+
   const handleDragEnd = async ({ type, source, destination, draggableId }) => {
     if (!destination) return;
 
@@ -553,19 +578,10 @@ export default function Timesheet() {
       const [newWorkerId, newDate] = destination.droppableId.split('__');
       const shift = shifts.find(s => s.id === draggableId);
       if (!shift) return;
-      const newWorker = workers.find(w => w.id === newWorkerId);
-      const update = {
-        date: newDate,
-        worker_id: newWorkerId,
-        worker_name: newWorkerId === LEDIG_WORKER_ID ? LEDIG_WORKER_NAME : (newWorker?.name || shift.worker_name),
-      };
       // Når en vakt flyttes i en spesifikk avdelingsvisning, behold avdelingen:
       // tagg vakten med aktiv team slik at den ikke "ghostes" til den nye
       // ansattes primæravdeling når de også jobber i en annen avdeling.
-      if (filterTeam !== 'all') {
-        update.team = filterTeam;
-      }
-      await base44.entities.Shift.update(draggableId, update);
+      await base44.entities.Shift.update(draggableId, moveFieldsFor(shift, newWorkerId, newDate));
       handleRefresh();
       return;
     }
@@ -583,6 +599,63 @@ export default function Timesheet() {
       handleRefresh();
       return;
     }
+  };
+
+  const placeShiftAt = async (workerId, dayStr) => {
+    if (!touchPlace || placeLock.current) return;
+    const shift = shifts.find(s => s.id === touchPlace.shiftId);
+    if (!shift) {
+      setTouchPlace(null);
+      return;
+    }
+    const worker = displayWorkers.find(w => w.id === workerId);
+    const cellId = `${workerId}__${dayStr}`;
+    if (!isShiftDropTarget(worker) || sameShiftCell(shift, workerId, dayStr)) return;
+    if (touchPlace.mode === 'kopier' && touchPlace.placed.includes(cellId)) return;
+    placeLock.current = true;
+    try {
+      const fields = moveFieldsFor(shift, workerId, dayStr);
+      if (touchPlace.mode === 'flytt') {
+        await base44.entities.Shift.update(shift.id, fields);
+        setTouchPlace(null);
+      } else {
+        await base44.entities.Shift.create(shiftCopyRecord(shift, fields));
+        setTouchPlace(prev => prev ? { ...prev, placed: [...prev.placed, cellId] } : prev);
+      }
+      handleRefresh();
+      flushNotifications();
+    } catch {
+      toast({
+        title: touchPlace.mode === 'kopier' ? 'Kunne ikke kopiere vakten' : 'Kunne ikke flytte vakten',
+        variant: 'destructive',
+      });
+    } finally {
+      placeLock.current = false;
+    }
+  };
+
+  const deleteTouchedShift = async () => {
+    const shift = touchSheet?.shift;
+    if (!shift || sheetBusy) return;
+    if (!window.confirm('Slette vakten?')) return;
+    setSheetBusy(true);
+    try {
+      await base44.entities.Shift.delete(shift.id);
+      handleRefresh();
+      flushNotifications();
+      setTouchSheet(null);
+    } catch {
+      toast({ title: 'Kunne ikke slette vakten', variant: 'destructive' });
+    } finally {
+      setSheetBusy(false);
+    }
+  };
+
+  const startTouchPlace = (mode) => {
+    const shift = touchSheet?.shift;
+    if (!shift) return;
+    setTouchPlace({ mode, shiftId: shift.id, placed: [] });
+    setTouchSheet(null);
   };
 
   // Group view: for each label group, get all shifts on each day
@@ -621,8 +694,12 @@ export default function Timesheet() {
     return `${hrs}t ${mins}m`;
   };
 
+  const placeBanner = touchPlace?.mode === 'kopier'
+    ? 'Trykk på rutene vakten skal kopieres til'
+    : 'Trykk på ruten vakten skal flyttes til';
+
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${touchPlace ? 'pb-28' : ''}`}>
       {/* Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -824,10 +901,10 @@ export default function Timesheet() {
                                         {dayShifts.map((s, si) => {
                                           const w = workers.find(x => x.id === s.worker_id);
                                           return (
-                                            <Draggable key={s.id} draggableId={s.id} index={si}>
+                                            <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={isMobile}>
                                               {(shiftDrag, shiftSnapshot) => (
                                                 <div
-                                                  ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...shiftDrag.dragHandleProps}
+                                                  ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...(isMobile ? {} : shiftDrag.dragHandleProps)}
                                                   onClick={() => { if (!shiftSnapshot.isDragging && w) setModalCell({ worker: w, day }); }}
                                                   className={`bg-white rounded border border-slate-200 px-2 py-1.5 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow
                                                     ${shiftSnapshot.isDragging ? 'shadow-lg ring-2 ring-blue-400 opacity-90' : ''}`}
@@ -984,24 +1061,45 @@ export default function Timesheet() {
                                   const otherShifts = getOtherTeamShifts(worker.id, day);
                                   // Ghost: worker has shifts on other teams but none on this team today
                                   const isGhostCell = otherShifts.length > 0 && cellShifts.length === 0;
+                                  const sourceShift = touchPlace ? shifts.find(s => s.id === touchPlace.shiftId) : null;
+                                  const alreadyPlaced = Boolean(touchPlace?.placed?.includes(cellId));
+                                  const validTarget = Boolean(touchPlace)
+                                    && isShiftDropTarget(worker)
+                                    && !sameShiftCell(sourceShift, worker.id, dayStr)
+                                    && !alreadyPlaced;
                                   return (
                                      <td key={day.toISOString()} className={`px-1 py-1 max-md:px-0.5 max-md:py-0.5 align-top max-md:w-[54px] max-md:max-w-[54px] max-md:overflow-hidden ${getHoliday(day) ? 'bg-amber-50/40' : isSameDay(day, new Date()) ? 'bg-blue-50/20' : ''}`}>
                                        <Droppable droppableId={cellId} type="SHIFT" isDropDisabled={worker.isInactive || worker.isFormer}>
                                          {(cellProvided, cellSnapshot) => (
                                            <div ref={cellProvided.innerRef} {...cellProvided.droppableProps}
-                                             className={`relative min-h-[40px] max-md:min-h-[28px] rounded transition-colors ${cellSnapshot.isDraggingOver ? 'bg-blue-100 ring-2 ring-blue-300 ring-inset' : ''}`}>
+                                             data-cell-id={cellId}
+                                             data-testid={validTarget ? 'shift-place-target' : undefined}
+                                             onClick={() => { if (validTarget) placeShiftAt(worker.id, dayStr); }}
+                                             className={`relative min-h-[40px] max-md:min-h-[28px] rounded transition-colors ${cellSnapshot.isDraggingOver ? 'bg-blue-100 ring-2 ring-blue-300 ring-inset' : ''} ${validTarget ? 'cursor-pointer bg-blue-100 shadow-[inset_0_0_0_2px_#2563eb]' : ''} ${alreadyPlaced ? 'bg-emerald-100 shadow-[inset_0_0_0_2px_#059669]' : ''}`}>
                                              {cellShifts.length > 0 ? (
                                                <div className="space-y-0.5">
                                                  {cellShifts.map((s, si) => {
                                                    const labelStyle = LABEL_STYLES[s.shift_label];
                                                    return (
-                                                     <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={isReadOnly}>
+                                                     <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={isReadOnly || isMobile}>
                                                        {(shiftDrag, shiftSnapshot) => {
                                                          const card = (
-                                                         <div ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...shiftDrag.dragHandleProps}
-                                                           onClick={() => !isReadOnly && !shiftSnapshot.isDragging && inlineEditId !== s.id && setModalCell({ worker, day })}
+                                                         <div ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...(isMobile ? {} : shiftDrag.dragHandleProps)}
+                                                           data-testid="shift-card"
+                                                           data-shift-id={s.id}
+                                                           onClick={(e) => {
+                                                             if (isReadOnly || shiftSnapshot.isDragging || inlineEditId === s.id) return;
+                                                             if (touchPlace) return;
+                                                             e.stopPropagation();
+                                                             if (isMobile) {
+                                                               setTouchSheet({ shift: s, worker, day });
+                                                               return;
+                                                             }
+                                                             setModalCell({ worker, day });
+                                                           }}
                                                            className={`flex flex-col items-center gap-0.5 max-md:gap-0 rounded px-1 py-1 max-md:px-0.5 max-md:py-0.5 text-center transition-shadow ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}
                                                              ${labelStyle?.cell || 'bg-slate-50'}
+                                                             ${touchPlace?.shiftId === s.id ? 'ring-2 ring-blue-600' : ''}
                                                              ${shiftSnapshot.isDragging ? 'shadow-2xl ring-2 ring-blue-400' : 'hover:shadow-sm'}`}
                                                            style={shiftSnapshot.isDragging ? { ...shiftDrag.draggableProps.style, zIndex: 9999, pointerEvents: 'auto' } : shiftDrag.draggableProps.style}>
                                                          {inlineEditId === s.id ? (
@@ -1022,7 +1120,7 @@ export default function Timesheet() {
                                                                start={s.start_time}
                                                                end={s.end_time}
                                                                className="text-xs max-md:text-[10px] text-slate-700 font-medium leading-tight max-md:leading-none max-md:whitespace-nowrap hover:text-blue-600 hover:underline"
-                                                               onClick={e => { if (!worker.isVirtual) startInlineEdit(e, s); }}
+                                                               onClick={e => { if (touchPlace || isMobile || worker.isVirtual) return; startInlineEdit(e, s); }}
                                                              />
                                                              {s.shift_label && <span className={`text-[10px] max-md:text-[8px] px-1 max-md:px-0.5 rounded font-medium capitalize leading-none ${labelStyle?.badge || 'bg-slate-100 text-slate-600'}`}>{s.shift_label}</span>}
                                                              {(() => {
@@ -1068,7 +1166,7 @@ export default function Timesheet() {
                                                </div>
                                              ) : isGhostCell ? (
                                                // Worker has shifts in another team — show red ghost with dept name + times
-                                               <div className="flex flex-col gap-0.5 min-h-[40px] max-md:min-h-[28px] cursor-pointer" onClick={() => setModalCell({ worker, day })}>
+                                               <div className="flex flex-col gap-0.5 min-h-[40px] max-md:min-h-[28px] cursor-pointer" onClick={(e) => { if (touchPlace) return; e.stopPropagation(); setModalCell({ worker, day }); }}>
                                                  {otherShifts.map(os => {
                                                    const ghostTeamKey = os.team || (workers.find(w => w.id === os.worker_id)?.teams || ['team1'])[0];
                                                    return (
@@ -1086,7 +1184,7 @@ export default function Timesheet() {
                                              ) : worker.isVirtual ? (
                                                <div className="min-h-[40px] max-md:min-h-[28px]" />
                                              ) : (
-                                               <div className="flex items-center justify-center min-h-[40px] max-md:min-h-[28px] cursor-pointer group" onClick={() => setModalCell({ worker, day })}>
+                                               <div className="flex items-center justify-center min-h-[40px] max-md:min-h-[28px] cursor-pointer group" onClick={(e) => { if (touchPlace) return; e.stopPropagation(); setModalCell({ worker, day }); }}>
                                                  <Plus className="w-3.5 h-3.5 text-slate-200 group-hover:text-blue-300 transition-colors" />
                                                </div>
                                              )}
@@ -1184,6 +1282,39 @@ export default function Timesheet() {
             <div className="py-16 text-center text-sm text-slate-400">Ingen ansatte å vise</div>
           )}
         </div>
+      )}
+
+      {isMobile && touchPlace && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-[150] flex items-center gap-2 bg-blue-600 px-3 py-3 text-white md:hidden"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+          data-testid="shift-place-banner"
+          role="status"
+        >
+          <p className="min-w-0 flex-1 text-sm leading-snug">{placeBanner}</p>
+          {touchPlace.mode === 'kopier' && (
+            <button type="button" className="shrink-0 rounded-md bg-white px-3 py-2 text-sm font-semibold text-blue-700" onClick={() => setTouchPlace(null)}>Ferdig</button>
+          )}
+          <button type="button" className="shrink-0 rounded-md border border-white/70 px-3 py-2 text-sm font-medium" onClick={() => setTouchPlace(null)}>Avbryt</button>
+        </div>
+      )}
+
+      {isMobile && touchSheet && (
+        <ShiftTouchSheet
+          shift={touchSheet.shift}
+          worker={touchSheet.worker}
+          day={touchSheet.day}
+          busy={sheetBusy}
+          onClose={() => setTouchSheet(null)}
+          onMove={() => startTouchPlace('flytt')}
+          onCopy={() => startTouchPlace('kopier')}
+          onEdit={() => {
+            const { worker, day } = touchSheet;
+            setTouchSheet(null);
+            setModalCell({ worker, day });
+          }}
+          onDelete={deleteTouchedShift}
+        />
       )}
 
       {modalCell && (

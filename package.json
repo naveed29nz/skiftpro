@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
-    "test:unit": "node --test src/contracts/*.test.js",
+    "test:unit": "node --test src/contracts/*.test.js src/timesheet/*.test.js",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview"
   },
