@@ -2,7 +2,7 @@ import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.t
 import { countersignerIdentity } from "../_shared/countersigner.ts";
 import { buildSnapshotPdf, bytesToBase64, sha256Hex } from "../_shared/contractPdf.ts";
 import { otpMessage, signedCopyRecipient, signedEmployeeMessage, signedEmployerMessage } from "../_shared/contractMail.ts";
-import { sendEmail } from "../_shared/email.ts";
+import { sendEmail, type EmailResult } from "../_shared/email.ts";
 import { resolveProvider } from "../_shared/signing/index.ts";
 
 function clientIp(req: Request): string | null {
@@ -20,15 +20,75 @@ function roleOf(value: unknown): "ansatt" | "arbeidsgiver" {
 // (often 429 when two messages leave close together) used to be returned
 // to the browser as success with sent:false, after the previous code had
 // already been invalidated. Surface the failure instead.
-function otpDeliveryError(reason?: string): string {
-  console.error("sign-contract otp email", reason || "unknown");
+function otpDeliveryError(result: EmailResult): string {
+  const reason = result.reason || "";
   if (!reason || reason === "email_not_configured") {
     return "E-post er ikke satt opp. Be admin sjekke at e-postutsending virker.";
   }
-  if (reason.includes("429") || /rate limit|too many requests/i.test(reason)) {
+  if (result.status === 429 || reason.includes("429") || /rate limit|too many requests/i.test(reason)) {
     return "E-posttjeneren tok ikke imot en ny kode nå. Bruk koden du allerede har fått, eller vent et øyeblikk.";
   }
   return "E-posten med koden kom ikke fram. Prøv igjen om litt. En kode du allerede har fått, virker fortsatt.";
+}
+
+// The phone often leaves for the mail app after the code row is stored.
+// Without waitUntil the isolate is shut down with the request, so Resend
+// never runs and the function logs no response. The promise is started
+// and pinned before we wait for it.
+function pinUntilDone(task: Promise<unknown>) {
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void } }).EdgeRuntime;
+  if (typeof runtime?.waitUntil === "function") runtime.waitUntil(task);
+}
+
+async function deliverOtpEmail(input: {
+  contractId: string;
+  role: string;
+  actor: string;
+  to: string;
+  code: string;
+  ip: string | null;
+  userAgent: string | null;
+}): Promise<EmailResult> {
+  console.log(JSON.stringify({
+    msg: "otp_email_start",
+    contract_id: input.contractId,
+    role: input.role,
+  }));
+  let result: EmailResult;
+  try {
+    const otp = otpMessage(input.code);
+    result = await sendEmail({ to: input.to, subject: otp.subject, text: otp.text });
+  } catch (error) {
+    result = {
+      sent: false,
+      status: 0,
+      reason: error instanceof Error ? error.message : "send_threw",
+    };
+  }
+  console.log(JSON.stringify({
+    msg: "otp_email_result",
+    contract_id: input.contractId,
+    role: input.role,
+    resend_status: result.status ?? null,
+    resend_id: result.id ?? null,
+    sent: result.sent,
+    error: result.sent ? null : (result.reason || "unknown").slice(0, 500),
+  }));
+  if (!result.sent) {
+    const admin = adminClient();
+    const recorded = await admin.rpc("record_otp_email_failure", {
+      p_contract_id: input.contractId,
+      p_role: input.role,
+      p_actor: input.actor,
+      p_status: result.status ?? null,
+      p_resend_id: result.id ?? null,
+      p_error: (result.reason || "unknown").slice(0, 500),
+      p_ip: input.ip,
+      p_user_agent: input.userAgent,
+    });
+    if (recorded.error) console.error(JSON.stringify({ msg: "otp_epost_feilet_rpc", error: recorded.error.message }));
+  }
+  return result;
 }
 
 async function archiveSignedPdf(contractId: string) {
@@ -155,13 +215,25 @@ async function handleGuest(req: Request, body: Record<string, unknown>) {
     });
     if (issued.error) return json({ error: issued.error.message }, 400);
     if (!issued.data?.ok) return json({ error: issued.data?.error || "Kunne ikke sende kode" }, 400);
-    const otp = otpMessage(String(issued.data.code || ""));
-    const mailed = await sendEmail({
-      to: issued.data.email,
-      subject: otp.subject,
-      text: otp.text,
+    const delivery = deliverOtpEmail({
+      contractId,
+      role: "ansatt",
+      actor: "",
+      to: String(issued.data.email || ""),
+      code: String(issued.data.code || ""),
+      ip,
+      userAgent,
     });
-    if (!mailed.sent) return json({ error: otpDeliveryError(mailed.reason), sent: false }, 502);
+    pinUntilDone(delivery);
+    const mailed = await delivery;
+    console.log(JSON.stringify({
+      msg: "otp_email_response",
+      contract_id: contractId,
+      http_status: mailed.sent ? 200 : 502,
+      resend_status: mailed.status ?? null,
+      resend_id: mailed.id ?? null,
+    }));
+    if (!mailed.sent) return json({ error: otpDeliveryError(mailed), sent: false }, 502);
     const dev = Deno.env.get("SIGNING_DEV_OTP") === "true";
     return json({
       ok: true,
@@ -249,13 +321,25 @@ Deno.serve(async (req) => {
       });
       if (issued.error) return json({ error: issued.error.message }, 500);
       const code = String(issued.data || "");
-      const otp = otpMessage(code);
-      const mailed = await sendEmail({
-        to: ctx.data.email,
-        subject: otp.subject,
-        text: otp.text,
+      const delivery = deliverOtpEmail({
+        contractId: String(contractId),
+        role,
+        actor: auth.user.id,
+        to: String(ctx.data.email || ""),
+        code,
+        ip: clientIp(req),
+        userAgent: req.headers.get("user-agent"),
       });
-      if (!mailed.sent) return json({ error: otpDeliveryError(mailed.reason), sent: false }, 502);
+      pinUntilDone(delivery);
+      const mailed = await delivery;
+      console.log(JSON.stringify({
+        msg: "otp_email_response",
+        contract_id: contractId,
+        http_status: mailed.sent ? 200 : 502,
+        resend_status: mailed.status ?? null,
+        resend_id: mailed.id ?? null,
+      }));
+      if (!mailed.sent) return json({ error: otpDeliveryError(mailed), sent: false }, 502);
       const dev = Deno.env.get("SIGNING_DEV_OTP") === "true";
       return json({
         ok: true,

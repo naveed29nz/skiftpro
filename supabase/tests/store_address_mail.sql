@@ -279,6 +279,27 @@ begin
     coalesce(again ->> 'status', again::text)
   );
 
+  perform public.record_otp_email_failure(
+    'c-otp-keep', 'ansatt', null, 429, null, 'Too many requests', '203.0.113.10', 'mail-test'
+  );
+  insert into rls_results values (
+    'a failed code email is stored without the code',
+    exists (
+      select 1 from public.contract_events e
+      where e.contract_id = 'c-otp-keep'
+        and e.event_type = 'otp_epost_feilet'
+        and e.actor_id = 'guest:w-other-a'
+        and e.payload ->> 'status' = '429'
+        and e.payload ->> 'error' = 'Too many requests'
+        and e.payload::text not like '%855561%'
+    ),
+    coalesce((
+      select e.payload::text from public.contract_events e
+      where e.contract_id = 'c-otp-keep' and e.event_type = 'otp_epost_feilet'
+      limit 1
+    ), '')
+  );
+
   n := (
     select count(*) from public.contract_events e
     where e.contract_id in ('c-guest', 'c-guest-user')

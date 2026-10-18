@@ -41,6 +41,7 @@ export default function ContractSignPanel({
   const [now, setNow] = useState(() => Date.now());
   const [localError, setLocalError] = useState('');
   const alertRef = useRef(null);
+  const messageRef = useRef(null);
 
   useEffect(() => {
     const root = scroller.current;
@@ -113,6 +114,12 @@ export default function ContractSignPanel({
     alertRef.current?.scrollIntoView({ block: 'nearest' });
     return undefined;
   }, [shownError]);
+
+  useEffect(() => {
+    if (!message) return undefined;
+    messageRef.current?.scrollIntoView({ block: 'nearest' });
+    return undefined;
+  }, [message]);
 
   const jumpToEnd = () => {
     const el = scroller.current;
@@ -223,9 +230,11 @@ export default function ContractSignPanel({
           disabled={!accepted || sending || verifying || busy || cooldownLeft > 0}
           onClick={askForCode}
         >
-          {sending ? 'Sender…' : cooldownLeft > 0 ? otpCooldownLabel(cooldownLeft) : 'Send engangskode'}
+          {sending ? 'Sender kode…' : cooldownLeft > 0 ? otpCooldownLabel(cooldownLeft) : 'Send engangskode'}
         </Button>
       </div>
+
+      {message ? <p ref={messageRef} className="text-sm text-emerald-700">{message}</p> : null}
 
       {codeSent && (
         <form
@@ -297,7 +306,6 @@ export default function ContractSignPanel({
         </form>
       )}
 
-      {message && <p className="text-sm text-emerald-700">{message}</p>}
     </div>
   );
 }

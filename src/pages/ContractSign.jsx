@@ -12,7 +12,7 @@ import { countersignerIdentity, employerCountersignDestination } from '@/contrac
 import { confirmationTypeLabel, employeeSignedLine, employerPlainTitle, mailedCopyNotice } from '@/contracts/confirmation';
 import { signedCopyRecipient } from '../../supabase/functions/_shared/contractEmails.js';
 import { mapSigningError } from '@/contracts/signingErrors';
-import { otpSendOutcome } from '@/contracts/otpCooldown';
+import { otpSendOutcome, otpSentMessage } from '@/contracts/otpCooldown';
 
 export default function ContractSign() {
   const { contractId } = useParams();
@@ -91,7 +91,7 @@ export default function ContractSign() {
         action: 'request_otp',
         role,
       });
-      const sent = res?.data?.sent ? `Koden er sendt til ${res.data.email || 'e-posten din'}.` : 'E-post er ikke satt opp. Be admin sjekke RESEND_API_KEY.';
+      const sent = res?.data?.sent ? otpSentMessage(res.data.email) : 'E-post er ikke satt opp. Be admin sjekke RESEND_API_KEY.';
       const dev = res?.data?.dev_code ? ` Utviklerkode: ${res.data.dev_code}.` : '';
       setMessage(sent + dev);
       return true;

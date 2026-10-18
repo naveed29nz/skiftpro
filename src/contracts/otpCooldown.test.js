@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  maskEmail,
   otpCooldownLabel,
   otpCooldownSeconds,
   otpDigits,
   otpSendOutcome,
+  otpSentMessage,
   OTP_RESEND_COOLDOWN_MS,
 } from './otpCooldown.js';
 
@@ -27,5 +29,18 @@ test('a new code cannot be requested again during the 30 second cooldown', () =>
 test('a failed resend still starts the cooldown instead of firing again', () => {
   assert.equal(otpSendOutcome('Ny kode kan sendes om 30 sekunder'), 'cooldown');
   assert.equal(otpSendOutcome('E-posten med koden kom ikke fram. Prøv igjen om litt.'), 'cooldown');
+  assert.equal(otpSendOutcome('Kunne ikke kontakte serveren. Sjekk nettverket og prøv igjen.'), 'cooldown');
   assert.equal(otpSendOutcome('Fant ikke avtalen'), false);
+});
+
+test('the sent confirmation hides the mailbox and mentions spam', () => {
+  assert.equal(maskEmail('naveed29nz+skiftprotest@gmail.com'), 'n***t@gmail.com');
+  assert.equal(maskEmail('ab@example.com'), 'a***b@example.com');
+  assert.equal(maskEmail('a@example.com'), 'a***@example.com');
+  assert.equal(maskEmail('ikke-en-adresse'), '');
+  assert.equal(
+    otpSentMessage('sofian@example.com'),
+    'Kode sendt til s***n@example.com – sjekk også Søppelpost/Annen',
+  );
+  assert.equal(otpSentMessage(''), 'Kode sendt – sjekk også Søppelpost/Annen');
 });
