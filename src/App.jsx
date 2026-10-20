@@ -24,6 +24,9 @@ const StoreSettingsPreview = import.meta.env.DEV
 const CustomerCardPreview = import.meta.env.DEV
   ? lazy(() => import('@/pages/CustomerCardPreview'))
   : null;
+const InnskuddPreview = import.meta.env.DEV
+  ? lazy(() => import('@/pages/InnskuddPreview'))
+  : null;
 
 function storedSessionPresent() {
   try {
@@ -101,6 +104,16 @@ function App() {
                 element={(
                   <Suspense fallback={<OpeningSplash />}>
                     <CustomerCardPreview />
+                  </Suspense>
+                )}
+              />
+            )}
+            {import.meta.env.DEV && InnskuddPreview && (
+              <Route
+                path="/dev/innskudd"
+                element={(
+                  <Suspense fallback={<OpeningSplash />}>
+                    <InnskuddPreview />
                   </Suspense>
                 )}
               />

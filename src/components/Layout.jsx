@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Clock, CalendarDays, DollarSign, Menu, X, Settings, UserCircle, Smartphone, Monitor, Banknote, Ticket, ClipboardList, Building2, CheckSquare, FileText, LogOut, BarChart, CreditCard, ScrollText } from 'lucide-react';
+import { LayoutDashboard, Users, Clock, CalendarDays, DollarSign, Menu, X, Settings, UserCircle, Smartphone, Monitor, Banknote, Ticket, ClipboardList, Building2, CheckSquare, FileText, LogOut, BarChart, CreditCard, ScrollText, Package } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
@@ -25,6 +25,7 @@ const adminNav = [
   { path: '/Resultat', label: 'Resultat', icon: BarChart },
   { path: '/Dagsoppgjor', label: 'Dagsoppgjør', icon: Banknote },
   { path: '/Loddtelling', label: 'Loddtelling', icon: Ticket },
+  { path: '/Innskudd', label: 'Innskudd', icon: Package },
   { path: '/Contracts', label: 'Kontrakter', icon: FileText },
   { path: '/Settings', label: 'Innstillinger', icon: Settings },
 ];
@@ -38,6 +39,7 @@ const subAdminNav = [
   { path: '/Resultat', label: 'Resultat', icon: BarChart },
   { path: '/Dagsoppgjor', label: 'Dagsoppgjør', icon: Banknote },
   { path: '/Loddtelling', label: 'Loddtelling', icon: Ticket },
+  { path: '/Innskudd', label: 'Innskudd', icon: Package },
   { path: '/Contracts', label: 'Kontrakter', icon: FileText },
   { path: '/Settings', label: 'Innstillinger', icon: Settings },
 ];
@@ -48,6 +50,7 @@ const butikksjeflNav = [
   { path: '/Resultat', label: 'Resultat', icon: BarChart },
   { path: '/Dagsoppgjor', label: 'Dagsoppgjør', icon: Banknote },
   { path: '/Loddtelling', label: 'Loddtelling', icon: Ticket },
+  { path: '/Innskudd', label: 'Innskudd', icon: Package },
   { path: '/Contracts', label: 'Kontrakter', icon: FileText },
   { path: '/Settings', label: 'Innstillinger', icon: Settings },
 ];
@@ -56,6 +59,7 @@ const workerNav = [
   { path: '/WorkerPortal', label: 'Min side', icon: UserCircle },
   { path: '/Dagsoppgjor', label: 'Dagsoppgjør', icon: Banknote },
   { path: '/Loddtelling', label: 'Loddtelling', icon: Ticket },
+  { path: '/Innskudd', label: 'Innskudd', icon: Package },
 ];
 
 function MobileViewToggle() {
@@ -112,9 +116,9 @@ function NavItems({ items, location, onClick }) {
   );
 }
 
-const subAdminAllowed = ['/WorkerPortal', '/Workers', '/Timesheet', '/Tasks', '/Salary', '/Settings', '/Dagsoppgjor', '/Loddtelling', '/Contracts', '/Resultat'];
-const butikksjefAllowed = ['/WorkerPortal', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Settings', '/Resultat', '/Contracts'];
-const workerAllowed = ['/WorkerPortal', '/Dagsoppgjor', '/Loddtelling'];
+const subAdminAllowed = ['/WorkerPortal', '/Workers', '/Timesheet', '/Tasks', '/Salary', '/Settings', '/Dagsoppgjor', '/Loddtelling', '/Innskudd', '/Contracts', '/Resultat'];
+const butikksjefAllowed = ['/WorkerPortal', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Innskudd', '/Settings', '/Resultat', '/Contracts'];
+const workerAllowed = ['/WorkerPortal', '/Dagsoppgjor', '/Loddtelling', '/Innskudd'];
 
 export default function Layout() {
   const location = useLocation();
@@ -198,7 +202,9 @@ export default function Layout() {
         } catch {}
       }
 
-      const allowed = role === 'user' ? (myWorker?.can_see_resultat ? ['/WorkerPortal', '/Resultat'] : ['/WorkerPortal']) : null;
+      const allowed = role === 'user'
+        ? [...workerAllowed, ...(myWorker?.can_see_resultat ? ['/Resultat'] : [])]
+        : null;
       const isImpersonatingNow = !!localStorage.getItem('impersonate_org_id');
       const isSuperAdminPage = location.pathname === '/SuperAdmin' || location.pathname.startsWith('/SuperAdmin/');
       if (role === 'superadmin' && !isImpersonatingNow && !isSuperAdminPage) {

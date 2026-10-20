@@ -34,6 +34,7 @@ const generateDefaults = () => {
     d[`team${i}_apningstid_til`] = '';
     d[`team${i}_apningstider`] = '';
     d[`team${i}_notes`] = '';
+    d[`team${i}_loomis_kundenr`] = '';
     d[`team${i}_radius_meters`] = '';
   }
   return d;
@@ -221,6 +222,15 @@ function StoreContractSection({ teamKey, teamName, form, setForm }) {
         />
       </div>
       <div className="space-y-1.5">
+        <Label className="text-xs">Loomis kundenr</Label>
+        <Input
+          inputMode="numeric"
+          value={form[`${teamKey}_loomis_kundenr`] || ''}
+          onChange={setField('loomis_kundenr')}
+          placeholder="Kundenummer i Loomis"
+        />
+      </div>
+      <div className="space-y-1.5">
         <Label className="text-xs">Notater</Label>
         <Textarea
           rows={2}
@@ -381,6 +391,7 @@ export default function Settings() {
       newForm[`${to}_apningstid_til`] = newForm[`${from}_apningstid_til`];
       newForm[`${to}_apningstider`] = newForm[`${from}_apningstider`];
       newForm[`${to}_notes`] = newForm[`${from}_notes`];
+      newForm[`${to}_loomis_kundenr`] = newForm[`${from}_loomis_kundenr`];
     }
     // Clear last slot
     const last = `team${activeCount}`;
@@ -397,6 +408,7 @@ export default function Settings() {
     newForm[`${last}_apningstid_til`] = '';
     newForm[`${last}_apningstider`] = '';
     newForm[`${last}_notes`] = '';
+    newForm[`${last}_loomis_kundenr`] = '';
     newForm.active_teams_count = activeCount - 1;
     setForm(newForm);
   };
