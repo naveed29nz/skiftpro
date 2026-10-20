@@ -11,6 +11,7 @@ import Salary from '@/pages/Salary';
 import WorkerPortal from '@/pages/WorkerPortal';
 import Tasks from '@/pages/Tasks';
 import Dagsoppgjor from '@/pages/Dagsoppgjor';
+import Innskudd from '@/pages/Innskudd';
 import Loddtelling from '@/pages/Loddtelling';
 import Ukeplan from '@/pages/Ukeplan';
 import Settings from '@/pages/Settings';
@@ -59,6 +60,7 @@ export default function AuthenticatedApp() {
           <Route path="/Tasks" element={<Tasks />} />
           <Route path="/WorkerPortal" element={<WorkerPortal />} />
           <Route path="/Dagsoppgjor" element={<Dagsoppgjor />} />
+          <Route path="/Innskudd" element={<Innskudd />} />
           <Route path="/Loddtelling" element={<Loddtelling />} />
           <Route path="/Ukeplan" element={<Ukeplan />} />
           <Route path="/Settings" element={<Settings />} />

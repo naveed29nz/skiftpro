@@ -24,6 +24,8 @@ export const ENTITY_TABLES = {
   ShiftSwap: 'shift_swaps',
   Dagsoppgjor: 'dagsoppgjor',
   Loddtelling: 'loddtelling',
+  LoomisInnskudd: 'loomis_innskudd',
+  LoomisDeposit: 'loomis_deposits',
   Availability: 'availability',
   MonthlyResult: 'monthly_results',
   StaffingBudget: 'staffing_budgets',
@@ -132,12 +134,19 @@ for (let i = 1; i <= 10; i += 1) {
     `team${i}_apningstid_til`,
     `team${i}_apningstider`,
     `team${i}_notes`,
+    `team${i}_loomis_kundenr`,
   );
 }
 
 function withoutStoreWorkplaceColumns(payload) {
   const next = { ...payload };
   for (const column of STORE_WORKPLACE_COLUMNS) delete next[column];
+  return next;
+}
+
+function withoutLoomisKundenr(payload) {
+  const next = { ...payload };
+  for (let i = 1; i <= 10; i += 1) delete next[`team${i}_loomis_kundenr`];
   return next;
 }
 
@@ -166,6 +175,7 @@ function workplaceColumns() {
       `team${i}_apningstid_til`,
       `team${i}_apningstider`,
       `team${i}_notes`,
+      `team${i}_loomis_kundenr`,
     );
   }
   cols.push('created_date', 'updated_date', 'created_by');
@@ -373,7 +383,12 @@ async function writeRow(table, payload, run) {
     return await runRead(table, (columns) => run(columns, payload));
   } catch (error) {
     if (table === 'workplace_settings' && isMissingColumn(error)) {
-      return runRead(table, (columns) => run(columns, withoutStoreWorkplaceColumns(payload)));
+      try {
+        return await runRead(table, (columns) => run(columns, withoutLoomisKundenr(payload)));
+      } catch (retryError) {
+        if (!isMissingColumn(retryError)) throw retryError;
+        return runRead(table, (columns) => run(columns, withoutStoreWorkplaceColumns(withoutLoomisKundenr(payload))));
+      }
     }
     if (table === 'organizations' && isMissingColumn(error) && (
       Object.prototype.hasOwnProperty.call(payload, 'employer_signatory_user_id')

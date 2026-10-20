@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
-    "test:unit": "node --test src/contracts/*.test.js src/timesheet/*.test.js src/components/ui/toast-store.test.js",
+    "test:unit": "node --test src/contracts/*.test.js src/timesheet/*.test.js src/components/ui/toast-store.test.js src/innskudd/*.test.js",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview"
   },
@@ -42,9 +42,9 @@
     "@radix-ui/react-toggle": "^1.1.2",
     "@radix-ui/react-toggle-group": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.8",
-    "@supabase/supabase-js": "^2.58.0",
     "@stripe/react-stripe-js": "^3.0.0",
     "@stripe/stripe-js": "^5.2.0",
+    "@supabase/supabase-js": "^2.58.0",
     "@tanstack/react-query": "^5.84.1",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
@@ -76,6 +76,7 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.171.0",
     "vaul": "^1.1.2",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
