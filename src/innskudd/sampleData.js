@@ -8,7 +8,7 @@ export function sampleInnskudd(today = todayIso()) {
     { key: 'team4', label: 'N.897', kundenr: '20057456' },
   ];
   const registrations = [
-    bag('a1', 'team1', '101522502', addDaysIso(today, -4), 'Sofian Zafar', 15115, { seddel_1000_antall: 10, seddel_500_antall: 8, seddel_200_antall: 5, seddel_100_antall: 1, mynt_belop: 115 }),
+    bag('a1', 'team1', '101522502', addDaysIso(today, -4), 'Sofian Zafar', 15115, { seddel_1000_antall: 10, seddel_500_antall: 8, seddel_200_antall: 5, seddel_100_antall: 1, mynt_belop: 15 }),
     bag('a2', 'team1', '101522499', addDaysIso(today, -3), 'Sofian Zafar', 2800, { seddel_500_antall: 5, seddel_200_antall: 1, seddel_100_antall: 1, mynt_belop: 0 }),
     bag('a3', 'team1', '101522489', addDaysIso(today, -8), 'Ali Raza', 7300, { seddel_1000_antall: 7, seddel_100_antall: 3 }),
     bag('a4', 'team1', '101522469', addDaysIso(today, -9), 'Ali Raza', 2760, { seddel_1000_antall: 2, seddel_500_antall: 1, seddel_200_antall: 1, seddel_100_antall: 0, mynt_belop: 60 }),

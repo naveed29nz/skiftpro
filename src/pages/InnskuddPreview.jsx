@@ -18,7 +18,7 @@ const ACTOR = { id: 'user-sofian', workerId: 'w-sofian', role: 'user' };
 
 /** Dev-only innskudd screens with the approved example bags. Not included in production. */
 export default function InnskuddPreview() {
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const vis = params.get('vis') === 'admin' ? 'admin' : 'ansatt';
   const severalStores = params.get('butikker') === 'flere';
   const initial = useMemo(() => sampleInnskudd(todayIso()), []);
@@ -106,23 +106,6 @@ export default function InnskuddPreview() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="bg-white border-b border-slate-200 px-4 py-2 flex items-center gap-2 text-sm">
-        <span className="font-semibold text-blue-700">SkiftPro</span>
-        <button
-          type="button"
-          onClick={() => setParams({ vis: 'ansatt' })}
-          className={`px-2 py-1 rounded-md ${vis === 'ansatt' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
-        >
-          Ansatt
-        </button>
-        <button
-          type="button"
-          onClick={() => setParams({ vis: 'admin' })}
-          className={`px-2 py-1 rounded-md ${vis === 'admin' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
-        >
-          Admin
-        </button>
-      </div>
       <div className="p-4 lg:p-6">
         {vis === 'ansatt' ? (
           <InnskuddSkjema
