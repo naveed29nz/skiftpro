@@ -268,6 +268,9 @@ export default function Loddtelling() {
 
   const saveAll = async (nextStatus) => {
     if (!butikk) return alert('Velg butikk først');
+    // Innsending låser uka. Bare admin/sub_admin (samme sjekk som «alle butikker»)
+    // får knappen, og bekreftelsesdialogen beholdes for dem.
+    if (nextStatus === 'innsendt' && !canSeeAllButikker) return;
     if (nextStatus === 'innsendt' && !window.confirm(
       `Send inn hele uke ${weekNum}?\n\nUka blir LÅST etter innsending. Da kan ingen ansatte legge inn flere dager denne uka – bare administrator kan endre.\n\nBruk «Lagre uke» hver dag, og «Send inn» først når hele uka er ferdig talt.`
     )) return;
@@ -458,7 +461,9 @@ export default function Loddtelling() {
           <Button onClick={() => saveAll()} disabled={saving || !butikk || isLocked} className="gap-1.5">
             <Save className="w-4 h-4" />{saving ? 'Lagrer...' : 'Lagre uke'}
           </Button>
-          <Button variant="outline" onClick={() => saveAll('innsendt')} disabled={saving || !butikk || isLocked} title="Låser hele uka – bruk først når uka er ferdig talt">Send inn uke</Button>
+          {canSeeAllButikker && (
+            <Button variant="outline" onClick={() => saveAll('innsendt')} disabled={saving || !butikk || isLocked} title="Låser hele uka – bruk først når uka er ferdig talt">Send inn uke</Button>
+          )}
           {dirty && !saving && !savedMsg && <span className="text-xs text-amber-600">Ikke lagret ennå</span>}
           {savedMsg && <span className="text-sm text-emerald-600 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" />Lagret!</span>}
           {!butikk && <span className="text-xs text-amber-600">Skriv inn butikk for å lagre</span>}
