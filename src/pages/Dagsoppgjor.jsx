@@ -9,6 +9,7 @@ import SeddelSkjema from '@/components/dagsoppgjor/SeddelSkjema';
 import { useOrg } from '@/hooks/useOrg';
 import { useScopedWorkplaceSetting } from '@/hooks/useScopedWorkplaceSetting';
 import { effectiveAppRole } from '@/utils/wageAccess';
+import { findWorkerByEmail } from '@/lib/workerLookup';
 
 const STATUS_COLORS = {
   Registrert: 'bg-slate-100 text-slate-700',
@@ -73,8 +74,7 @@ export default function Dagsoppgjor() {
     base44.auth.me().then(async u => {
       setCurrentUser(u);
       if (u?.email) {
-        const ws = await base44.entities.Worker.filter({ email: u.email });
-        const w = ws[0] || null;
+        const w = await findWorkerByEmail(u.email, u.role);
         setMyWorker(w);
         const team = w?.teams?.[0] || '';
         setMyTeam(team);

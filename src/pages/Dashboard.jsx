@@ -14,6 +14,7 @@ import StaffingIndicator from '@/components/staffing/StaffingIndicator';
 import SuperAdminSwitch from '@/components/dashboard/SuperAdminSwitch';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import { useOrg } from '@/hooks/useOrg';
+import { findWorkerByEmail } from '@/lib/workerLookup';
 import { ClipboardList } from 'lucide-react';
 
 function calcHours(shift) {
@@ -42,8 +43,7 @@ export default function Dashboard() {
     base44.auth.me().then(async u => {
       setCurrentUser(u);
       if (u?.email) {
-        const workers = await base44.entities.Worker.filter({ email: u.email });
-        setMyWorker(workers[0] || null);
+        setMyWorker(await findWorkerByEmail(u.email, u.role));
       }
     }).catch(() => {});
   }, []);

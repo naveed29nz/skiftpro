@@ -66,6 +66,9 @@ export default function OrgOnboarding({ userId, userEmail }) {
 
         {step === 1 && (
           <form onSubmit={createOrg} className="space-y-4">
+            <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Er du ansatt? Ikke opprett bedrift – be lederen din om invitasjon.
+            </p>
             <div className="space-y-1.5">
               <Label>Organisasjonsnavn *</Label>
               <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />

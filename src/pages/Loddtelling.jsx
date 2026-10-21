@@ -8,6 +8,7 @@ import { nb } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Save, CheckCircle2, Download, AlertTriangle } from 'lucide-react';
 import { getActiveTeams } from '@/utils/teams';
 import { useOrg } from '@/hooks/useOrg';
+import { findWorkerByEmail } from '@/lib/workerLookup';
 
 const FIXED_LODDTYPER = ['Flax Million', 'Pengedryss', 'Flax for livet', 'Kryssord', 'Grise Flax', 'Mega'];
 const CUSTOM_KEYS = ['custom_1', 'custom_2', 'custom_3'];
@@ -171,7 +172,7 @@ export default function Loddtelling() {
         if (cancelled) return;
         setCurrentUser(u);
         const [ws, settings, workers] = await Promise.all([
-          u?.email ? base44.entities.Worker.filter({ email: u.email }) : Promise.resolve([]),
+          u?.email ? findWorkerByEmail(u.email, u.role).then((worker) => (worker ? [worker] : [])) : Promise.resolve([]),
           base44.entities.WorkplaceSetting.filter({ org_id: orgId }),
           base44.entities.Worker.filter({ org_id: orgId }),
         ]);

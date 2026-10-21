@@ -29,6 +29,8 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState(params.get('mode') === 'signup' ? 'signup' : 'password');
   const [fullName, setFullName] = useState('');
+  const [accountKind, setAccountKind] = useState('employee');
+  const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -57,16 +59,27 @@ export default function Login() {
     setPending(true);
     setError('');
     setMessage('');
+    const metadata = {
+      signup: 'self_serve',
+      signup_kind: accountKind,
+      terms_accepted: 'true',
+      full_name: fullName,
+      role: 'user',
+    };
+    if (accountKind === 'employee') {
+      const mobile = phone.trim();
+      if (!mobile) {
+        setPending(false);
+        setError('Skriv inn mobilnummeret ditt.');
+        return;
+      }
+      metadata.phone = mobile;
+    }
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          signup: 'self_serve',
-          terms_accepted: 'true',
-          full_name: fullName,
-          role: 'user',
-        },
+        data: metadata,
         emailRedirectTo: `${window.location.origin}/login`,
       },
     });
@@ -79,7 +92,9 @@ export default function Login() {
       window.location.assign('/Dashboard');
       return;
     }
-    setMessage('Kontoen er opprettet. Bekreft e-posten hvis du får en melding, og logg deretter inn for å opprette organisasjonen.');
+    setMessage(accountKind === 'employee'
+      ? 'Kontoen er opprettet. Bekreft e-posten hvis du får en melding, og logg deretter inn.'
+      : 'Kontoen er opprettet. Bekreft e-posten hvis du får en melding, og logg deretter inn for å opprette organisasjonen.');
   };
 
   const handlePassword = async (event) => {
@@ -120,11 +135,40 @@ export default function Login() {
           </div>
           <h1 className="text-xl font-bold text-slate-800">SkiftPro</h1>
           <p className="text-slate-500 text-sm mt-1">
-            {mode === 'signup' ? 'Opprett konto og prøv gratis i 30 dager.' : 'Logg inn for å åpne vaktplanen.'}
+            {mode === 'signup'
+              ? (accountKind === 'business'
+                ? 'Opprett konto og prøv gratis i 30 dager.'
+                : 'Opprett ansattkonto og logg inn på vaktplanen.')
+              : 'Logg inn for å åpne vaktplanen.'}
           </p>
         </div>
 
         <form onSubmit={mode === 'reset' ? handleReset : mode === 'signup' ? handleSignup : handlePassword} className="space-y-4">
+          {mode === 'signup' && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-slate-700">Hva vil du gjøre?</legend>
+              <label className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer ${accountKind === 'employee' ? 'border-blue-600 bg-blue-50' : 'border-slate-200'}`}>
+                <input
+                  type="radio"
+                  name="accountKind"
+                  value="employee"
+                  checked={accountKind === 'employee'}
+                  onChange={() => setAccountKind('employee')}
+                />
+                Jeg er ansatt
+              </label>
+              <label className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer ${accountKind === 'business' ? 'border-blue-600 bg-blue-50' : 'border-slate-200'}`}>
+                <input
+                  type="radio"
+                  name="accountKind"
+                  value="business"
+                  checked={accountKind === 'business'}
+                  onChange={() => setAccountKind('business')}
+                />
+                Registrer ny bedrift
+              </label>
+            </fieldset>
+          )}
           {mode === 'signup' && (
             <div className="space-y-1.5">
               <Label htmlFor="name">Navn</Label>
@@ -142,6 +186,22 @@ export default function Login() {
               required
             />
           </div>
+          {mode === 'signup' && accountKind === 'employee' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="phone">Mobilnummer</Label>
+              <Input
+                id="phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="900 00 000"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                required
+              />
+              <p className="text-xs text-slate-500">Samme nummer som på ansattkortet, hvis e-posten ikke er lagt inn ennå.</p>
+            </div>
+          )}
           {mode !== 'reset' && (
             <div className="space-y-1.5">
               <Label htmlFor="password">Passord</Label>
@@ -182,7 +242,7 @@ export default function Login() {
           {mode === 'reset' ? 'Tilbake til innlogging' : 'Glemt passord?'}
         </button>
         {mode !== 'signup' && (
-          <button type="button" className="mt-2 text-sm text-blue-700 hover:underline" onClick={() => { setMode('signup'); setError(''); setMessage(''); }}>
+          <button type="button" className="mt-2 text-sm text-blue-700 hover:underline" onClick={() => { setMode('signup'); setAccountKind('employee'); setError(''); setMessage(''); }}>
             Opprett konto
           </button>
         )}
