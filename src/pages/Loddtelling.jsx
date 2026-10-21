@@ -135,6 +135,12 @@ export default function Loddtelling() {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
   const [localData, setLocalData] = useState({});
+  // Verdiene slik de var i databasen da skjemaet ble lastet. Brukes til å
+  // sende bare feltene denne brukeren faktisk har endret, slik at to ansatte
+  // i samme butikk ikke overskriver hverandres dager.
+  const [baseline, setBaseline] = useState({});
+  const [dirty, setDirty] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [customNames, setCustomNames] = useState({ custom_1: '', custom_2: '', custom_3: '' });
   const [wpSettings, setWpSettings] = useState(null);
   const [allWorkers, setAllWorkers] = useState([]);
@@ -184,9 +190,14 @@ export default function Loddtelling() {
   const { data: allRecords = [] } = useQuery({
     queryKey: ['loddtelling', orgId],
     queryFn: () => orgId
-      ? base44.entities.Loddtelling.filter({ org_id: orgId }, '-uke_nummer', 500)
-      : base44.entities.Loddtelling.list('-uke_nummer', 500),
+      ? base44.entities.Loddtelling.filter({ org_id: orgId }, '-updated_date', 5000)
+      : base44.entities.Loddtelling.list('-updated_date', 5000),
   });
+
+  const draftKey = butikk ? `loddtelling-draft:${orgId || ''}:${butikk}:${year}:${weekNum}` : null;
+  const weekRows = allRecords.filter(r => r.uke_nummer === weekNum && r.year === year && (r.team || r.butikk) === butikk);
+  const lockedRow = weekRows.find(r => r.locked || r.status === 'innsendt');
+  const isLocked = !!lockedRow && !canSeeAllButikker;
 
   // Build local state from DB records for this week+butikk
   useEffect(() => {
@@ -199,8 +210,8 @@ export default function Loddtelling() {
     const allTypes = [...FIXED_LODDTYPER, ...CUSTOM_KEYS];
     const newCustomNames = { ...customNames };
     allTypes.forEach(lt => {
-      const existing = allRecords.find(r => r.uke_nummer === weekNum && r.year === year && r.butikk === butikk && r.loddtype === lt);
-      const nextWeekRecord = allRecords.find(r => r.uke_nummer === nextWeekNum && r.year === nextWeekYear && r.butikk === butikk && r.loddtype === lt);
+      const existing = allRecords.find(r => r.uke_nummer === weekNum && r.year === year && (r.team || r.butikk) === butikk && r.loddtype === lt);
+      const nextWeekRecord = allRecords.find(r => r.uke_nummer === nextWeekNum && r.year === nextWeekYear && (r.team || r.butikk) === butikk && r.loddtype === lt);
       const autoSluttFysisk = nextWeekRecord?.man_inng ?? null;
       if (existing) {
         const row = { ...emptyRecord(butikk, weekNum, year, lt), ...existing };
@@ -221,49 +232,112 @@ export default function Loddtelling() {
       }
     });
     setCustomNames(newCustomNames);
-    setLocalData(map);
+    setBaseline(map);
+    // Ikke-lagrede tall på denne enheten legges oppå det som ligger i databasen,
+    // så de ikke forsvinner når siden henter data på nytt.
+    let draft = null;
+    try { draft = JSON.parse(localStorage.getItem(`loddtelling-draft:${orgId || ''}:${butikk}:${year}:${weekNum}`) || 'null'); } catch {}
+    if (draft && typeof draft === 'object') {
+      const merged = { ...map };
+      Object.entries(draft).forEach(([lt, fields]) => {
+        if (merged[lt] && fields && typeof fields === 'object') merged[lt] = { ...merged[lt], ...fields };
+      });
+      setLocalData(merged);
+      setDirty(Object.keys(draft).length > 0);
+    } else {
+      setLocalData(map);
+      setDirty(false);
+    }
   }, [allRecords, weekNum, year, butikk, weekRef]);
 
   const handleChange = (loddtype, field, val) => {
+    if (isLocked) return;
     setLocalData(prev => ({ ...prev, [loddtype]: { ...prev[loddtype], [field]: val } }));
+    setDirty(true);
+    setSaveError('');
+    if (draftKey) {
+      try {
+        const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
+        draft[loddtype] = { ...(draft[loddtype] || {}), [field]: val };
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+      } catch {}
+    }
   };
+
+  const numOrZero = (v) => parseFloat(v) || 0;
 
   const saveAll = async (nextStatus) => {
     if (!butikk) return alert('Velg butikk først');
+    if (nextStatus === 'innsendt' && !window.confirm(
+      `Send inn hele uke ${weekNum}?\n\nUka blir LÅST etter innsending. Da kan ingen ansatte legge inn flere dager denne uka – bare administrator kan endre.\n\nBruk «Lagre uke» hver dag, og «Send inn» først når hele uka er ferdig talt.`
+    )) return;
     setSaving(true);
+    setSaveError('');
+    const failed = [];
+    // Hent ferske rader rett før lagring, så vi oppdaterer riktig rad og ikke
+    // lager duplikater hvis en kollega har lagret i mellomtiden.
+    let fresh = [];
     try {
+      fresh = await base44.entities.Loddtelling.filter({ org_id: orgId, uke_nummer: weekNum, year }, '-updated_date', 200);
+    } catch {}
     for (const lt of [...FIXED_LODDTYPER, ...CUSTOM_KEYS]) {
       const r = localData[lt];
       if (!r) continue;
-      // Skip unnamed custom types with no data
       if (CUSTOM_KEYS.includes(lt) && !customNames[lt]) continue;
+      const base = baseline[lt] || {};
+      const server = fresh.find(x => (x.team || x.butikk) === butikk && x.loddtype === lt) || null;
+      const id = server?.id || r.id;
       const hasData = DAYS.some(d => r[`${d.key}_inng`] !== '' || r[`${d.key}_akt`] !== '' || r[`${d.key}_salg`] !== '') || r.slutt_fysisk !== '';
-      if (!hasData && !r.id) continue;
-      const { forventet } = calcForventet(r);
-      const slutt = r.slutt_fysisk !== '' ? parseFloat(r.slutt_fysisk) || 0 : null;
+      if (!hasData && !id) continue;
+
+      // Bare felt brukeren har endret sendes (resten beholdes slik de er i databasen).
+      const changed = {};
+      DAYS.forEach(d => {
+        ['_inng','_akt','_salg'].forEach(sfx => {
+          const k = `${d.key}${sfx}`;
+          if (!id || String(r[k] ?? '') !== String(base[k] ?? '')) changed[k] = numOrZero(r[k]);
+        });
+      });
+      if (!id || String(r.slutt_fysisk ?? '') !== String(base.slutt_fysisk ?? '')) changed.slutt_fysisk = r.slutt_fysisk !== '' ? numOrZero(r.slutt_fysisk) : 0;
+      if (!id || (r.kommentar || '') !== (base.kommentar || '')) changed.kommentar = r.kommentar || '';
+      if (CUSTOM_KEYS.includes(lt)) changed.loddtype_label = customNames[lt] || '';
+
+      if (id && Object.keys(changed).length === 0 && nextStatus !== 'innsendt') continue;
+
+      // Differanse regnes ut fra databasen + endringene våre.
+      const mergedRow = { ...(server || base), ...changed };
+      const { forventet } = calcForventet(Object.fromEntries(Object.entries(mergedRow).map(([k, v]) => [k, v ?? ''])));
+      const sluttVal = mergedRow.slutt_fysisk;
+      const hasSlutt = r.slutt_fysisk !== '';
       const payload = {
-        butikk, team: butikk, uke_nummer: weekNum, year, loddtype: lt,
-        org_id: orgId || '',
-        ...(CUSTOM_KEYS.includes(lt) ? { loddtype_label: customNames[lt] || '' } : {}),
-        slutt_fysisk: slutt ?? 0,
-        differanse: slutt !== null ? slutt - forventet : 0,
-        kommentar: r.kommentar || '',
+        ...changed,
+        differanse: hasSlutt ? numOrZero(sluttVal) - forventet : 0,
         updated_by: currentUser?.email || '',
         ...(nextStatus === 'innsendt' ? { status: 'innsendt', locked: true } : {}),
       };
-      DAYS.forEach(d => {
-        ['_inng','_akt','_salg'].forEach(s => {
-          payload[`${d.key}${s}`] = parseFloat(r[`${d.key}${s}`]) || 0;
+      try {
+        if (id) await base44.entities.Loddtelling.update(id, payload);
+        else await base44.entities.Loddtelling.create({
+          butikk, team: butikk, uke_nummer: weekNum, year, loddtype: lt, org_id: orgId || '', ...payload,
         });
-      });
-      if (r.id) await base44.entities.Loddtelling.update(r.id, payload);
-      else await base44.entities.Loddtelling.create(payload);
+      } catch (error) {
+        failed.push(`${CUSTOM_KEYS.includes(lt) ? (customNames[lt] || lt) : lt}: ${error?.message || 'ukjent feil'}`);
+      }
     }
-    } catch (error) {
-      alert(error?.message || 'Kunne ikke lagre. Innsendt loddtelling kan bare endres av administrator.');
+    if (failed.length === 0 && draftKey) {
+      try { localStorage.removeItem(draftKey); } catch {}
     }
     await queryClient.invalidateQueries({ queryKey: ['loddtelling'] });
     setSaving(false);
+    if (failed.length > 0) {
+      const lockedErr = failed.some(f => /låst/i.test(f));
+      const msg = lockedErr
+        ? 'IKKE LAGRET: Uka er allerede sendt inn og låst. Tallene dine ligger fortsatt på denne enheten. Kontakt administrator.'
+        : `IKKE LAGRET (${failed.length}): ${failed.join(' · ')}. Tallene ligger fortsatt på denne enheten – prøv igjen.`;
+      setSaveError(msg);
+      alert(msg);
+      return;
+    }
     setSavedMsg(true);
     setTimeout(() => setSavedMsg(false), 2500);
   };
@@ -336,6 +410,16 @@ export default function Loddtelling() {
         </div>
       </div>
 
+      {lockedRow && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Uke {weekNum} er sendt inn{lockedRow.submitted_at ? ` ${format(new Date(lockedRow.submitted_at), 'd. MMM HH:mm', { locale: nb })}` : ''}{lockedRow.updated_by ? ` av ${lockedRow.updated_by}` : ''} og er låst.
+          {canSeeAllButikker ? ' Som administrator kan du fortsatt endre.' : ' Du kan ikke legge inn flere tall denne uka – kontakt administrator.'}
+        </div>
+      )}
+      {saveError && (
+        <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">{saveError}</div>
+      )}
+
       {/* One table per loddtype */}
       {FIXED_LODDTYPER.map(lt => (
         <LoddTypeTable
@@ -371,10 +455,11 @@ export default function Loddtelling() {
       {/* Save bar */}
       <div className="sticky bottom-4 z-10">
         <div className="bg-white border border-slate-200 rounded-2xl shadow-lg px-5 py-3 flex items-center gap-4 flex-wrap">
-          <Button onClick={() => saveAll()} disabled={saving || !butikk} className="gap-1.5">
+          <Button onClick={() => saveAll()} disabled={saving || !butikk || isLocked} className="gap-1.5">
             <Save className="w-4 h-4" />{saving ? 'Lagrer...' : 'Lagre uke'}
           </Button>
-          <Button variant="outline" onClick={() => saveAll('innsendt')} disabled={saving || !butikk}>Send inn</Button>
+          <Button variant="outline" onClick={() => saveAll('innsendt')} disabled={saving || !butikk || isLocked} title="Låser hele uka – bruk først når uka er ferdig talt">Send inn uke</Button>
+          {dirty && !saving && !savedMsg && <span className="text-xs text-amber-600">Ikke lagret ennå</span>}
           {savedMsg && <span className="text-sm text-emerald-600 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" />Lagret!</span>}
           {!butikk && <span className="text-xs text-amber-600">Skriv inn butikk for å lagre</span>}
           {totalAvvik > 0 && (
