@@ -1,5 +1,6 @@
 -- Employee signup must attach to a worker card and must not open a new organization.
--- Throwaway database only. Requires 20261021130000_employee_signup_link.sql.
+-- Throwaway database only. Requires 20261021130000_employee_signup_link.sql
+-- and 20261021140000_claim_worker_card_email_only.sql. Linking is email-only.
 
 create temp table if not exists rls_results (
   name text primary key,
@@ -56,14 +57,16 @@ begin
   );
 
   perform set_config('request.jwt.claims', json_build_object('sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2')::text, true);
-  select c.org_id, c.worker_id, c.role into got_org, got_worker, got_role
+  got_worker := null;
+  got_role := null;
+  select c.worker_id, c.role into got_worker, got_role
   from public.claim_worker_card('+47 912 34 567') c;
   select w.email into card_email from public.workers w where w.id = 'w-phone';
   select p.role into profile_role from public.profiles p where p.id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2';
   insert into rls_results values (
-    'unique empty-email phone match writes profile email and sub_admin',
-    got_worker = 'w-phone' and got_role = 'sub_admin' and card_email = 'bo@butikk.no' and profile_role = 'sub_admin',
-    coalesce(got_worker, '') || ' email=' || coalesce(card_email, '') || ' role=' || coalesce(profile_role, '')
+    'phone argument does not link a card or change the profile',
+    got_worker is null and got_role is null and card_email is null and profile_role = 'user',
+    coalesce(got_worker, 'none') || ' email=' || coalesce(card_email, '') || ' role=' || coalesce(profile_role, '')
   );
 
   perform set_config('request.jwt.claims', json_build_object('sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3')::text, true);

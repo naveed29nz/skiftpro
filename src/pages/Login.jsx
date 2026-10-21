@@ -30,7 +30,6 @@ export default function Login() {
   const [mode, setMode] = useState(params.get('mode') === 'signup' ? 'signup' : 'password');
   const [fullName, setFullName] = useState('');
   const [accountKind, setAccountKind] = useState('employee');
-  const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -66,15 +65,6 @@ export default function Login() {
       full_name: fullName,
       role: 'user',
     };
-    if (accountKind === 'employee') {
-      const mobile = phone.trim();
-      if (!mobile) {
-        setPending(false);
-        setError('Skriv inn mobilnummeret ditt.');
-        return;
-      }
-      metadata.phone = mobile;
-    }
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -186,22 +176,6 @@ export default function Login() {
               required
             />
           </div>
-          {mode === 'signup' && accountKind === 'employee' && (
-            <div className="space-y-1.5">
-              <Label htmlFor="phone">Mobilnummer</Label>
-              <Input
-                id="phone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                placeholder="900 00 000"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                required
-              />
-              <p className="text-xs text-slate-500">Samme nummer som på ansattkortet, hvis e-posten ikke er lagt inn ennå.</p>
-            </div>
-          )}
           {mode !== 'reset' && (
             <div className="space-y-1.5">
               <Label htmlFor="password">Passord</Label>

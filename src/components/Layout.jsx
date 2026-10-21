@@ -13,10 +13,8 @@ import { queryClientInstance } from '@/lib/query-client';
 import { claimOrgId, resolveSignupGate, resolveSignupKind } from '@/lib/signupGate';
 import { findWorkerByEmail } from '@/lib/workerLookup';
 
-async function claimWorkerOrg(phone) {
-  const { data, error } = await supabase.rpc('claim_worker_card', {
-    p_phone: phone ? String(phone).trim() : null,
-  });
+async function claimWorkerOrg() {
+  const { data, error } = await supabase.rpc('claim_worker_card');
   // Until the migration is applied the RPC is missing. That must not crash the shell.
   if (error) return null;
   return claimOrgId(data);
@@ -220,7 +218,7 @@ export default function Layout() {
               metadata = authData?.user?.user_metadata || {};
             } catch {}
             const signupKind = resolveSignupKind(u, metadata);
-            const linkedOrg = await claimWorkerOrg(metadata.phone);
+            const linkedOrg = await claimWorkerOrg();
             if (linkedOrg) {
               const reloadKey = `skiftpro.claimReload.${u.id}`;
               let reloaded = false;
