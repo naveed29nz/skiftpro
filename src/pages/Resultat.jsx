@@ -7,6 +7,7 @@ import { Save, TrendingUp, TrendingDown } from 'lucide-react';
 import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { findWorkerByEmail } from '@/lib/workerLookup';
 
 const PAYROLL_TAX = 0.141;
 const MONTHS = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
@@ -188,8 +189,7 @@ export default function Resultat() {
     base44.auth.me().then(async u => {
       setCurrentUser(u);
       if (u?.email) {
-        const ws = await base44.entities.Worker.filter({ email: u.email });
-        setMyWorker(ws[0] || null);
+        setMyWorker(await findWorkerByEmail(u.email, u.role));
       }
     }).catch(() => {});
   }, []);

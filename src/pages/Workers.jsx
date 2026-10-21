@@ -14,6 +14,7 @@ import { useTeamNames } from '@/hooks/useTeamNames';
 import { releaseUpcomingShifts } from '@/utils/workerLifecycle';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { resolveEmployerSignerName } from '@/contracts/employment';
+import { sameEmail } from '@/lib/emails';
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', color: 'bg-purple-100 text-purple-700' },
@@ -257,7 +258,7 @@ export default function Workers() {
     await base44.entities.Worker.update(worker.id, { role: newRole });
     queryClient.invalidateQueries({ queryKey: ['workers'] });
     // Also sync to User entity if they have an account
-    const u = users.find(x => x.email === worker.email);
+    const u = users.find((x) => sameEmail(x.email, worker.email));
     if (u) {
       await base44.entities.User.update(u.id, { role: newRole });
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -301,7 +302,7 @@ export default function Workers() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {displayWorkers.map(worker => {
-          const u = users.find(x => x.email === worker.email);
+          const u = users.find((x) => sameEmail(x.email, worker.email));
           const role = u?.role || worker.role || 'user';
           const roleInfo = ROLE_OPTIONS.find(r => r.value === role);
           return (

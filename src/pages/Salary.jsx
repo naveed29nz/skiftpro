@@ -9,6 +9,7 @@ import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { getActiveTeams } from '@/utils/teams';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { useOrg } from '@/hooks/useOrg';
+import { sameEmail } from '@/lib/emails';
 
 const escHtml = (str) => String(str ?? '').replace(/[&<>"']/g, (c) => {
   const codes = { '&': 38, '<': 60, '>': 62, '"': 34, "'": 39 };
@@ -31,7 +32,7 @@ export default function Salary() {
   const { data: holidays = [] } = useQuery({ queryKey: ['holidays', orgId], queryFn: () => orgId ? base44.entities.Holiday.filter({ org_id: orgId }) : base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings', orgId], queryFn: () => orgId ? base44.entities.WorkplaceSetting.filter({ org_id: orgId }) : base44.entities.WorkplaceSetting.list(), staleTime: 0 });
 
-  const myWorker = workers.find(w => w.email === currentUser?.email);
+  const myWorker = workers.find((w) => sameEmail(w.email, currentUser?.email));
   const myTeams = myWorker?.teams || ['team1'];
 
   useEffect(() => {

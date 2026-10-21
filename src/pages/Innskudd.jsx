@@ -17,6 +17,7 @@ import {
 } from '@/innskudd/model';
 import { parseLoomisWorkbook } from '@/innskudd/parseLoomisExport';
 import { humanInnskuddError, upsertLoomisDeposits } from '@/innskudd/upsertDeposits';
+import { findWorkerByEmail } from '@/lib/workerLookup';
 
 export default function Innskudd() {
   const queryClient = useQueryClient();
@@ -40,8 +41,8 @@ export default function Innskudd() {
       if (cancelled) return;
       setUser(me);
       if (me?.email) {
-        const rows = await base44.entities.Worker.filter({ email: me.email });
-        if (!cancelled) setWorker(rows[0] || null);
+        const worker = await findWorkerByEmail(me.email, me.role);
+        if (!cancelled) setWorker(worker);
       }
       if (!cancelled) setReady(true);
     }).catch(() => {

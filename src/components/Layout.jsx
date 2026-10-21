@@ -3,10 +3,24 @@ import { LayoutDashboard, Users, Clock, CalendarDays, DollarSign, Menu, X, Setti
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 import OrgOnboarding from '@/components/OrgOnboarding';
+import EmployeeNoInvite from '@/components/EmployeeNoInvite';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
 import LegalFooter from '@/components/LegalFooter';
 import { useOrg } from '@/hooks/useOrg';
+import { queryClientInstance } from '@/lib/query-client';
+import { claimOrgId, resolveSignupGate, resolveSignupKind } from '@/lib/signupGate';
+import { findWorkerByEmail } from '@/lib/workerLookup';
+
+async function claimWorkerOrg(phone) {
+  const { data, error } = await supabase.rpc('claim_worker_card', {
+    p_phone: phone ? String(phone).trim() : null,
+  });
+  // Until the migration is applied the RPC is missing. That must not crash the shell.
+  if (error) return null;
+  return claimOrgId(data);
+}
 
 const superAdminOnlyNav = [
   { path: '/SuperAdmin', label: 'Kunder', icon: Building2 },
@@ -129,22 +143,25 @@ export default function Layout() {
 
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [employeeBlocked, setEmployeeBlocked] = useState(false);
   const [onboardingUser, setOnboardingUser] = useState(null);
+  const [linkAttempt, setLinkAttempt] = useState(0);
+  const [linking, setLinking] = useState(false);
   const { isImpersonating } = useOrg();
 
   useEffect(() => {
+    let cancelled = false;
+    setLinking(true);
     base44.auth.me().then(async u => {
       let role = u?.role || 'user';
       let myWorker = null;
-      let orgAdmin = false;
 
       // If the platform role is already admin, don't downgrade via Worker entity
       const platformRole = u?.role || 'user';
 
       if (u?.email) {
         try {
-          const workers = await base44.entities.Worker.filter({ email: u.email });
-          myWorker = workers[0] || null;
+          myWorker = await findWorkerByEmail(u.email, platformRole);
           if (myWorker && platformRole !== 'admin') {
             // Use team_roles if available: pick the highest role across all teams the worker belongs to
             const teamRoles = myWorker.team_roles || {};
@@ -191,16 +208,50 @@ export default function Layout() {
       const canSeeResultatFlag = myWorker?.can_see_resultat || role === 'admin' || role === 'sub_admin' || role === 'butikksjef';
       setCanSeeResultat(canSeeResultatFlag);
 
+      let showOnboarding = false;
+      let showEmployee = false;
       if (u?.terms_accepted_at && platformRole !== 'admin' && !myWorker) {
         try {
           const ownOrgs = await base44.entities.Organization.list();
           if (!ownOrgs.length) {
-            setOnboardingUser(u);
-            setNeedsOnboarding(true);
-            return;
+            let metadata = {};
+            try {
+              const { data: authData } = await supabase.auth.getUser();
+              metadata = authData?.user?.user_metadata || {};
+            } catch {}
+            const signupKind = resolveSignupKind(u, metadata);
+            const linkedOrg = await claimWorkerOrg(metadata.phone);
+            if (linkedOrg) {
+              const reloadKey = `skiftpro.claimReload.${u.id}`;
+              let reloaded = false;
+              try {
+                reloaded = sessionStorage.getItem(reloadKey) === '1';
+                sessionStorage.setItem(reloadKey, '1');
+              } catch {}
+              if (!reloaded) {
+                await queryClientInstance.invalidateQueries();
+                if (!cancelled) window.location.assign('/WorkerPortal');
+                return;
+              }
+            }
+            const gate = resolveSignupGate({
+              platformRole,
+              hasWorker: false,
+              hasOrg: false,
+              termsAccepted: true,
+              signupKind,
+            });
+            showOnboarding = gate === 'onboarding';
+            showEmployee = gate === 'employee';
           }
         } catch {}
       }
+
+      if (cancelled) return;
+      setNeedsOnboarding(showOnboarding);
+      setEmployeeBlocked(showEmployee);
+      setOnboardingUser(showOnboarding || showEmployee ? u : null);
+      if (showOnboarding || showEmployee) return;
 
       const allowed = role === 'user'
         ? [...workerAllowed, ...(myWorker?.can_see_resultat ? ['/Resultat'] : [])]
@@ -216,8 +267,15 @@ export default function Layout() {
       } else if (role === 'user' && allowed && !allowed.includes(location.pathname) && !location.pathname.startsWith('/kontrakt/')) {
         navigate('/WorkerPortal', { replace: true });
       }
-    }).catch(() => setUserRole('user'));
-  }, []);
+    }).catch(() => {
+      if (!cancelled) setUserRole('user');
+    }).finally(() => {
+      if (!cancelled) setLinking(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [linkAttempt]);
 
   const workerNavDynamic = canSeeResultat && userRole === 'user'
     ? [...workerNav, { path: '/Resultat', label: 'Resultat', icon: BarChart }]
@@ -231,6 +289,19 @@ export default function Layout() {
     : [];
   const allNavItems = [...superAdminOnlyNav, ...adminNav, ...subAdminNav, ...butikksjeflNav, ...workerNav];
   const currentPage = allNavItems.find(n => n.path === location.pathname);
+
+  if (employeeBlocked && onboardingUser) {
+    return (
+      <EmployeeNoInvite
+        email={onboardingUser.email}
+        pending={linking}
+        onRetry={() => {
+          try { sessionStorage.removeItem(`skiftpro.claimReload.${onboardingUser.id}`); } catch {}
+          setLinkAttempt((attempt) => attempt + 1);
+        }}
+      />
+    );
+  }
 
   if (needsOnboarding && onboardingUser) {
     return <OrgOnboarding userId={onboardingUser.id} userEmail={onboardingUser.email} />;

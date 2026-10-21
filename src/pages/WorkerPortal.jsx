@@ -18,6 +18,7 @@ import WorkerTasksTab from '@/components/worker/WorkerTasksTab';
 import WorkerContractsTab from '@/components/worker/WorkerContractsTab';
 import WorkerSalaryTab from '@/components/worker/WorkerSalaryTab';
 import { useTeamNames } from '@/hooks/useTeamNames';
+import { sameEmail } from '@/lib/emails';
 
 function calcHours(shift) {
   const [sh, sm] = shift.start_time.split(':').map(Number);
@@ -55,7 +56,7 @@ export default function WorkerPortal() {
 
   const workplaceSetting = wpSettings[0];
   const teamNames = useTeamNames();
-  const worker = workers.find(w => w.email === currentUser?.email);
+  const worker = workers.find((w) => sameEmail(w.email, currentUser?.email));
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');

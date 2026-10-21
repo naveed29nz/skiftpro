@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { sameEmail } from '@/lib/emails';
 import { useState, useEffect } from 'react';
 
 export function useCurrentUser() {
@@ -19,7 +20,7 @@ export function useCurrentWorker() {
     enabled: !!user,
   });
 
-  const worker = user ? workers.find(w => w.email === user.email) : null;
+  const worker = user ? workers.find((w) => sameEmail(w.email, user.email)) : null;
   const orgId = worker?.org_id || null;
 
   return { user, worker, myTeams: worker?.teams || ['team1'], orgId, teamRoles: worker?.team_roles || {} };
