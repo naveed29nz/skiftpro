@@ -1,4 +1,5 @@
 import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 const ROLES = new Set(["admin", "sub_admin", "butikksjef", "user"]);
 
@@ -30,12 +31,31 @@ Deno.serve(async (req) => {
 
     const admin = adminClient();
     const site = (Deno.env.get("SITE_URL") || "").replace(/\/$/, "");
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: { role, full_name: body.full_name || "" },
-      redirectTo: site ? `${site}/reset-password` : undefined,
+    // Supabase sin innebygde e-post har en grense på 2 e-poster i timen og
+    // leverer bare til teammedlemmer. Lag invitasjonslenken uten at Supabase
+    // sender noe, og send den selv via Resend.
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        data: { role, full_name: body.full_name || "" },
+        redirectTo: site ? `${site}/reset-password` : undefined,
+      },
     });
 
-    if (!error && data?.user) {
+    if (!error && data?.user && data.properties?.action_link) {
+      const name = String(body.full_name || "").trim();
+      const link = data.properties.action_link;
+      const mailed = await sendEmail({
+        to: email,
+        subject: "Du er invitert til SkiftPro",
+        text: `Hei${name ? " " + name : ""}!\n\nDu er invitert til SkiftPro. Trykk på lenken under for å velge passord og logge inn:\n\n${link}\n\nLenken er gyldig i 24 timer. Hvis den har gått ut, be lederen din sende en ny invitasjon.\n\nHilsen SkiftPro`,
+      });
+      if (!mailed.sent) {
+        // Fjern brukeren som aldri fikk e-post, så et nytt forsøk kan lage ny lenke.
+        await admin.auth.admin.deleteUser(data.user.id).catch(() => {});
+        return json({ error: `E-posten ble ikke sendt (${mailed.reason || mailed.status || "ukjent"})` }, 502);
+      }
       return json({ ok: true, id: data.user.id, email });
     }
 
