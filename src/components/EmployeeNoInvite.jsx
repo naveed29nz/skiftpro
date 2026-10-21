@@ -14,7 +14,7 @@ export default function EmployeeNoInvite({ email, onRetry, pending = false }) {
           <h1 className="text-xl font-bold text-slate-800">Vi fant deg ikke</h1>
         </div>
         <p className="text-sm text-slate-600">
-          Vi fant deg ikke som ansatt. Be lederen din om å legge inn e-posten din ({shownEmail}) på ansattkortet ditt eller sende deg en invitasjon.
+          Vi fant deg ikke som ansatt. Be lederen din om å legge inn e-posten din ({shownEmail}) på ansattkortet ditt.
         </p>
         <Button type="button" className="w-full" onClick={onRetry} disabled={pending}>
           {pending ? 'Sjekker…' : 'Prøv igjen'}
