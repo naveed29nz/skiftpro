@@ -18,12 +18,6 @@ const COLOR_FOR = (key, i) => TEAM_COLORS[key] || ['#3B82F6', '#10B981', '#8B5CF
 // AGA 14.1% + feriepenger 12%
 const SOCIAL_FACTOR = 1 + 0.141 + 0.12;
 
-function calcHours(shift) {
-  const [sh, sm] = shift.start_time.split(':').map(Number);
-  const [eh, em] = shift.end_time.split(':').map(Number);
-  return Math.max(0, ((eh * 60 + em) - (sh * 60 + sm) - (shift.break_minutes || 0)) / 60);
-}
-
 export default function ManagerCharts() {
   const [month, setMonth] = useState(startOfMonth(new Date()));
   const monthKey = format(month, 'yyyy-MM');

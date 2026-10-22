@@ -27,6 +27,9 @@ const CustomerCardPreview = import.meta.env.DEV
 const InnskuddPreview = import.meta.env.DEV
   ? lazy(() => import('@/pages/InnskuddPreview'))
   : null;
+const PayrollRound1Preview = import.meta.env.DEV
+  ? lazy(() => import('@/pages/PayrollRound1Preview'))
+  : null;
 
 function storedSessionPresent() {
   try {
@@ -124,6 +127,16 @@ function App() {
                 element={(
                   <Suspense fallback={<OpeningSplash />}>
                     <StoreSettingsPreview />
+                  </Suspense>
+                )}
+              />
+            )}
+            {import.meta.env.DEV && PayrollRound1Preview && (
+              <Route
+                path="/dev/lonn-runde1"
+                element={(
+                  <Suspense fallback={<OpeningSplash />}>
+                    <PayrollRound1Preview />
                   </Suspense>
                 )}
               />

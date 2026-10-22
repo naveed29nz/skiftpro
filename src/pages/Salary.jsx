@@ -1,28 +1,62 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Download, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, ChevronDown, ChevronUp, FileText, FileSpreadsheet } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { getActiveTeams } from '@/utils/teams';
-import { canSeeWageCosts } from '@/utils/wageAccess';
+import { canSeeWageCosts, effectiveAppRole } from '@/utils/wageAccess';
 import { useOrg } from '@/hooks/useOrg';
 import { sameEmail } from '@/lib/emails';
+import { toast } from '@/components/ui/use-toast';
+import PayrollExportColumns from '@/components/payroll/PayrollExportColumns';
+import PayrollLockCard from '@/components/payroll/PayrollLockCard';
+import {
+  DEFAULT_PAYROLL_COLUMN_KEYS,
+  payrollCsv,
+  payrollRowFromWorker,
+  payrollSheetRows,
+  resolvePayrollColumns,
+} from '@/utils/payrollExport';
+import * as XLSX from 'xlsx';
+
+const COLUMN_STORAGE_KEY = 'skiftpro.payrollExportColumns';
+const PAYROLL_TAX_RATE = 0.243;
 
 const escHtml = (str) => String(str ?? '').replace(/[&<>"']/g, (c) => {
   const codes = { '&': 38, '<': 60, '>': 62, '"': 34, "'": 39 };
   return '&' + '#' + codes[c] + ';';
 });
 
+function readStoredColumns() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || 'null');
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function sumField(rows, field) {
+  return rows.reduce((sum, row) => sum + (Number(row[field]) || 0), 0);
+}
+
+function hoursText(value) {
+  return `${Number(value || 0).toFixed(1)}t`;
+}
+
 export default function Salary() {
+  const queryClient = useQueryClient();
   const [month, setMonth] = useState(startOfMonth(new Date()));
   const [filterWorker, setFilterWorker] = useState('all');
   const [filterTeam, setFilterTeam] = useState('all');
   const [teamDefaultSet, setTeamDefaultSet] = useState(false);
   const [expandedWorker, setExpandedWorker] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [columnKeys, setColumnKeys] = useState(() => readStoredColumns() || DEFAULT_PAYROLL_COLUMN_KEYS);
+  const [lockBusy, setLockBusy] = useState(false);
 
   useEffect(() => { base44.auth.me().then(setCurrentUser).catch(() => {}); }, []);
 
@@ -31,19 +65,30 @@ export default function Salary() {
   const { data: shifts = [] } = useQuery({ queryKey: ['shifts', orgId], queryFn: () => orgId ? base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000) : base44.entities.Shift.list('-date', 1000), enabled: !!orgId });
   const { data: holidays = [] } = useQuery({ queryKey: ['holidays', orgId], queryFn: () => orgId ? base44.entities.Holiday.filter({ org_id: orgId }) : base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings', orgId], queryFn: () => orgId ? base44.entities.WorkplaceSetting.filter({ org_id: orgId }) : base44.entities.WorkplaceSetting.list(), staleTime: 0 });
+  const { data: payrollLocks = [] } = useQuery({
+    queryKey: ['payroll-locks', orgId],
+    queryFn: () => orgId ? base44.entities.PayrollPeriodLock.filter({ org_id: orgId }) : base44.entities.PayrollPeriodLock.list(),
+    enabled: !!orgId,
+  });
 
   const myWorker = workers.find((w) => sameEmail(w.email, currentUser?.email));
   const myTeams = myWorker?.teams || ['team1'];
+  const canLock = effectiveAppRole(currentUser, myWorker) === 'admin';
 
   useEffect(() => {
     if (!teamDefaultSet && myWorker) {
-      // Admins default to "Alle team"; others to their own team
       setFilterTeam(currentUser?.role === 'admin' ? 'all' : (myWorker.teams?.[0] || 'all'));
       setTeamDefaultSet(true);
     }
   }, [myWorker, teamDefaultSet, currentUser?.role]);
 
   const wp = orgId ? wpSettings.find(s => s.org_id === orgId) : wpSettings[0];
+  useEffect(() => {
+    if (Array.isArray(wp?.payroll_export_columns) && wp.payroll_export_columns.length > 0) {
+      setColumnKeys(wp.payroll_export_columns);
+    }
+  }, [wp?.payroll_export_columns]);
+
   const monthStart = format(month, 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(month), 'yyyy-MM-dd');
   const monthShifts = shifts.filter(s => s.date >= monthStart && s.date <= monthEnd && s.status !== 'cancelled');
@@ -63,8 +108,6 @@ export default function Salary() {
 
   const teamFilteredWorkers = filterTeam === 'all' ? activeWorkers : activeWorkers.filter(w =>
     (w.teams || ['team1']).includes(filterTeam) ||
-    // Inkluder også ansatte som har vakter tagget til denne avdelingen i måneden,
-    // selv om de formelt tilhører et annet team (tverravdeling-arbeid).
     monthShifts.some(s => s.worker_id === w.id && s.team === filterTeam)
   );
   const displayWorkers = filterWorker === 'all' ? teamFilteredWorkers : teamFilteredWorkers.filter(w => w.id === filterWorker);
@@ -74,151 +117,151 @@ export default function Salary() {
       const teamKey = filterTeam !== 'all' ? filterTeam : getWorkerTeamKey(worker);
       const workerShifts = monthShifts.filter(s => {
         if (s.worker_id !== worker.id) return false;
-        // Lønn reflekterer faktisk arbeid: i "Alle team" telles ALLE arbeiderens
-        // vakter uansett hvilken avdeling vakten er tagget til (tverravdeling-vakter
-        // må ikke forsvinne). Ved spesifikt team-filter telles kun vaktenes tag.
         if (filterTeam === 'all') return true;
         if (s.team) return s.team === filterTeam;
         return (worker.teams?.[0] || 'team1') === filterTeam;
       });
-      // Use the shift's own team (not just the worker's primary) so sunday/holiday extras
-      // resolve against the department the shift was actually scheduled in.
       const breakdowns = workerShifts.map(s => getShiftBreakdown(s, worker.hourly_rate || 0, s.team || teamKey, holidays, wp, worker.disabled_extras || []));
-      const regularHours = breakdowns.reduce((sum, b) => sum + b.regularHours, 0);
-      const extraHours = breakdowns.reduce((sum, b) => sum + b.extraHours, 0);
-      const sickHours = breakdowns.reduce((sum, b) => sum + (b.sickHours || 0), 0);
-      const totalHours = regularHours + extraHours + sickHours;
+      const regularHours = sumField(breakdowns, 'regularHours');
+      const sundayHours = sumField(breakdowns, 'sundayHours');
+      const holidayHours = sumField(breakdowns, 'holidayHours');
+      const extraHours = sumField(breakdowns, 'extraHours');
+      const nightHours = sumField(breakdowns, 'nightHours');
+      const breakHours = sumField(breakdowns, 'breakHours');
+      const sickHours = sumField(breakdowns, 'sickHours');
+      const ferieHours = sumField(breakdowns, 'ferieHours');
+      const totalHours = regularHours + extraHours + sickHours + ferieHours;
       const totalPay = breakdowns.reduce((sum, b) => sum + b.pay, 0);
       const extraBonus = breakdowns.reduce((sum, b) => sum + b.extraBonus, 0);
       const completedShifts = workerShifts.filter(s => s.status === 'completed').length;
-      return { worker, breakdowns, regularHours, extraHours, sickHours, totalHours, totalPay, extraBonus, completedShifts, totalShifts: workerShifts.length };
+      return {
+        worker, breakdowns, regularHours, sundayHours, holidayHours, extraHours,
+        nightHours, breakHours, sickHours, ferieHours, totalHours, totalPay, extraBonus,
+        completedShifts, totalShifts: workerShifts.length,
+      };
     }).sort((a, b) => b.totalPay - a.totalPay);
   }, [displayWorkers, monthShifts, holidays, wp]);
 
   const grandTotalHours = salaryData.reduce((sum, d) => sum + d.totalHours, 0);
   const grandTotalPay = salaryData.reduce((sum, d) => sum + d.totalPay, 0);
-  const PAYROLL_TAX_RATE = 0.243;
   const grandTotalTax = grandTotalPay * PAYROLL_TAX_RATE;
   const grandTotalCost = grandTotalPay + grandTotalTax;
+  const periodLabel = format(month, 'MMMM yyyy');
+  const teamLabel = filterTeam === 'all' ? 'Alle team' : (wp?.[`${filterTeam}_name`] || filterTeam);
+  const exportColumns = resolvePayrollColumns(columnKeys);
+  const exportRows = salaryData.map((entry) => payrollRowFromWorker(entry, {
+    period: format(month, 'yyyy-MM'),
+    team: teamLabel,
+  }, PAYROLL_TAX_RATE));
 
-  const exportCSV = () => {
-    const sep = ';';
-    const monthLabel = format(month, 'MMMM yyyy');
-    const teamLabel = filterTeam === 'all' ? 'Alle team' : (wp?.[`${filterTeam}_name`] || filterTeam);
-
-    const lines = [];
-    lines.push(`Lønnsrapport${sep}${monthLabel}${sep}${teamLabel}`);
-    lines.push('');
-    lines.push(['Ansatt', 'Stilling', 'Vanlige timer', 'Ekstra timer', 'Syke timer', 'Totale timer', 'Timesats (kr/t)', 'Grunnlønn (kr)', 'Tillegg (kr)', 'Total lønn (kr)', 'Sosiale avg. 24,3% (kr)', 'Total kostnad (kr)'].join(sep));
-
-    salaryData.forEach(d => {
-      const tax = d.totalPay * PAYROLL_TAX_RATE;
-      const basePay = d.totalPay - d.extraBonus;
-      lines.push([
-        `"${d.worker.name}"`,
-        `"${d.worker.position || ''}"`,
-        d.regularHours.toFixed(1).replace('.', ','),
-        d.extraHours.toFixed(1).replace('.', ','),
-        (d.sickHours || 0).toFixed(1).replace('.', ','),
-        d.totalHours.toFixed(1).replace('.', ','),
-        (d.worker.hourly_rate || 0).toFixed(0),
-        basePay.toFixed(0),
-        d.extraBonus.toFixed(0),
-        d.totalPay.toFixed(0),
-        tax.toFixed(0),
-        (d.totalPay + tax).toFixed(0),
-      ].join(sep));
-    });
-
-    lines.push('');
-    lines.push(['TOTAL', '', salaryData.reduce((s,d)=>s+d.regularHours,0).toFixed(1).replace('.',','), salaryData.reduce((s,d)=>s+d.extraHours,0).toFixed(1).replace('.',','), salaryData.reduce((s,d)=>s+(d.sickHours||0),0).toFixed(1).replace('.',','), grandTotalHours.toFixed(1).replace('.',','), '', '', '', grandTotalPay.toFixed(0), grandTotalTax.toFixed(0), grandTotalCost.toFixed(0)].join(sep));
-    lines.push(['+ Sosiale kostnader (24,3%)', '', '', '', '', '', '', '', '', grandTotalTax.toFixed(0), ''].join(sep));
-    lines.push(['Total kostnad inkl. avg.', '', '', '', '', '', '', '', '', '', grandTotalCost.toFixed(0)].join(sep));
-
-    // BOM for Excel UTF-8
-    const bom = '\uFEFF';
-    const blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const downloadBlob = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `lønn-${format(month, 'yyyy-MM')}.csv`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const exportPDF = () => {
-    const monthLabel = format(month, 'MMMM yyyy');
-    const teamLabel = filterTeam === 'all' ? 'Alle team' : (wp?.[`${filterTeam}_name`] || filterTeam);
+  const exportCSV = () => {
+    const csv = payrollCsv(exportRows, exportColumns, { period: periodLabel, team: teamLabel });
+    downloadBlob(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' }), `lønn-${format(month, 'yyyy-MM')}.csv`);
+  };
 
+  const exportExcel = () => {
+    const sheet = XLSX.utils.aoa_to_sheet(payrollSheetRows(exportRows, exportColumns));
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, 'Lønn');
+    XLSX.writeFile(book, `lønn-${format(month, 'yyyy-MM')}.xlsx`);
+  };
+
+  const saveColumns = async (keys) => {
+    setColumnKeys(keys);
+    try { localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(keys)); } catch { /* private mode */ }
+    if (!wp?.id) return;
+    try {
+      await base44.entities.WorkplaceSetting.update(wp.id, { payroll_export_columns: keys });
+      queryClient.invalidateQueries({ queryKey: ['workplace-settings'] });
+    } catch (error) {
+      toast({ title: 'Kolonnene er lagret i nettleseren', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const lockPeriod = async (payload) => {
+    setLockBusy(true);
+    try {
+      await base44.entities.PayrollPeriodLock.create({ ...payload, org_id: orgId || undefined });
+      queryClient.invalidateQueries({ queryKey: ['payroll-locks'] });
+      toast({ title: 'Lønnsperioden er låst' });
+    } catch (error) {
+      toast({ title: 'Kunne ikke låse perioden', description: error.message, variant: 'destructive' });
+    } finally {
+      setLockBusy(false);
+    }
+  };
+
+  const unlockPeriod = async (lock) => {
+    setLockBusy(true);
+    try {
+      await base44.entities.PayrollPeriodLock.update(lock.id, { unlocked_at: new Date().toISOString() });
+      queryClient.invalidateQueries({ queryKey: ['payroll-locks'] });
+      toast({ title: 'Lønnsperioden er låst opp' });
+    } catch (error) {
+      toast({ title: 'Kunne ikke låse opp', description: error.message, variant: 'destructive' });
+    } finally {
+      setLockBusy(false);
+    }
+  };
+
+  const exportPDF = () => {
+    const hourCols = [
+      ['Vanlige t.', 'regularHours'],
+      ['Pause', 'breakHours'],
+      ['Natt t.', 'nightHours'],
+      ['Søndag t.', 'sundayHours'],
+      ['Helligdag t.', 'holidayHours'],
+      ['Syk t.', 'sickHours'],
+      ['Ferie t.', 'ferieHours'],
+    ];
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Lønnsrapport ${monthLabel}</title>
+        <title>Lønnsrapport ${escHtml(periodLabel)}</title>
         <style>
           * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { font-family: Arial, sans-serif; font-size: 11px; color: #1e293b; padding: 32px; }
-          h1 { font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-          .subtitle { font-size: 12px; color: #64748b; margin-bottom: 24px; }
-          .summary { display: flex; gap: 16px; margin-bottom: 24px; }
-          .summary-card { flex: 1; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; }
-          .summary-card .label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
-          .summary-card .value { font-size: 18px; font-weight: 700; color: #0f172a; }
+          body { font-family: Arial, sans-serif; font-size: 10px; color: #1e293b; padding: 24px; }
+          h1 { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+          .subtitle { font-size: 11px; color: #64748b; margin-bottom: 16px; }
+          .note { font-size: 10px; color: #64748b; margin-bottom: 16px; }
           table { width: 100%; border-collapse: collapse; }
           thead tr { background: #f8fafc; }
-          th { padding: 8px 12px; text-align: right; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; border-bottom: 2px solid #e2e8f0; }
+          th { padding: 6px 6px; text-align: right; font-size: 8px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; border-bottom: 2px solid #e2e8f0; }
           th:first-child { text-align: left; }
-          td { padding: 10px 12px; text-align: right; border-bottom: 1px solid #f1f5f9; }
+          td { padding: 7px 6px; text-align: right; border-bottom: 1px solid #f1f5f9; }
           td:first-child { text-align: left; }
           .worker-name { font-weight: 600; color: #0f172a; }
-          .worker-sub { font-size: 9px; color: #94a3b8; }
-          .extra { color: #d97706; font-weight: 600; }
+          .worker-sub { font-size: 8px; color: #94a3b8; }
           .total-pay { font-weight: 700; color: #0f172a; }
-          .tfoot-total td { background: #f8fafc; font-weight: 700; border-top: 2px solid #cbd5e1; padding: 10px 12px; }
-          .tfoot-tax td { background: #fff7ed; color: #c2410c; font-weight: 600; border-top: 1px solid #fed7aa; padding: 10px 12px; }
-          .tfoot-grand td { background: #1e293b; color: white; font-weight: 700; font-size: 12px; padding: 12px; }
-          .detail-section { margin-top: 24px; }
-          .detail-section h2 { font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
-          .detail-table thead tr { background: #f1f5f9; }
-          .detail-table th { font-size: 8px; padding: 6px 10px; }
-          .detail-table td { font-size: 10px; padding: 6px 10px; }
+          .tfoot-total td { background: #f8fafc; font-weight: 700; border-top: 2px solid #cbd5e1; }
+          .tfoot-tax td { background: #fff7ed; color: #c2410c; font-weight: 600; }
+          .tfoot-grand td { background: #1e293b; color: white; font-weight: 700; }
+          .detail-section { margin-top: 20px; }
           .worker-header { background: #eff6ff; padding: 6px 10px; font-weight: 700; font-size: 11px; color: #1e40af; }
-          @media print { body { padding: 16px; } }
+          @media print { body { padding: 12px; } }
         </style>
       </head>
       <body>
         <h1>Lønnsrapport</h1>
-        <p class="subtitle">${monthLabel} &nbsp;•&nbsp; ${teamLabel}</p>
-
-        <div class="summary">
-          <div class="summary-card">
-            <div class="label">Totale timer</div>
-            <div class="value">${grandTotalHours.toFixed(1)}t</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">Total lønn</div>
-            <div class="value">${grandTotalPay.toFixed(0)} kr</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">Ansatte</div>
-            <div class="value">${salaryData.length}</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">Total kostnad inkl. avg.</div>
-            <div class="value">${grandTotalCost.toFixed(0)} kr</div>
-          </div>
-        </div>
-
+        <p class="subtitle">${escHtml(periodLabel)} &nbsp;•&nbsp; ${escHtml(teamLabel)}</p>
+        <p class="note">Natt-, søndag- og helligdagstimer er tillegg og kan overlappe vanlige timer. Syk og ferie telles for seg.</p>
         <table>
           <thead>
             <tr>
               <th>Ansatt</th>
-              <th>Vanlige t.</th>
-              <th>Ekstra t.</th>
-              <th>Syk t.</th>
+              ${hourCols.map(([label]) => `<th>${label}</th>`).join('')}
               <th>Total t.</th>
-              <th>Timesats</th>
               <th>Total lønn</th>
             </tr>
           </thead>
@@ -229,69 +272,32 @@ export default function Salary() {
                   <div class="worker-name">${escHtml(d.worker.name)}</div>
                   <div class="worker-sub">${d.totalShifts} vakter${d.worker.position ? ' · ' + escHtml(d.worker.position) : ''}</div>
                 </td>
-                <td>${d.regularHours.toFixed(1)}t</td>
-                <td class="${d.extraHours > 0 ? 'extra' : ''}">${d.extraHours > 0 ? d.extraHours.toFixed(1) + 't' : '—'}</td>
-                <td>${(d.sickHours || 0) > 0 ? (d.sickHours || 0).toFixed(1) + 't' : '—'}</td>
-                <td><strong>${d.totalHours.toFixed(1)}t</strong></td>
-                <td>${d.worker.hourly_rate?.toFixed(0)} kr/t</td>
+                ${hourCols.map(([, key]) => `<td>${hoursText(d[key])}</td>`).join('')}
+                <td><strong>${hoursText(d.totalHours)}</strong></td>
                 <td class="total-pay">${d.totalPay.toFixed(0)} kr</td>
               </tr>
             `).join('')}
           </tbody>
           <tfoot>
             <tr class="tfoot-total">
-              <td>Total lønn</td>
-              <td>${salaryData.reduce((s,d)=>s+d.regularHours,0).toFixed(1)}t</td>
-              <td class="extra">${salaryData.reduce((s,d)=>s+d.extraHours,0).toFixed(1)}t</td>
-              <td>${salaryData.reduce((s,d)=>s+(d.sickHours||0),0).toFixed(1)}t</td>
-              <td>${grandTotalHours.toFixed(1)}t</td>
-              <td></td>
+              <td>Total</td>
+              ${hourCols.map(([, key]) => `<td>${hoursText(salaryData.reduce((s, d) => s + d[key], 0))}</td>`).join('')}
+              <td>${hoursText(grandTotalHours)}</td>
               <td>${grandTotalPay.toFixed(0)} kr</td>
             </tr>
             <tr class="tfoot-tax">
-              <td>+ Sosiale kostnader (24,3%)</td>
-              <td colspan="4"></td>
+              <td colspan="${hourCols.length + 2}">+ Sosiale kostnader (24,3%)</td>
               <td>${grandTotalTax.toFixed(0)} kr</td>
             </tr>
             <tr class="tfoot-grand">
-              <td>Total kostnad</td>
-              <td colspan="4"></td>
+              <td colspan="${hourCols.length + 2}">Total kostnad</td>
               <td>${grandTotalCost.toFixed(0)} kr</td>
             </tr>
           </tfoot>
         </table>
-
-        ${salaryData.some(d => d.breakdowns.length > 0) ? `
-        <div style="page-break-before: always;"></div>
-        <div class="detail-section">
-          <h2>Lønnsdetaljer per ansatt</h2>
-          ${salaryData.filter(d => d.breakdowns.length > 0).map(d => `
-            <div style="margin-bottom:16px;">
-              <div class="worker-header">${escHtml(d.worker.name)} — ${d.totalPay.toFixed(0)} kr</div>
-              <table class="detail-table">
-                <thead><tr><th style="text-align:left">Dato</th><th style="text-align:left">Type</th><th style="text-align:left">Tid</th><th>Timer</th><th>Grunnlønn</th><th>Tillegg</th><th>Total</th></tr></thead>
-                <tbody>
-                  ${d.breakdowns.map(b => `
-                    <tr>
-                      <td style="text-align:left">${format(new Date(b.shift.date + 'T00:00:00'), 'dd.MM.yyyy')}</td>
-                      <td style="text-align:left">${escHtml(b.label)}</td>
-                      <td style="text-align:left">${escHtml(b.shift.start_time)}–${escHtml(b.shift.end_time)}</td>
-                      <td>${b.hours.toFixed(1)}t</td>
-                      <td>${b.basePay.toFixed(0)} kr</td>
-                      <td>${b.extraBonus > 0 ? '+' + b.extraBonus.toFixed(0) + ' kr' : '—'}</td>
-                      <td><strong>${b.pay.toFixed(0)} kr</strong></td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          `).join('')}
-        </div>
-        ` : ''}
       </body>
       </html>
     `;
-
     const win = window.open('', '_blank');
     win.document.write(html);
     win.document.close();
@@ -313,12 +319,24 @@ export default function Salary() {
     );
   }
 
+  const totals = {
+    regularHours: salaryData.reduce((s, d) => s + d.regularHours, 0),
+    breakHours: salaryData.reduce((s, d) => s + d.breakHours, 0),
+    nightHours: salaryData.reduce((s, d) => s + d.nightHours, 0),
+    sundayHours: salaryData.reduce((s, d) => s + d.sundayHours, 0),
+    holidayHours: salaryData.reduce((s, d) => s + d.holidayHours, 0),
+    sickHours: salaryData.reduce((s, d) => s + d.sickHours, 0),
+    ferieHours: salaryData.reduce((s, d) => s + d.ferieHours, 0),
+  };
+
   return (
     <div className="space-y-6">
+      <PayrollLockCard locks={payrollLocks} canLock={canLock} busy={lockBusy} onLock={lockPeriod} onUnlock={unlockPeriod} />
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setMonth(subMonths(month, 1))}><ChevronLeft className="w-4 h-4" /></Button>
-          <span className="text-sm font-medium text-slate-700 min-w-[120px] text-center">{format(month, 'MMMM yyyy')}</span>
+          <span className="text-sm font-medium text-slate-700 min-w-[120px] text-center">{periodLabel}</span>
           <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setMonth(addMonths(month, 1))}><ChevronRight className="w-4 h-4" /></Button>
         </div>
         <div className="flex gap-3 flex-wrap">
@@ -339,14 +357,21 @@ export default function Salary() {
             </SelectContent>
           </Select>
           <Button variant="outline" onClick={exportCSV} className="gap-2"><Download className="w-4 h-4" /> CSV</Button>
+          <Button variant="outline" onClick={exportExcel} className="gap-2"><FileSpreadsheet className="w-4 h-4" /> Excel</Button>
           <Button variant="outline" onClick={exportPDF} className="gap-2"><FileText className="w-4 h-4" /> PDF</Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <PayrollExportColumns selected={columnKeys} onChange={saveColumns} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <p className="text-sm text-slate-500">Totale timer</p>
           <p className="text-2xl font-bold text-slate-900 mt-1">{grandTotalHours.toFixed(1)}t</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <p className="text-sm text-slate-500">Pause trukket</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{totals.breakHours.toFixed(1)}t</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <p className="text-sm text-slate-500">Total lønn</p>
@@ -355,7 +380,7 @@ export default function Salary() {
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <p className="text-sm text-slate-500">Ansatte</p>
           <p className="text-2xl font-bold text-slate-900 mt-1">{salaryData.length}</p>
-          <p className="text-xs text-slate-400 mt-1">Tillegg konfigurert per team</p>
+          <p className="text-xs text-slate-400 mt-1">Nattillegg kommer i tillegg til søndag og helligdag</p>
         </div>
       </div>
 
@@ -364,67 +389,69 @@ export default function Salary() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                <th className="px-5 py-3 text-left font-medium">Ansatt</th>
-                <th className="px-5 py-3 text-right font-medium">Vanlige t.</th>
-                <th className="px-5 py-3 text-right font-medium">Ekstra t.</th>
-                <th className="px-5 py-3 text-right font-medium">Syk t.</th>
-                <th className="px-5 py-3 text-right font-medium">Total t.</th>
-                <th className="px-5 py-3 text-right font-medium">Timesats</th>
-                <th className="px-5 py-3 text-right font-medium">Total lønn</th>
-                <th className="px-5 py-3 text-right font-medium"></th>
+                <th className="px-4 py-3 text-left font-medium">Ansatt</th>
+                <th className="px-3 py-3 text-right font-medium">Vanlige</th>
+                <th className="px-3 py-3 text-right font-medium">Pause</th>
+                <th className="px-3 py-3 text-right font-medium">Natt</th>
+                <th className="px-3 py-3 text-right font-medium">Søndag</th>
+                <th className="px-3 py-3 text-right font-medium">Helligdag</th>
+                <th className="px-3 py-3 text-right font-medium">Syk</th>
+                <th className="px-3 py-3 text-right font-medium">Ferie</th>
+                <th className="px-3 py-3 text-right font-medium">Total</th>
+                <th className="px-3 py-3 text-right font-medium">Timesats</th>
+                <th className="px-4 py-3 text-right font-medium">Total lønn</th>
+                <th className="px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {salaryData.map(({ worker, breakdowns, regularHours, extraHours, sickHours, totalHours, totalPay, totalShifts }) => (
-                <>
-                  <tr key={worker.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-4">
+              {salaryData.map((row) => (
+                <Fragment key={row.worker.id}>
+                  <tr className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-4">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full text-white text-sm flex items-center justify-center font-medium" style={{ backgroundColor: worker.color || '#3B82F6' }}>
-                          {worker.name?.charAt(0)}
+                        <div className="w-8 h-8 rounded-full text-white text-sm flex items-center justify-center font-medium" style={{ backgroundColor: row.worker.color || '#3B82F6' }}>
+                          {row.worker.name?.charAt(0)}
                         </div>
                         <div>
-                          <p className="font-medium text-slate-800">{worker.name}</p>
-                          <p className="text-xs text-slate-400">{totalShifts} vakter</p>
+                          <p className="font-medium text-slate-800">{row.worker.name}</p>
+                          <p className="text-xs text-slate-400">{row.totalShifts} vakter</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-right text-slate-600">{regularHours.toFixed(1)}t</td>
-                    <td className="px-5 py-4 text-right">
-                      {extraHours > 0
-                        ? <span className="font-medium text-amber-600">{extraHours.toFixed(1)}t</span>
-                        : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      {sickHours > 0
-                        ? <span className="font-medium text-red-500">{sickHours.toFixed(1)}t</span>
-                        : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-5 py-4 text-right font-semibold text-slate-700">{totalHours.toFixed(1)}t</td>
-                    <td className="px-5 py-4 text-right text-slate-500">{worker.hourly_rate?.toFixed(0)} kr/t</td>
-                    <td className="px-5 py-4 text-right font-bold text-slate-900">{totalPay.toFixed(0)} kr</td>
-                    <td className="px-5 py-4 text-right">
-                      {breakdowns.length > 0 && (
+                    <td className="px-3 py-4 text-right text-slate-600">{row.regularHours.toFixed(1)}t</td>
+                    <td className="px-3 py-4 text-right text-slate-500">{row.breakHours > 0 ? `${row.breakHours.toFixed(1)}t` : '—'}</td>
+                    <td className="px-3 py-4 text-right text-indigo-600">{row.nightHours > 0 ? `${row.nightHours.toFixed(1)}t` : '—'}</td>
+                    <td className="px-3 py-4 text-right text-amber-600">{row.sundayHours > 0 ? `${row.sundayHours.toFixed(1)}t` : '—'}</td>
+                    <td className="px-3 py-4 text-right text-orange-600">{row.holidayHours > 0 ? `${row.holidayHours.toFixed(1)}t` : '—'}</td>
+                    <td className="px-3 py-4 text-right text-red-500">{row.sickHours > 0 ? `${row.sickHours.toFixed(1)}t` : '—'}</td>
+                    <td className="px-3 py-4 text-right text-sky-600">{row.ferieHours > 0 ? `${row.ferieHours.toFixed(1)}t` : '—'}</td>
+                    <td className="px-3 py-4 text-right font-semibold text-slate-700">{row.totalHours.toFixed(1)}t</td>
+                    <td className="px-3 py-4 text-right text-slate-500">{row.worker.hourly_rate?.toFixed(0)} kr/t</td>
+                    <td className="px-4 py-4 text-right font-bold text-slate-900">{row.totalPay.toFixed(0)} kr</td>
+                    <td className="px-2 py-4 text-right">
+                      {row.breakdowns.length > 0 && (
                         <Button variant="ghost" size="icon" className="h-7 w-7"
-                          onClick={() => setExpandedWorker(expandedWorker === worker.id ? null : worker.id)}>
-                          {expandedWorker === worker.id ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                          onClick={() => setExpandedWorker(expandedWorker === row.worker.id ? null : row.worker.id)}>
+                          {expandedWorker === row.worker.id ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
                         </Button>
                       )}
                     </td>
                   </tr>
-                  {expandedWorker === worker.id && (
-                    <tr key={`${worker.id}-detail`} className="border-t border-slate-100">
-                      <td colSpan={8} className="px-5 pb-4 pt-1">
+                  {expandedWorker === row.worker.id && (
+                    <tr className="border-t border-slate-100">
+                      <td colSpan={12} className="px-4 pb-4 pt-1">
                         <div className="bg-slate-50 rounded-lg p-3 space-y-1.5">
                           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Lønnsdetaljer</p>
-                          {breakdowns.map((b, i) => (
-                            <div key={i} className="flex items-center justify-between text-xs">
+                          {row.breakdowns.map((b, i) => (
+                            <div key={i} className="flex items-center justify-between gap-3 text-xs">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-slate-400">{format(new Date(b.shift.date + 'T00:00:00'), 'dd. MMM')}</span>
-                                <span className={`px-1.5 py-0.5 rounded font-medium ${b.isSick ? 'bg-red-100 text-red-700' : b.isExtra ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{b.label}</span>
-                                <span className="text-slate-500">{b.shift.start_time}–{b.shift.end_time}</span>
+                                <span className={`px-1.5 py-0.5 rounded font-medium ${b.isFerie ? 'bg-sky-100 text-sky-700' : b.isSick ? 'bg-red-100 text-red-700' : b.isExtra ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{b.label}</span>
+                                <span className="text-slate-500">{b.isAllDay ? 'Hele dagen' : `${b.shift.start_time}–${b.shift.end_time}`}</span>
+                                {b.breakHours > 0 && <span className="text-slate-400">pause {b.breakHours.toFixed(1)}t</span>}
+                                {b.nightHours > 0 && <span className="text-indigo-600">natt {b.nightHours.toFixed(1)}t</span>}
                               </div>
-                              <div className="text-right space-x-2">
+                              <div className="text-right space-x-2 shrink-0">
                                 <span className="text-slate-500">{b.hours.toFixed(1)}t → {b.basePay.toFixed(0)} kr</span>
                                 {b.extraBonus > 0 && <span className="text-blue-600 font-medium">+{b.extraBonus.toFixed(0)} kr tillegg</span>}
                                 <span className="font-semibold text-slate-700">{b.pay.toFixed(0)} kr</span>
@@ -435,31 +462,33 @@ export default function Salary() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
             {salaryData.length >= 1 && (
               <tfoot>
                 <tr className="bg-slate-50 font-semibold border-t border-slate-200">
-                  <td className="px-5 py-3 text-slate-700">Total lønn</td>
-                  <td className="px-5 py-3 text-right text-slate-600">{salaryData.reduce((s, d) => s + d.regularHours, 0).toFixed(1)}t</td>
-                  <td className="px-5 py-3 text-right text-amber-600">{salaryData.reduce((s, d) => s + d.extraHours, 0).toFixed(1)}t</td>
-                  <td className="px-5 py-3 text-right text-red-500">{salaryData.reduce((s, d) => s + (d.sickHours || 0), 0).toFixed(1)}t</td>
-                  <td className="px-5 py-3 text-right text-slate-700">{grandTotalHours.toFixed(1)}t</td>
-                  <td className="px-5 py-3"></td>
-                  <td className="px-5 py-3 text-right text-slate-900 text-base">{grandTotalPay.toFixed(0)} kr</td>
+                  <td className="px-4 py-3 text-slate-700">Total</td>
+                  <td className="px-3 py-3 text-right text-slate-600">{totals.regularHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3 text-right text-slate-500">{totals.breakHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3 text-right text-indigo-600">{totals.nightHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3 text-right text-amber-600">{totals.sundayHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3 text-right text-orange-600">{totals.holidayHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3 text-right text-red-500">{totals.sickHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3 text-right text-sky-600">{totals.ferieHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3 text-right text-slate-700">{grandTotalHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3"></td>
+                  <td className="px-4 py-3 text-right text-slate-900">{grandTotalPay.toFixed(0)} kr</td>
                   <td></td>
                 </tr>
                 <tr className="bg-orange-50 border-t border-orange-100">
-                  <td className="px-5 py-3 text-orange-700 font-medium">+ Sosiale kostnader <span className="text-xs font-normal text-orange-500">(24,3%)</span></td>
-                  <td colSpan={5} className="px-5 py-3"></td>
-                  <td className="px-5 py-3 text-right text-orange-700 font-semibold">{grandTotalTax.toFixed(0)} kr</td>
+                  <td className="px-4 py-3 text-orange-700 font-medium" colSpan={10}>+ Sosiale kostnader <span className="text-xs font-normal text-orange-500">(24,3%)</span></td>
+                  <td className="px-4 py-3 text-right text-orange-700 font-semibold">{grandTotalTax.toFixed(0)} kr</td>
                   <td></td>
                 </tr>
                 <tr className="bg-slate-800 text-white font-bold border-t border-slate-700">
-                  <td className="px-5 py-3.5">Total kostnad</td>
-                  <td colSpan={5} className="px-5 py-3.5"></td>
-                  <td className="px-5 py-3.5 text-right text-lg">{grandTotalCost.toFixed(0)} kr</td>
+                  <td className="px-4 py-3.5" colSpan={10}>Total kostnad</td>
+                  <td className="px-4 py-3.5 text-right text-lg">{grandTotalCost.toFixed(0)} kr</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -467,6 +496,9 @@ export default function Salary() {
           </table>
         </div>
         {salaryData.length === 0 && <div className="py-16 text-center text-sm text-slate-400">Ingen data for denne perioden</div>}
+        <p className="px-4 py-3 text-xs text-slate-400 border-t border-slate-100">
+          Natt-, søndag- og helligdagstimer er tillegg og kan overlappe vanlige timer. Pause er allerede trukket fra vanlige timer, søndag, helligdag, syk og ferie.
+        </p>
       </div>
     </div>
   );

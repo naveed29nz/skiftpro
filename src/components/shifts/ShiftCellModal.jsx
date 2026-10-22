@@ -9,12 +9,15 @@ import { format } from 'date-fns';
 import { nb } from 'date-fns/locale';
 import { base44 } from '@/api/base44Client';
 import { flushNotifications } from '@/utils/notify';
+import { breakRulesForTeam, effectiveBreakMinutes } from '@/utils/payCalc';
+import { isFullDayAbsence, shiftLabelName } from '@/utils/shiftLabels';
 
 const LABEL_STYLES = {
   morning: 'bg-amber-100 text-amber-700 border border-amber-200',
   middle:  'bg-blue-100 text-blue-700 border border-blue-200',
   evening: 'bg-purple-100 text-purple-700 border border-purple-200',
   sick:    'bg-red-100 text-red-700 border border-red-200',
+  ferie:   'bg-sky-100 text-sky-700 border border-sky-200',
 };
 
 const LABEL_OPTIONS = [
@@ -23,16 +26,22 @@ const LABEL_OPTIONS = [
   { value: 'middle', label: '☀️ Midt på dagen' },
   { value: 'evening', label: '🌙 Kveld' },
   { value: 'sick', label: '🤒 Syk' },
+  { value: 'ferie', label: '🏖️ Ferie' },
 ];
 
-const emptyShift = { worker_id: '', start_time: '08:00', end_time: '16:00', break_minutes: 30, notes: '', shift_label: 'none', team: '' };
+const emptyShift = { worker_id: '', start_time: '08:00', end_time: '16:00', break_minutes: 30, break_manual: true, all_day: false, notes: '', shift_label: 'none', team: '' };
 
 // Defined OUTSIDE the parent component to avoid remounting on every render
-function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, workers, worker, teamNames }) {
+function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, workers, worker, teamNames, wp, defaultTeam }) {
   const selectedWorkerId = data.worker_id || worker.id;
   const w = workers.find(x => x.id === selectedWorkerId) || worker;
   const workerTeams = w?.teams || ['team1'];
   const showTeamSelector = workerTeams.length > 1;
+  const team = data.team || defaultTeam || workerTeams[0] || 'team1';
+  const hasBreakRule = breakRulesForTeam(wp, team).length > 0;
+  const automaticBreak = effectiveBreakMinutes({ ...data, team, break_manual: false, all_day: false }, wp, team);
+  const absence = isFullDayAbsence(data.shift_label);
+  const wholeDay = absence && data.all_day;
 
   return (
     <div className="space-y-2">
@@ -60,7 +69,7 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
           </Select>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2">
+      {!wholeDay && <div className="grid grid-cols-2 gap-2">
         <div>
           <Label className="text-xs">Start</Label>
           <Input
@@ -79,11 +88,15 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
             className="h-8 text-xs"
           />
         </div>
-      </div>
+      </div>}
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label className="text-xs">Merking</Label>
-          <Select value={data.shift_label || 'none'} onValueChange={v => setData(d => ({ ...d, shift_label: v }))}>
+          <Select value={data.shift_label || 'none'} onValueChange={v => setData(d => ({
+            ...d,
+            shift_label: v,
+            all_day: v === 'sick' || v === 'ferie' ? true : false,
+          }))}>
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Ingen merking" /></SelectTrigger>
             <SelectContent>
               {LABEL_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -92,14 +105,35 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
         </div>
         <div>
           <Label className="text-xs">Pause (min)</Label>
+          {hasBreakRule && !wholeDay ? (
+            <label className="flex items-center gap-1.5 text-[11px] text-slate-600 mb-1">
+              <input
+                type="checkbox"
+                checked={!data.break_manual}
+                onChange={(event) => setData(d => ({ ...d, break_manual: !event.target.checked, break_minutes: event.target.checked ? automaticBreak : d.break_minutes }))}
+              />
+              Automatisk ({automaticBreak} min)
+            </label>
+          ) : null}
           <Input
             type="number"
-            value={data.break_minutes}
-            onChange={e => setData(d => ({ ...d, break_minutes: e.target.value }))}
+            value={!data.break_manual && hasBreakRule ? automaticBreak : data.break_minutes}
+            disabled={wholeDay || (!data.break_manual && hasBreakRule)}
+            onChange={e => setData(d => ({ ...d, break_manual: true, break_minutes: e.target.value }))}
             className="h-8 text-xs"
           />
         </div>
       </div>
+      {absence && (
+        <label className="flex items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={Boolean(data.all_day)}
+            onChange={(event) => setData(d => ({ ...d, all_day: event.target.checked }))}
+          />
+          Hele dagen uten klokkeslett
+        </label>
+      )}
       <div>
         <Label className="text-xs">Notat</Label>
         <Input
@@ -116,18 +150,49 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
   );
 }
 
-export default function ShiftCellModal({ worker, day, shifts, workers = [], onClose, onRefresh, currentTeam, teamNames = {}, defaultShiftLabel }) {
+function shiftPayload(data, workerRecord, dayStr, team, wp) {
+  const label = data.shift_label === 'none' ? '' : (data.shift_label || '');
+  const allDay = Boolean(data.all_day) && isFullDayAbsence(label);
+  const resolvedTeam = data.team || team || (workerRecord.teams || ['team1'])[0];
+  const hasRule = breakRulesForTeam(wp, resolvedTeam).length > 0;
+  const manual = allDay || !hasRule || data.break_manual !== false;
+  const minutes = allDay
+    ? 0
+    : (manual
+      ? (Number(data.break_minutes) || 0)
+      : effectiveBreakMinutes({ ...data, team: resolvedTeam, break_manual: false, all_day: false }, wp, resolvedTeam));
+  return {
+    worker_id: workerRecord.id,
+    worker_name: workerRecord.name,
+    start_time: allDay ? '00:00' : data.start_time,
+    end_time: allDay ? '00:00' : data.end_time,
+    break_minutes: minutes,
+    break_manual: manual,
+    all_day: allDay,
+    notes: data.notes,
+    shift_label: label,
+    team: data.team || team || undefined,
+  };
+}
+
+export default function ShiftCellModal({ worker, day, shifts, workers = [], onClose, onRefresh, currentTeam, teamNames = {}, defaultShiftLabel, wp, locked = false }) {
   const dayStr = format(day, 'yyyy-MM-dd');
   const dayLabel = format(day, 'EEEE d. MMM', { locale: nb });
 
   const defaultTeam = currentTeam && currentTeam !== 'all' ? currentTeam : (worker.teams?.[0] || '');
 
   const [adding, setAdding] = useState(false);
-  const [newShift, setNewShift] = useState({
-    ...emptyShift,
-    worker_id: worker.id,
-    team: defaultTeam,
-    shift_label: defaultShiftLabel || emptyShift.shift_label,
+  const [newShift, setNewShift] = useState(() => {
+    const team = defaultTeam || worker.teams?.[0] || 'team1';
+    const label = defaultShiftLabel || emptyShift.shift_label;
+    return {
+      ...emptyShift,
+      worker_id: worker.id,
+      team: defaultTeam,
+      shift_label: label,
+      all_day: isFullDayAbsence(label),
+      break_manual: breakRulesForTeam(wp, team).length === 0,
+    };
   });
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
@@ -142,17 +207,10 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
     const team = newShift.team || defaultTeam || workerTeams[0];
     await base44.entities.Shift.create({
       org_id: w.org_id,
-      worker_id: w.id,
-      worker_name: w.name,
       date: dayStr,
-      start_time: newShift.start_time,
-      end_time: newShift.end_time,
-      break_minutes: Number(newShift.break_minutes) || 0,
-      notes: newShift.notes,
-      shift_label: newShift.shift_label === 'none' ? '' : (newShift.shift_label || ''),
       status: 'scheduled',
       published: false,
-      team,
+      ...shiftPayload(newShift, w, dayStr, team, wp),
     });
     setAdding(false);
     resetNewShift();
@@ -166,16 +224,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
   const handleEdit = async (shiftId) => {
     setLoading(true);
     const w = resolveWorker(editData.worker_id);
-    await base44.entities.Shift.update(shiftId, {
-      worker_id: w.id,
-      worker_name: w.name,
-      start_time: editData.start_time,
-      end_time: editData.end_time,
-      break_minutes: Number(editData.break_minutes) || 0,
-      notes: editData.notes,
-      shift_label: editData.shift_label === 'none' ? '' : (editData.shift_label || ''),
-      team: editData.team || undefined,
-    });
+    await base44.entities.Shift.update(shiftId, shiftPayload(editData, w, dayStr, editData.team || defaultTeam, wp));
     setEditingId(null);
     setLoading(false);
     onRefresh();
@@ -200,6 +249,8 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
       start_time: shift.start_time,
       end_time: shift.end_time,
       break_minutes: shift.break_minutes || 0,
+      break_manual: shift.break_manual !== false,
+      all_day: Boolean(shift.all_day),
       notes: shift.notes || '',
       shift_label: shift.shift_label || '',
       status: 'scheduled',
@@ -217,6 +268,8 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
       start_time: shift.start_time,
       end_time: shift.end_time,
       break_minutes: shift.break_minutes || 0,
+      break_manual: shift.break_manual !== false,
+      all_day: Boolean(shift.all_day),
       notes: shift.notes || '',
       shift_label: shift.shift_label || 'none',
       team: shift.team || '',
@@ -258,16 +311,18 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                   workers={workers}
                   worker={worker}
                   teamNames={teamNames}
+                  wp={wp}
+                  defaultTeam={defaultTeam}
                 />
               ) : (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-sm font-medium text-slate-800">{shift.start_time} – {shift.end_time}</p>
+                        <p className="text-sm font-medium text-slate-800">{shift.all_day ? 'Hele dagen' : `${shift.start_time} – ${shift.end_time}`}</p>
                         {shift.shift_label && (
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium capitalize ${LABEL_STYLES[shift.shift_label] || 'bg-slate-100 text-slate-600'}`}>
-                            {shift.shift_label}
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${LABEL_STYLES[shift.shift_label] || 'bg-slate-100 text-slate-600'}`}>
+                            {shiftLabelName(shift.shift_label) || shift.shift_label}
                           </span>
                         )}
                         {shift.team && (
@@ -279,11 +334,12 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                       {shift.worker_name && shift.worker_id !== worker.id && (
                         <p className="text-xs text-slate-500">{shift.worker_name}</p>
                       )}
-                      {shift.break_minutes > 0 && <p className="text-xs text-slate-400">{shift.break_minutes}min break</p>}
+                      {shift.break_minutes > 0 && !shift.all_day && <p className="text-xs text-slate-400">{shift.break_minutes} min pause{shift.break_manual === false ? ' (automatisk)' : ''}</p>}
+                      {shift.hours_approved && <p className="text-xs text-emerald-600">Timer godkjent</p>}
                       {shift.notes && <p className="text-xs text-slate-400">{shift.notes}</p>}
                     </div>
                   </div>
-                  <div className="flex gap-1 border-t border-slate-100 pt-2">
+                  {!locked && <div className="flex gap-1 border-t border-slate-100 pt-2">
                     <Button
                       variant="ghost" size="sm"
                       className="h-7 text-xs px-2 flex-1 gap-1 text-slate-600 hover:text-blue-600 hover:bg-blue-50"
@@ -307,7 +363,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                     >
                       <Trash2 className="w-3 h-3" /> Slett
                     </Button>
-                  </div>
+                  </div>}
                 </div>
               )}
             </div>
@@ -325,12 +381,15 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                 workers={workers}
                 worker={worker}
                 teamNames={teamNames}
+                wp={wp}
+                defaultTeam={defaultTeam}
               />
             </div>
           )}
         </div>
 
-        {!adding && (
+        {locked && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Lønnsperioden er låst. Vaktene kan ikke endres før perioden låses opp.</p>}
+        {!adding && !locked && (
           <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs" onClick={() => { setAdding(true); setEditingId(null); }}>
             <Plus className="w-3.5 h-3.5" /> Legg til vakt
           </Button>

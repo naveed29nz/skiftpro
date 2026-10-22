@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import ManagerCharts from '@/components/dashboard/ManagerCharts';
-import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
+import { calcHours, getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { format, parseISO, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, startOfMonth, endOfMonth } from 'date-fns';
@@ -16,12 +16,6 @@ import { useTeamNames } from '@/hooks/useTeamNames';
 import { useOrg } from '@/hooks/useOrg';
 import { findWorkerByEmail } from '@/lib/workerLookup';
 import { ClipboardList } from 'lucide-react';
-
-function calcHours(shift) {
-  const [sh, sm] = shift.start_time.split(':').map(Number);
-  const [eh, em] = shift.end_time.split(':').map(Number);
-  return Math.max(0, ((eh * 60 + em) - (sh * 60 + sm) - (shift.break_minutes || 0)) / 60);
-}
 
 const PAYROLL_TAX = 0.141;
 
@@ -198,7 +192,7 @@ export default function Dashboard() {
                   <p className="text-xs text-slate-400">{s.notes || s.shift_label || 'Vakt i dag'}</p>
                 </div>
                 <span className="text-xs font-medium bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">
-                  {calcHours(s).toFixed(1)}t
+                  {calcHours(s, wp, s.team).toFixed(1)}t
                 </span>
               </div>
             ))}
