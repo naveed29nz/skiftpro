@@ -13,11 +13,13 @@ const INITIAL = {
   team2_sunday_extra_amount: 50,
   team2_holiday_extra_type: 'percentage',
   team2_holiday_extra_amount: 100,
-  team2_night_extra_type: 'percentage',
+  team2_night_enabled: false,
+  team2_night_extra_type: 'none',
   team2_night_extra_amount: 50,
   team2_night_from: '21:00',
   team2_night_to: '06:00',
-  team2_break_rules: [{ after_minutes: 360, break_minutes: 30 }],
+  team2_auto_break: false,
+  team2_break_rules: [],
 };
 
 const SAMPLE_LOCKS = [
@@ -51,7 +53,7 @@ export default function PayrollRound1Preview() {
           <PayrollRulesCard teamKeys={['team2']} form={form} setForm={setForm} />
           <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-3">
             <h2 className="text-base font-semibold text-slate-800">Søndag, helligdag og natt</h2>
-            <p className="text-xs text-slate-400">Nattillegg er 50 % mellom 21:00 og 06:00 som standard, og kan slås av per avdeling.</p>
+            <p className="text-xs text-slate-400">Nattillegg er av til bryteren slås på. Da kan prosent og tidsvindu endres.</p>
             <TeamPaySection teamKey="team2" teamName={form.team2_name} form={form} setForm={setForm} />
           </div>
         </section>

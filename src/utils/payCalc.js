@@ -83,8 +83,18 @@ export function grossMinutes(shift) {
   return total;
 }
 
+export function autoBreakEnabled(wpSettings, teamKey) {
+  return wpSettings?.[`${teamKey || 'team1'}_auto_break`] === true;
+}
+
+export function nightEnabled(wpSettings, teamKey) {
+  return wpSettings?.[`${teamKey || 'team1'}_night_enabled`] === true;
+}
+
 export function breakRulesForTeam(wpSettings, teamKey) {
-  const raw = wpSettings?.[`${teamKey || 'team1'}_break_rules`];
+  const key = teamKey || 'team1';
+  if (!autoBreakEnabled(wpSettings, key)) return [];
+  const raw = wpSettings?.[`${key}_break_rules`];
   if (!Array.isArray(raw)) return [];
   return raw
     .map((rule) => ({
@@ -106,20 +116,27 @@ export function automaticBreakMinutes(gross, rules) {
 
 export function effectiveBreakMinutes(shift, wpSettings, teamKey) {
   if (!shift || shift.all_day) return 0;
-  if (shift.break_manual) return Math.max(0, Number(shift.break_minutes) || 0);
+  if (shift.break_manual === true) return Math.max(0, Number(shift.break_minutes) || 0);
   const rules = breakRulesForTeam(wpSettings, shift.team || teamKey || 'team1');
-  if (rules.length === 0) return Math.max(0, Number(shift.break_minutes) || 0);
+  if (rules.length === 0) {
+    if (shift.break_manual === false) return 0;
+    return Math.max(0, Number(shift.break_minutes) || 0);
+  }
   return automaticBreakMinutes(grossMinutes(shift), rules);
 }
 
 export function nightSupplement(wpSettings, teamKey) {
   const key = teamKey || 'team1';
-  const extraType = wpSettings?.[`${key}_night_extra_type`] ?? 'percentage';
-  const raw = wpSettings?.[`${key}_night_extra_amount`];
-  const extraAmount = raw == null || raw === '' ? 50 : Number(raw) || 0;
   const from = wpSettings?.[`${key}_night_from`] || '21:00';
   const to = wpSettings?.[`${key}_night_to`] || '06:00';
-  return { extraType: extraType || 'percentage', extraAmount, from, to };
+  if (!nightEnabled(wpSettings, key)) {
+    return { extraType: 'none', extraAmount: 0, from, to };
+  }
+  const storedType = wpSettings?.[`${key}_night_extra_type`];
+  const extraType = !storedType || storedType === 'none' ? 'percentage' : storedType;
+  const raw = wpSettings?.[`${key}_night_extra_amount`];
+  const extraAmount = raw == null || raw === '' ? 50 : Number(raw) || 0;
+  return { extraType, extraAmount, from, to };
 }
 
 function nightOverlapMinutes(start, end, from, to) {

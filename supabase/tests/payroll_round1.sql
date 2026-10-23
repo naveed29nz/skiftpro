@@ -12,7 +12,7 @@ select
   'break rules and night window are readable',
   public._rls_exec(
     '44444444-4444-4444-4444-444444444444',
-    $q$select team2_break_rules, team2_night_from, team2_night_to from public.workplace_settings where id = 'ws-a'$q$
+    $q$select team2_break_rules, team2_auto_break, team2_night_enabled, team2_night_from, team2_night_to from public.workplace_settings where id = 'ws-a'$q$
   ) = 'ok',
   public._rls_exec(
     '44444444-4444-4444-4444-444444444444',
@@ -40,21 +40,24 @@ update public.workplace_settings
 set team2_break_rules = '[{"after_minutes": 1, "break_minutes": 5}]'::jsonb
 where id = 'ws-custom';
 
-select public.seed_narvesen_break_rules();
-
 insert into rls_results (name, ok, detail)
 select
-  'N.417 team2 gets the 30 minute break rule',
-  team2_break_rules = '[{"after_minutes": 360, "break_minutes": 30}]'::jsonb
-    and team1_break_rules = '[]'::jsonb,
-  team2_break_rules::text
+  'stores start with break and night turned off',
+  team2_auto_break = false
+    and team2_night_enabled = false
+    and team2_night_extra_type = 'none'
+    and team2_break_rules = '[]'::jsonb
+    and team1_auto_break = false
+    and not exists (select 1 from pg_proc where proname = 'seed_narvesen_break_rules'),
+  team2_night_extra_type || ' auto=' || team2_auto_break::text
 from public.workplace_settings
 where id = 'ws-n417';
 
 insert into rls_results (name, ok, detail)
 select
-  'an existing N.417 break rule is kept',
-  team2_break_rules = '[{"after_minutes": 1, "break_minutes": 5}]'::jsonb,
+  'a saved break rule stays off until the store enables it',
+  team2_auto_break = false
+    and team2_break_rules = '[{"after_minutes": 1, "break_minutes": 5}]'::jsonb,
   team2_break_rules::text
 from public.workplace_settings
 where id = 'ws-custom';

@@ -175,6 +175,8 @@ function withoutRound1WorkplaceColumns(payload) {
   delete next.payroll_export_columns;
   for (let i = 1; i <= 10; i += 1) {
     delete next[`team${i}_break_rules`];
+    delete next[`team${i}_auto_break`];
+    delete next[`team${i}_night_enabled`];
     delete next[`team${i}_night_from`];
     delete next[`team${i}_night_to`];
     delete next[`team${i}_night_extra_type`];
@@ -194,8 +196,10 @@ function workplaceColumns() {
       `team${i}_holiday_extra_amount`,
       `team${i}_night_extra_type`,
       `team${i}_night_extra_amount`,
+      `team${i}_night_enabled`,
       `team${i}_night_from`,
       `team${i}_night_to`,
+      `team${i}_auto_break`,
       `team${i}_break_rules`,
       `team${i}_latitude`,
       `team${i}_longitude`,

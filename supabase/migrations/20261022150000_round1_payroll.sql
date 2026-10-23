@@ -5,6 +5,8 @@
 -- New workplace_settings columns that are not wage amounts are granted to
 -- authenticated and anon. Night supplement type and amount stay hidden, the
 -- same way Sunday and holiday amounts do, and are read through the wage RPCs.
+-- Automatic break and night supplement are off for every store until an
+-- administrator turns them on. No store, including N.417, is seeded.
 -- Existing shifts keep their stored break (break_manual defaults to true on
 -- rows that already exist, and to false on rows inserted after this migration).
 
@@ -31,54 +33,74 @@ comment on column public.shifts.hours_approved is
 
 alter table public.workplace_settings
   add column if not exists team1_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team1_auto_break boolean not null default false,
   add column if not exists team1_night_from text not null default '21:00',
   add column if not exists team1_night_to text not null default '06:00',
-  add column if not exists team1_night_extra_type text not null default 'percentage',
+  add column if not exists team1_night_enabled boolean not null default false,
+  add column if not exists team1_night_extra_type text not null default 'none',
   add column if not exists team1_night_extra_amount double precision not null default 50,
   add column if not exists team2_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team2_auto_break boolean not null default false,
   add column if not exists team2_night_from text not null default '21:00',
   add column if not exists team2_night_to text not null default '06:00',
-  add column if not exists team2_night_extra_type text not null default 'percentage',
+  add column if not exists team2_night_enabled boolean not null default false,
+  add column if not exists team2_night_extra_type text not null default 'none',
   add column if not exists team2_night_extra_amount double precision not null default 50,
   add column if not exists team3_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team3_auto_break boolean not null default false,
   add column if not exists team3_night_from text not null default '21:00',
   add column if not exists team3_night_to text not null default '06:00',
-  add column if not exists team3_night_extra_type text not null default 'percentage',
+  add column if not exists team3_night_enabled boolean not null default false,
+  add column if not exists team3_night_extra_type text not null default 'none',
   add column if not exists team3_night_extra_amount double precision not null default 50,
   add column if not exists team4_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team4_auto_break boolean not null default false,
   add column if not exists team4_night_from text not null default '21:00',
   add column if not exists team4_night_to text not null default '06:00',
-  add column if not exists team4_night_extra_type text not null default 'percentage',
+  add column if not exists team4_night_enabled boolean not null default false,
+  add column if not exists team4_night_extra_type text not null default 'none',
   add column if not exists team4_night_extra_amount double precision not null default 50,
   add column if not exists team5_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team5_auto_break boolean not null default false,
   add column if not exists team5_night_from text not null default '21:00',
   add column if not exists team5_night_to text not null default '06:00',
-  add column if not exists team5_night_extra_type text not null default 'percentage',
+  add column if not exists team5_night_enabled boolean not null default false,
+  add column if not exists team5_night_extra_type text not null default 'none',
   add column if not exists team5_night_extra_amount double precision not null default 50,
   add column if not exists team6_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team6_auto_break boolean not null default false,
   add column if not exists team6_night_from text not null default '21:00',
   add column if not exists team6_night_to text not null default '06:00',
-  add column if not exists team6_night_extra_type text not null default 'percentage',
+  add column if not exists team6_night_enabled boolean not null default false,
+  add column if not exists team6_night_extra_type text not null default 'none',
   add column if not exists team6_night_extra_amount double precision not null default 50,
   add column if not exists team7_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team7_auto_break boolean not null default false,
   add column if not exists team7_night_from text not null default '21:00',
   add column if not exists team7_night_to text not null default '06:00',
-  add column if not exists team7_night_extra_type text not null default 'percentage',
+  add column if not exists team7_night_enabled boolean not null default false,
+  add column if not exists team7_night_extra_type text not null default 'none',
   add column if not exists team7_night_extra_amount double precision not null default 50,
   add column if not exists team8_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team8_auto_break boolean not null default false,
   add column if not exists team8_night_from text not null default '21:00',
   add column if not exists team8_night_to text not null default '06:00',
-  add column if not exists team8_night_extra_type text not null default 'percentage',
+  add column if not exists team8_night_enabled boolean not null default false,
+  add column if not exists team8_night_extra_type text not null default 'none',
   add column if not exists team8_night_extra_amount double precision not null default 50,
   add column if not exists team9_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team9_auto_break boolean not null default false,
   add column if not exists team9_night_from text not null default '21:00',
   add column if not exists team9_night_to text not null default '06:00',
-  add column if not exists team9_night_extra_type text not null default 'percentage',
+  add column if not exists team9_night_enabled boolean not null default false,
+  add column if not exists team9_night_extra_type text not null default 'none',
   add column if not exists team9_night_extra_amount double precision not null default 50,
   add column if not exists team10_break_rules jsonb not null default '[]'::jsonb,
+  add column if not exists team10_auto_break boolean not null default false,
   add column if not exists team10_night_from text not null default '21:00',
   add column if not exists team10_night_to text not null default '06:00',
-  add column if not exists team10_night_extra_type text not null default 'percentage',
+  add column if not exists team10_night_enabled boolean not null default false,
+  add column if not exists team10_night_extra_type text not null default 'none',
   add column if not exists team10_night_extra_amount double precision not null default 50,
   add column if not exists payroll_export_columns jsonb;
 
@@ -89,44 +111,10 @@ comment on column public.workplace_settings.team1_night_from is
 comment on column public.workplace_settings.payroll_export_columns is
   'Optional list of payroll export column keys. Null uses the built-in column set.';
 
--- Oslo S Nord N.417 / team2, and any department named N.417: 30 min unpaid break over 6 hours.
-create or replace function public.seed_narvesen_break_rules()
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  i integer;
-  rules_col text;
-  name_col text;
-  rule jsonb := '[{"after_minutes": 360, "break_minutes": 30}]'::jsonb;
-begin
-  for i in 1..10 loop
-    rules_col := format('team%s_break_rules', i);
-    name_col := format('team%s_name', i);
-    execute format(
-      'update public.workplace_settings
-       set %I = $1
-       where %I = ''[]''::jsonb
-         and (%I ilike ''%%N.417%%'' or %I ilike ''%%Oslo S Nord%%'')',
-      rules_col, rules_col, name_col, name_col
-    ) using rule;
-  end loop;
-
-  update public.workplace_settings
-  set team2_break_rules = rule
-  where team2_break_rules = '[]'::jsonb
-    and (
-      workplace_name ilike '%Oslo S Nord%'
-      or team2_name ilike '%Oslo S Nord%'
-      or team2_name ilike '%N.417%'
-    );
-end;
-$$;
-
-revoke all on function public.seed_narvesen_break_rules() from public;
-select public.seed_narvesen_break_rules();
+comment on column public.workplace_settings.team1_auto_break is
+  'When false, break rules are ignored. Manual break_minutes on a shift still apply.';
+comment on column public.workplace_settings.team1_night_enabled is
+  'When false, night hours and the night supplement are zero for this department.';
 
 -- Night percent is a wage column. Butikksjef and employees must not write it.
 create or replace function public.guard_workplace_wages()
@@ -453,7 +441,7 @@ revoke all on function public.my_wage_info() from public;
 grant execute on function public.my_wage_info() to authenticated;
 
 -- Readable hour rules and the night window. Wage amounts stay revoked.
-grant select (payroll_export_columns, team1_break_rules, team1_night_from, team1_night_to, team2_break_rules, team2_night_from, team2_night_to, team3_break_rules, team3_night_from, team3_night_to, team4_break_rules, team4_night_from, team4_night_to, team5_break_rules, team5_night_from, team5_night_to, team6_break_rules, team6_night_from, team6_night_to, team7_break_rules, team7_night_from, team7_night_to, team8_break_rules, team8_night_from, team8_night_to, team9_break_rules, team9_night_from, team9_night_to, team10_break_rules, team10_night_from, team10_night_to) on public.workplace_settings to anon, authenticated;
+grant select (payroll_export_columns, team1_break_rules, team1_auto_break, team1_night_enabled, team1_night_from, team1_night_to, team2_break_rules, team2_auto_break, team2_night_enabled, team2_night_from, team2_night_to, team3_break_rules, team3_auto_break, team3_night_enabled, team3_night_from, team3_night_to, team4_break_rules, team4_auto_break, team4_night_enabled, team4_night_from, team4_night_to, team5_break_rules, team5_auto_break, team5_night_enabled, team5_night_from, team5_night_to, team6_break_rules, team6_auto_break, team6_night_enabled, team6_night_from, team6_night_to, team7_break_rules, team7_auto_break, team7_night_enabled, team7_night_from, team7_night_to, team8_break_rules, team8_auto_break, team8_night_enabled, team8_night_from, team8_night_to, team9_break_rules, team9_auto_break, team9_night_enabled, team9_night_from, team9_night_to, team10_break_rules, team10_auto_break, team10_night_enabled, team10_night_from, team10_night_to) on public.workplace_settings to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Locked payroll periods. A trigger blocks every shift write, including the

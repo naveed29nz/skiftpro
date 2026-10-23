@@ -10,7 +10,9 @@ import {
 
 const osloTeam2 = {
   full_time_hours_per_week: 37.5,
+  team2_auto_break: true,
   team2_break_rules: [{ after_minutes: 360, break_minutes: 30 }],
+  team2_night_enabled: true,
   team2_night_from: '21:00',
   team2_night_to: '06:00',
   team2_night_extra_type: 'percentage',
@@ -133,6 +135,31 @@ test('sunday and night supplements stack, and sick does not get either', () => {
   assert.equal(absence.nightBonus, 0);
   assert.equal(absence.sundayBonus, 0);
   assert.equal(absence.pay, 400);
+});
+
+test('break rules and night supplement stay off until the store enables them', () => {
+  const stored = {
+    ...osloTeam2,
+    team2_auto_break: false,
+    team2_night_enabled: false,
+  };
+  const shift = {
+    date: '2026-10-21',
+    start_time: '22:00',
+    end_time: '06:30',
+    team: 'team2',
+    break_manual: false,
+    break_minutes: 30,
+  };
+  assert.equal(effectiveBreakMinutes(shift, stored, 'team2'), 0);
+  assert.equal(calcHours(shift, stored, 'team2'), 8.5);
+  assert.equal(nightMinutes(shift, stored, 'team2'), 0);
+  const breakdown = getShiftBreakdown(shift, 200, 'team2', [], stored, []);
+  assert.equal(breakdown.breakHours, 0);
+  assert.equal(breakdown.nightHours, 0);
+  assert.equal(breakdown.nightBonus, 0);
+  assert.equal(effectiveBreakMinutes(shift, {}, 'team2'), 0);
+  assert.equal(nightMinutes(shift, {}, 'team2'), 0);
 });
 
 test('ferie can be a full day without clock times and is counted apart from work', () => {
