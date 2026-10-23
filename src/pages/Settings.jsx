@@ -6,12 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { MapPin, Navigation, Save, Users, Lock, Plus, Trash2 } from 'lucide-react';
 import { useOrg } from '@/hooks/useOrg';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import BillingCard from '@/components/BillingCard';
 import EmployerSettingsCard from '@/components/settings/EmployerSettingsCard';
+import PayrollRulesCard from '@/components/settings/PayrollRulesCard';
 
 const PLAN_DEPT_LIMITS = { basic: 1, pro: 3, enterprise: 6, ultimate: 10 };
 
@@ -27,6 +29,13 @@ const generateDefaults = () => {
     d[`team${i}_sunday_extra_amount`] = 0;
     d[`team${i}_holiday_extra_type`] = 'none';
     d[`team${i}_holiday_extra_amount`] = 0;
+    d[`team${i}_night_extra_type`] = 'none';
+    d[`team${i}_night_extra_amount`] = 50;
+    d[`team${i}_night_from`] = '21:00';
+    d[`team${i}_night_to`] = '06:00';
+    d[`team${i}_night_enabled`] = false;
+    d[`team${i}_auto_break`] = false;
+    d[`team${i}_break_rules`] = [];
     d[`team${i}_latitude`] = '';
     d[`team${i}_longitude`] = '';
     d[`team${i}_address`] = '';
@@ -121,9 +130,17 @@ const EXTRA_TYPE_OPTIONS = [
   { value: 'fixed', label: 'Fast beløp (kr/time ekstra)' },
 ];
 
-function TeamPaySection({ teamKey, teamName, form, setForm }) {
+export function TeamPaySection({ teamKey, teamName, form, setForm }) {
   const sundayType = form[`${teamKey}_sunday_extra_type`] || 'none';
   const holidayType = form[`${teamKey}_holiday_extra_type`] || 'none';
+  const nightOn = form[`${teamKey}_night_enabled`] === true;
+  const setNight = (enabled) => setForm((current) => ({
+    ...current,
+    [`${teamKey}_night_enabled`]: enabled,
+    [`${teamKey}_night_extra_type`]: enabled ? 'percentage' : 'none',
+    [`${teamKey}_night_from`]: current[`${teamKey}_night_from`] || '21:00',
+    [`${teamKey}_night_to`]: current[`${teamKey}_night_to`] || '06:00',
+  }));
 
   return (
     <div className="border border-slate-100 rounded-lg p-4 space-y-3">
@@ -178,6 +195,44 @@ function TeamPaySection({ teamKey, teamName, form, setForm }) {
           {holidayType !== 'none' && (
             <p className="text-xs text-slate-400">
               {holidayType === 'percentage' ? `+${form[`${teamKey}_holiday_extra_amount`] || 0}% av timelønn på helligdager` : `+${form[`${teamKey}_holiday_extra_amount`] || 0} kr/time ekstra på helligdager`}
+            </p>
+          )}
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label htmlFor={`${teamKey}-night`} className="text-xs">Nattillegg</Label>
+              <p className="text-xs text-slate-400">{nightOn ? 'På' : 'Av'}</p>
+            </div>
+            <Switch
+              id={`${teamKey}-night`}
+              checked={nightOn}
+              onCheckedChange={setNight}
+              aria-label={`Nattillegg for ${teamName}`}
+            />
+          </div>
+          {!nightOn && (
+            <p className="text-xs text-slate-500">Av. Nattimer gir ikke tillegg i timelister eller lønn.</p>
+          )}
+          {nightOn && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="number" min="0" step="any"
+                className="h-8 text-xs w-24"
+                value={form[`${teamKey}_night_extra_amount`] ?? ''}
+                onChange={e => setForm(f => ({ ...f, [`${teamKey}_night_extra_amount`]: e.target.value }))}
+                placeholder="50"
+                aria-label={`Nattillegg prosent for ${teamName}`}
+              />
+              <span className="text-xs text-slate-500">%</span>
+              <Input type="time" className="h-8 text-xs w-28" value={form[`${teamKey}_night_from`] || '21:00'} onChange={e => setForm(f => ({ ...f, [`${teamKey}_night_from`]: e.target.value }))} aria-label={`Nattillegg fra for ${teamName}`} />
+              <span className="text-xs text-slate-400">til</span>
+              <Input type="time" className="h-8 text-xs w-28" value={form[`${teamKey}_night_to`] || '06:00'} onChange={e => setForm(f => ({ ...f, [`${teamKey}_night_to`]: e.target.value }))} aria-label={`Nattillegg til for ${teamName}`} />
+            </div>
+          )}
+          {nightOn && (
+            <p className="text-xs text-slate-400">
+              +{form[`${teamKey}_night_extra_amount`] ?? 50}% mellom {form[`${teamKey}_night_from`] || '21:00'} og {form[`${teamKey}_night_to`] || '06:00'}. Tillegget kommer oppå vanlig lønn, søndag og helligdag. Slå av bryteren for å fjerne det.
             </p>
           )}
         </div>
@@ -301,6 +356,14 @@ export default function Settings() {
         }
         merged.active_teams_count = count;
       }
+      for (let i = 1; i <= 10; i += 1) {
+        if (!Array.isArray(merged[`team${i}_break_rules`])) merged[`team${i}_break_rules`] = [];
+        if (!merged[`team${i}_night_from`]) merged[`team${i}_night_from`] = '21:00';
+        if (!merged[`team${i}_night_to`]) merged[`team${i}_night_to`] = '06:00';
+        if (!merged[`team${i}_night_extra_type`]) merged[`team${i}_night_extra_type`] = 'none';
+        merged[`team${i}_auto_break`] = merged[`team${i}_auto_break`] === true;
+        merged[`team${i}_night_enabled`] = merged[`team${i}_night_enabled`] === true;
+      }
       setForm(merged);
     }
   }, [existing]);
@@ -346,7 +409,7 @@ export default function Settings() {
     e.preventDefault();
     const numFields = ['latitude', 'longitude', 'radius_meters', 'full_time_hours_per_week'];
     for (let i = 1; i <= 10; i++) {
-      numFields.push(`team${i}_sunday_extra_amount`, `team${i}_holiday_extra_amount`,
+      numFields.push(`team${i}_sunday_extra_amount`, `team${i}_holiday_extra_amount`, `team${i}_night_extra_amount`,
         `team${i}_latitude`, `team${i}_longitude`, `team${i}_radius_meters`);
     }
     const data = { ...form };
@@ -358,6 +421,13 @@ export default function Settings() {
         delete data[`team${i}_sunday_extra_amount`];
         delete data[`team${i}_holiday_extra_type`];
         delete data[`team${i}_holiday_extra_amount`];
+        delete data[`team${i}_night_extra_type`];
+        delete data[`team${i}_night_extra_amount`];
+        delete data[`team${i}_night_from`];
+        delete data[`team${i}_night_to`];
+        delete data[`team${i}_night_enabled`];
+        delete data[`team${i}_auto_break`];
+        delete data[`team${i}_break_rules`];
       }
     }
     saveMut.mutate(data);
@@ -383,6 +453,13 @@ export default function Settings() {
       newForm[`${to}_sunday_extra_amount`] = newForm[`${from}_sunday_extra_amount`];
       newForm[`${to}_holiday_extra_type`] = newForm[`${from}_holiday_extra_type`];
       newForm[`${to}_holiday_extra_amount`] = newForm[`${from}_holiday_extra_amount`];
+      newForm[`${to}_night_extra_type`] = newForm[`${from}_night_extra_type`];
+      newForm[`${to}_night_extra_amount`] = newForm[`${from}_night_extra_amount`];
+      newForm[`${to}_night_from`] = newForm[`${from}_night_from`];
+      newForm[`${to}_night_to`] = newForm[`${from}_night_to`];
+      newForm[`${to}_night_enabled`] = newForm[`${from}_night_enabled`];
+      newForm[`${to}_auto_break`] = newForm[`${from}_auto_break`];
+      newForm[`${to}_break_rules`] = newForm[`${from}_break_rules`];
       newForm[`${to}_latitude`] = newForm[`${from}_latitude`];
       newForm[`${to}_longitude`] = newForm[`${from}_longitude`];
       newForm[`${to}_radius_meters`] = newForm[`${from}_radius_meters`];
@@ -400,6 +477,13 @@ export default function Settings() {
     newForm[`${last}_sunday_extra_amount`] = 0;
     newForm[`${last}_holiday_extra_type`] = 'none';
     newForm[`${last}_holiday_extra_amount`] = 0;
+    newForm[`${last}_night_extra_type`] = 'none';
+    newForm[`${last}_night_extra_amount`] = 50;
+    newForm[`${last}_night_from`] = '21:00';
+    newForm[`${last}_night_to`] = '06:00';
+    newForm[`${last}_night_enabled`] = false;
+    newForm[`${last}_auto_break`] = false;
+    newForm[`${last}_break_rules`] = [];
     newForm[`${last}_latitude`] = '';
     newForm[`${last}_longitude`] = '';
     newForm[`${last}_radius_meters`] = '';
@@ -524,10 +608,12 @@ export default function Settings() {
 
         <StoreWorkplaceCard teamKeys={teamKeys} form={form} setForm={setForm} />
 
+        {showWages && <PayrollRulesCard teamKeys={teamKeys} form={form} setForm={setForm} />}
+
         {showWages && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
           <h2 className="text-base font-semibold text-slate-800">Tillegg per avdeling</h2>
-          <p className="text-xs text-slate-400">Sett søndags- og helligdagstillegg separat for hver avdeling.</p>
+          <p className="text-xs text-slate-400">Søndag og helligdag settes som før. Nattillegg er av til du slår det på for avdelingen.</p>
           {teamKeys.map(key => (
             <TeamPaySection key={key} teamKey={key} teamName={form[`${key}_name`] || key} form={form} setForm={setForm} />
           ))}

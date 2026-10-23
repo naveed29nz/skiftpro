@@ -1,16 +1,9 @@
 import { useState } from 'react';
 import { format, addDays, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { calcHours } from '@/utils/payCalc';
 
-function calcHours(shift) {
-  const [sh, sm] = shift.start_time.split(':').map(Number);
-  const [eh, em] = shift.end_time.split(':').map(Number);
-  let total = (eh * 60 + em) - (sh * 60 + sm) - (shift.break_minutes || 0);
-  if (total < 0) total += 24 * 60; // overnight shift crossing midnight
-  return Math.max(0, total / 60);
-}
-
-export default function WeekSummary({ allShifts = [], today }) {
+export default function WeekSummary({ allShifts = [], today, wp }) {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
@@ -18,7 +11,7 @@ export default function WeekSummary({ allShifts = [], today }) {
   const weekShifts = allShifts.filter(s => s.date >= weekStartStr && s.date <= weekEndStr && s.status !== 'cancelled');
   const isCurrentWeek = weekStartStr === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const totalHours = weekShifts.reduce((sum, s) => sum + calcHours(s), 0);
+  const totalHours = weekShifts.reduce((sum, s) => sum + calcHours(s, wp, s.team), 0);
   const todayStr = today || format(new Date(), 'yyyy-MM-dd');
 
   return (

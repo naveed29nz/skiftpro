@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { Plus, Clock, CalendarOff } from 'lucide-react';
+import { calcHours as netHours } from '@/utils/payCalc';
+import { shiftLabelName } from '@/utils/shiftLabels';
 
 // 24-timers Gantt-visning (én dag) sortert på skiftkategori – i stil med Planday.
 const SHIFT_ROWS = [
@@ -8,6 +10,7 @@ const SHIFT_ROWS = [
   { key: 'middle',  name: 'Mellomvakt',    headerClass: 'bg-sky-600 text-white',     rowClass: 'bg-sky-50/40',    blockClass: 'bg-sky-200 text-sky-900 border border-sky-300' },
   { key: 'evening', name: 'Kveldsvakt',    headerClass: 'bg-slate-600 text-white',   rowClass: 'bg-slate-100/40', blockClass: 'bg-slate-300 text-slate-900 border border-slate-400' },
   { key: 'sick',    name: 'Syk',           headerClass: 'bg-red-600 text-white',     rowClass: 'bg-red-50/40',    blockClass: 'bg-red-200 text-red-900 border border-red-300' },
+  { key: 'ferie',   name: 'Ferie',         headerClass: 'bg-sky-600 text-white',     rowClass: 'bg-sky-50/40',    blockClass: 'bg-sky-200 text-sky-900 border border-sky-300' },
   { key: '',        name: 'Ing. kategori', headerClass: 'bg-gray-500 text-white',   rowClass: 'bg-gray-50/40',   blockClass: 'bg-gray-200 text-gray-900 border border-gray-300' },
 ];
 
@@ -20,10 +23,12 @@ function timeToHours(t) {
   const [h, m] = t.split(':').map(Number);
   return h + m / 60;
 }
-function calcHours(s) {
-  let mins = (timeToHours(s.end_time) - timeToHours(s.start_time)) * 60 - (s.break_minutes || 0);
-  if (mins < 0) mins += 24 * 60;
-  return Math.max(0, mins / 60);
+function blockSpan(shift) {
+  if (shift.all_day) return { start: 8, hours: 8, label: 'Hel dag' };
+  const start = timeToHours(shift.start_time);
+  let hours = timeToHours(shift.end_time) - start;
+  if (hours <= 0) hours += 24;
+  return { start, hours, label: `${shift.start_time}–${shift.end_time}` };
 }
 function fmtHours(h) {
   const hrs = Math.floor(h);
@@ -33,12 +38,13 @@ function fmtHours(h) {
 
 // Fordeler overlappende skift i egne "laner" slik at blokkene ikke klapper over hverandre.
 function assignLanes(shifts) {
-  const sorted = [...shifts].sort((a, b) => timeToHours(a.start_time) - timeToHours(b.start_time));
+  const sorted = [...shifts].sort((a, b) => blockSpan(a).start - blockSpan(b).start);
   const laneEnds = [];
   const lanesByShift = new Map();
   sorted.forEach(s => {
-    const start = timeToHours(s.start_time);
-    const end = start + calcHours(s);
+    const span = blockSpan(s);
+    const start = span.start;
+    const end = start + span.hours;
     let lane = laneEnds.findIndex(e => e <= start + 0.01);
     if (lane === -1) { lane = laneEnds.length; laneEnds.push(end); }
     else laneEnds[lane] = end;
@@ -48,7 +54,7 @@ function assignLanes(shifts) {
   return { lanesByShift, maxLanes };
 }
 
-export default function DayGantt({ day, workers, shifts, availability, filterTeam = 'all', onEdit, onAdd, showWages = false }) {
+export default function DayGantt({ day, workers, shifts, availability, filterTeam = 'all', onEdit, onAdd, showWages = false, wp }) {
   const dayStr = format(day, 'yyyy-MM-dd');
   const workersById = useMemo(() => {
     const m = new Map();
@@ -82,10 +88,10 @@ export default function DayGantt({ day, workers, shifts, availability, filterTea
 
   const shiftsByGroup = (key) => dayShifts.filter(s => (s.shift_label || '') === key);
   const statsOf = (ss) => ({
-    hours: ss.reduce((sum, s) => sum + calcHours(s), 0),
+    hours: ss.reduce((sum, s) => sum + netHours(s, wp, s.team), 0),
     cost: ss.reduce((sum, s) => {
       const w = workersById.get(s.worker_id);
-      return sum + calcHours(s) * (w?.hourly_rate || 0);
+      return sum + netHours(s, wp, s.team) * (w?.hourly_rate || 0);
     }, 0),
     count: ss.length,
   });
@@ -145,8 +151,9 @@ export default function DayGantt({ day, workers, shifts, availability, filterTea
                   {/* Skiftblokker */}
                   {groupShifts.map(s => {
                     const w = workersById.get(s.worker_id);
-                    const left = (timeToHours(s.start_time) / 24) * TIME_WIDTH;
-                    const widthPx = (calcHours(s) / 24) * TIME_WIDTH;
+                    const span = blockSpan(s);
+                    const left = (span.start / 24) * TIME_WIDTH;
+                    const widthPx = (span.hours / 24) * TIME_WIDTH;
                     const lane = lanesByShift.get(s.id) || 0;
                     return (
                       <button key={s.id}
@@ -154,7 +161,7 @@ export default function DayGantt({ day, workers, shifts, availability, filterTea
                         style={{ left, width: Math.max(widthPx - 4, 56), top: 6 + lane * 40, height: 34 }}
                         className={`absolute rounded px-1.5 py-1 text-[10px] leading-tight text-left hover:shadow-md hover:ring-1 hover:ring-blue-300 transition-all ${row.blockClass}`}>
                         <div className="font-semibold truncate">{s.worker_name || w?.name}</div>
-                        <div className="truncate opacity-80">{s.start_time}–{s.end_time}</div>
+                        <div className="truncate opacity-80">{span.label}{s.shift_label ? ` · ${shiftLabelName(s.shift_label)}` : ''}</div>
                       </button>
                     );
                   })}

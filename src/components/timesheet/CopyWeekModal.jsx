@@ -39,6 +39,8 @@ export default function CopyWeekModal({ weekStart, weekShifts, currentTeam = 'al
           start_time: shift.start_time,
           end_time: shift.end_time,
           break_minutes: shift.break_minutes || 0,
+          break_manual: shift.break_manual !== false,
+          all_day: Boolean(shift.all_day),
           notes: shift.notes || '',
           shift_label: shift.shift_label || '',
           status: 'scheduled',

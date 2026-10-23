@@ -1,9 +1,9 @@
 /**
- * Shared pay calculation utility.
- * Calculates pay for a shift considering team-specific sunday/holiday extras.
+ * Shared pay calculation.
+ * Hours deduct the effective unpaid break. Sunday, holiday and night
+ * supplements stack. Sick and ferie are counted apart from worked hours.
  */
 
-// --- Norwegian Public Holiday computation ---
 function getEaster(year) {
   const a = year % 19, b = Math.floor(year / 100), c = year % 100;
   const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
@@ -19,7 +19,7 @@ function getEaster(year) {
 function addD(date, n) { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
 
 function fmt(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function getNorwegianPublicHolidays(year) {
@@ -40,123 +40,265 @@ function getNorwegianPublicHolidays(year) {
   ];
 }
 
-export function calcHours(shift) {
-  const [sh, sm] = shift.start_time.split(':').map(Number);
-  const [eh, em] = shift.end_time.split(':').map(Number);
-  let total = (eh * 60 + em) - (sh * 60 + sm) - (shift.break_minutes || 0);
-  if (total < 0) total += 24 * 60; // overnight shift crossing midnight
-  return Math.max(0, total / 60);
-}
-
-/**
- * Get the team key for a worker (first team in their teams array).
- */
 export function getWorkerTeamKey(worker) {
   return (worker?.teams || ['team1'])[0] || 'team1';
 }
 
-/**
- * Get team-specific extra pay settings from wpSettings for a given teamKey and type (sunday/holiday).
- */
 export function getTeamExtra(wpSettings, teamKey, type) {
   const extraType = wpSettings?.[`${teamKey}_${type}_extra_type`] || 'none';
   const extraAmount = parseFloat(wpSettings?.[`${teamKey}_${type}_extra_amount`]) || 0;
   return { extraType, extraAmount };
 }
 
-/**
- * Calculate extra pay amount for a given base pay and team extra settings.
- */
 export function calcExtraAmount(basePay, hours, extraType, extraAmount) {
   if (extraType === 'percentage') return basePay * (extraAmount / 100);
   if (extraType === 'fixed') return hours * extraAmount;
   return 0;
 }
 
+export function isAbsenceLabel(label) {
+  return label === 'sick' || label === 'ferie';
+}
+
+function clockMinutes(time) {
+  if (!time || typeof time !== 'string' || !time.includes(':')) return null;
+  const [h, m] = time.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+export function fullDayHours(wpSettings) {
+  const weekly = Number(wpSettings?.full_time_hours_per_week);
+  const hours = Number.isFinite(weekly) && weekly > 0 ? weekly : 37.5;
+  return hours / 5;
+}
+
+/** Clock length in minutes. An overnight shift that ends at the start time counts as 24 hours. */
+export function grossMinutes(shift) {
+  const start = clockMinutes(shift?.start_time);
+  const end = clockMinutes(shift?.end_time);
+  if (start == null || end == null) return 0;
+  let total = end - start;
+  if (total <= 0) total += 24 * 60;
+  return total;
+}
+
+export function autoBreakEnabled(wpSettings, teamKey) {
+  return wpSettings?.[`${teamKey || 'team1'}_auto_break`] === true;
+}
+
+export function nightEnabled(wpSettings, teamKey) {
+  return wpSettings?.[`${teamKey || 'team1'}_night_enabled`] === true;
+}
+
+export function breakRulesForTeam(wpSettings, teamKey) {
+  const key = teamKey || 'team1';
+  if (!autoBreakEnabled(wpSettings, key)) return [];
+  const raw = wpSettings?.[`${key}_break_rules`];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((rule) => ({
+      afterMinutes: Number(rule?.after_minutes) || 0,
+      breakMinutes: Number(rule?.break_minutes) || 0,
+    }))
+    .filter((rule) => rule.afterMinutes > 0 && rule.breakMinutes > 0)
+    .sort((a, b) => a.afterMinutes - b.afterMinutes);
+}
+
+/** Highest matching rule. A shift of exactly the threshold does not match. */
+export function automaticBreakMinutes(gross, rules) {
+  let chosen = 0;
+  for (const rule of rules || []) {
+    if (gross > rule.afterMinutes) chosen = rule.breakMinutes;
+  }
+  return chosen;
+}
+
+export function effectiveBreakMinutes(shift, wpSettings, teamKey) {
+  if (!shift || shift.all_day) return 0;
+  if (shift.break_manual === true) return Math.max(0, Number(shift.break_minutes) || 0);
+  const rules = breakRulesForTeam(wpSettings, shift.team || teamKey || 'team1');
+  if (rules.length === 0) {
+    if (shift.break_manual === false) return 0;
+    return Math.max(0, Number(shift.break_minutes) || 0);
+  }
+  return automaticBreakMinutes(grossMinutes(shift), rules);
+}
+
+export function nightSupplement(wpSettings, teamKey) {
+  const key = teamKey || 'team1';
+  const from = wpSettings?.[`${key}_night_from`] || '21:00';
+  const to = wpSettings?.[`${key}_night_to`] || '06:00';
+  if (!nightEnabled(wpSettings, key)) {
+    return { extraType: 'none', extraAmount: 0, from, to };
+  }
+  const storedType = wpSettings?.[`${key}_night_extra_type`];
+  const extraType = !storedType || storedType === 'none' ? 'percentage' : storedType;
+  const raw = wpSettings?.[`${key}_night_extra_amount`];
+  const extraAmount = raw == null || raw === '' ? 50 : Number(raw) || 0;
+  return { extraType, extraAmount, from, to };
+}
+
+function nightOverlapMinutes(start, end, from, to) {
+  const windows = to <= from
+    ? [[from, 1440], [1440, 1440 + to], [0, to]]
+    : [[from, to], [from + 1440, to + 1440]];
+  let total = 0;
+  for (const [winStart, winEnd] of windows) {
+    const left = Math.max(start, winStart);
+    const right = Math.min(end, winEnd);
+    if (right > left) total += right - left;
+  }
+  return total;
+}
+
+export function nightMinutes(shift, wpSettings, teamKey) {
+  if (!shift || shift.all_day || isAbsenceLabel(shift.shift_label)) return 0;
+  const start = clockMinutes(shift.start_time);
+  if (start == null) return 0;
+  const gross = grossMinutes(shift);
+  const breakMinutes = Math.min(gross, effectiveBreakMinutes(shift, wpSettings, teamKey));
+  const worked = gross - breakMinutes;
+  if (worked <= 0) return 0;
+  const night = nightSupplement(wpSettings, shift.team || teamKey);
+  if (night.extraType === 'none') return 0;
+  const from = clockMinutes(night.from);
+  const to = clockMinutes(night.to);
+  if (from == null || to == null || from === to) return 0;
+  return nightOverlapMinutes(start, start + worked, from, to);
+}
+
+export function calcHours(shift, wpSettings, teamKey) {
+  if (shift?.all_day) return fullDayHours(wpSettings);
+  const gross = grossMinutes(shift);
+  const breakMinutes = Math.min(gross, effectiveBreakMinutes(shift, wpSettings, teamKey));
+  return Math.max(0, (gross - breakMinutes) / 60);
+}
+
+const EMPTY_SPLIT = {
+  grossHours: 0,
+  breakHours: 0,
+  nightHours: 0,
+  sundayHours: 0,
+  holidayHours: 0,
+  sickHours: 0,
+  ferieHours: 0,
+  nightBonus: 0,
+  sundayBonus: 0,
+  holidayBonus: 0,
+};
+
 /**
  * Full shift pay breakdown.
- * @param {object} shift
- * @param {number} workerRate - hourly rate in kr
- * @param {string} teamKey - 'team1'|'team2'|'team3'
- * @param {array} holidays - holiday records
- * @param {object} wpSettings - workplace settings object (wpSettings[0])
+ * Night hours are a supplement on top of weekday, Sunday or holiday pay.
  */
 export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettings, disabledExtras = []) {
-  const hours = calcHours(shift);
-  const date = new Date(shift.date + 'T00:00:00');
+  const resolvedTeam = shift?.team || teamKey || 'team1';
+  const hours = calcHours(shift, wpSettings, resolvedTeam);
+  const rate = Number(workerRate) || 0;
+  const date = new Date(`${shift.date}T00:00:00`);
+  const gross = shift?.all_day ? hours : grossMinutes(shift) / 60;
+  const breakHours = shift?.all_day ? 0 : Math.max(0, gross - hours);
 
-  // Syk: betales som vanlig timepris, men markeres separat og teller ikke som
-  // vanlig arbeidstid eller ekstratid. Ingen søndags/helligdagstillegg for syke vakter.
-  if (shift.shift_label === 'sick') {
-    const basePay = hours * workerRate;
+  if (isAbsenceLabel(shift.shift_label)) {
+    const basePay = hours * rate;
+    const isFerie = shift.shift_label === 'ferie';
     return {
       shift,
       hours,
-      label: 'Syk',
+      label: isFerie ? 'Ferie' : 'Syk',
       isExtra: false,
-      isSick: true,
+      isSick: !isFerie,
+      isFerie,
+      isAllDay: Boolean(shift.all_day),
       basePay,
       extraBonus: 0,
       pay: basePay,
       regularHours: 0,
       extraHours: 0,
-      sickHours: hours,
+      ...EMPTY_SPLIT,
+      grossHours: shift.all_day ? hours : gross,
+      breakHours: shift.all_day ? 0 : Math.max(0, gross - hours),
+      sickHours: isFerie ? 0 : hours,
+      ferieHours: isFerie ? hours : 0,
     };
   }
 
   const isSunday = date.getDay() === 0;
-  const holiday = holidays?.find(h => h.date === shift.date);
-  const year = date.getFullYear();
-  const norwegianHolidays = getNorwegianPublicHolidays(year);
+  const holiday = holidays?.find((h) => h.date === shift.date);
+  const norwegianHolidays = getNorwegianPublicHolidays(date.getFullYear());
   const isNorwegianHoliday = !holiday && norwegianHolidays.includes(shift.date);
 
-  let basePay = hours * workerRate;
-  let extraBonus = 0;
+  let basePay = hours * rate;
+  let sundayBonus = 0;
+  let holidayBonus = 0;
   let label = 'Vanlig';
   let isExtra = false;
+  let sundayHours = 0;
+  let holidayHours = 0;
 
   if (holiday) {
     isExtra = true;
+    holidayHours = hours;
     if (disabledExtras.includes('holiday')) {
       label = `Helligdag: ${holiday.name} (ingen tillegg)`;
-      // basePay stays as normal hours * rate
     } else {
       const multiplier = holiday.pay_multiplier || 2;
-      basePay = hours * workerRate * multiplier;
+      basePay = hours * rate * multiplier;
       label = `Helligdag: ${holiday.name} ×${multiplier}`;
-      // Holiday entity extra (old system)
       const et = holiday.extra_type;
       const ea = holiday.extra_amount || 0;
-      if (et === 'percentage') extraBonus += basePay * (ea / 100);
-      else if (et === 'fixed_per_shift' || et === 'fixed_per_day') extraBonus += ea;
-      // Team holiday extra (new system)
-      const { extraType, extraAmount } = getTeamExtra(wpSettings, teamKey, 'holiday');
-      extraBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
+      if (et === 'percentage') holidayBonus += basePay * (ea / 100);
+      else if (et === 'fixed_per_shift' || et === 'fixed_per_day') holidayBonus += ea;
+      const { extraType, extraAmount } = getTeamExtra(wpSettings, resolvedTeam, 'holiday');
+      holidayBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
     }
   } else if (isNorwegianHoliday) {
     isExtra = true;
+    holidayHours = hours;
     if (!disabledExtras.includes('holiday')) {
-      const { extraType, extraAmount } = getTeamExtra(wpSettings, teamKey, 'holiday');
-      extraBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
+      const { extraType, extraAmount } = getTeamExtra(wpSettings, resolvedTeam, 'holiday');
+      holidayBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
     }
   } else if (isSunday) {
     label = 'Søndag';
     isExtra = true;
+    sundayHours = hours;
     if (!disabledExtras.includes('sunday')) {
-      const { extraType, extraAmount } = getTeamExtra(wpSettings, teamKey, 'sunday');
-      extraBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
+      const { extraType, extraAmount } = getTeamExtra(wpSettings, resolvedTeam, 'sunday');
+      sundayBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
     }
   }
+
+  const nightHours = nightMinutes(shift, wpSettings, resolvedTeam) / 60;
+  let nightBonus = 0;
+  if (nightHours > 0 && !disabledExtras.includes('night')) {
+    const night = nightSupplement(wpSettings, resolvedTeam);
+    nightBonus = calcExtraAmount(nightHours * rate, nightHours, night.extraType, night.extraAmount);
+  }
+  const extraBonus = sundayBonus + holidayBonus + nightBonus;
 
   return {
     shift,
     hours,
     label,
     isExtra,
+    isSick: false,
+    isFerie: false,
+    isAllDay: false,
     basePay,
     extraBonus,
     pay: basePay + extraBonus,
     regularHours: isExtra ? 0 : hours,
     extraHours: isExtra ? hours : 0,
+    ...EMPTY_SPLIT,
+    grossHours: gross,
+    breakHours,
+    nightHours,
+    sundayHours,
+    holidayHours,
+    nightBonus,
+    sundayBonus,
+    holidayBonus,
   };
 }

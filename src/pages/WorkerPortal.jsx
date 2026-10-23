@@ -6,7 +6,7 @@ import { Clock, CalendarDays, Coins, Users, ArrowLeftRight, LayoutDashboard, Log
 import AvailabilityCalendar from '@/components/worker/AvailabilityCalendar';
 import { Button } from '@/components/ui/button';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
-import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
+import { calcHours, getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import StampCard from '@/components/worker/StampCard';
 import StampCorrections from '@/components/worker/StampCorrections';
 import PushOptIn from '@/components/PushOptIn';
@@ -19,14 +19,6 @@ import WorkerContractsTab from '@/components/worker/WorkerContractsTab';
 import WorkerSalaryTab from '@/components/worker/WorkerSalaryTab';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import { sameEmail } from '@/lib/emails';
-
-function calcHours(shift) {
-  const [sh, sm] = shift.start_time.split(':').map(Number);
-  const [eh, em] = shift.end_time.split(':').map(Number);
-  let total = (eh * 60 + em) - (sh * 60 + sm) - (shift.break_minutes || 0);
-  if (total < 0) total += 24 * 60; // overnight shift crossing midnight
-  return Math.max(0, total / 60);
-}
 
 const TABS = [
   { id: 'dashboard', label: 'Min side', icon: LayoutDashboard },
@@ -218,7 +210,7 @@ export default function WorkerPortal() {
               todayStamp={todayStamp}
               onStampChange={setTodayStamp}
             />
-            <WeekSummary allShifts={myShifts} today={today} />
+            <WeekSummary allShifts={myShifts} today={today} wp={workplaceSetting} />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <StampCorrections worker={worker} user={currentUser} />

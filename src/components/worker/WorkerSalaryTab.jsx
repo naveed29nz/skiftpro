@@ -9,9 +9,13 @@ const LABEL_STYLES = {
   holiday: 'bg-red-100 text-red-700',
   extra: 'bg-blue-100 text-blue-700',
   regular: 'bg-slate-100 text-slate-500',
+  sick: 'bg-red-100 text-red-700',
+  ferie: 'bg-sky-100 text-sky-700',
 };
 
 function labelKind(b) {
+  if (b.isFerie) return 'ferie';
+  if (b.isSick) return 'sick';
   if (b.label?.startsWith('Helligdag')) return 'holiday';
   if (b.label === 'Søndag') return 'sunday';
   if (b.isExtra) return 'extra';
@@ -82,7 +86,7 @@ export default function WorkerSalaryTab({ worker, shifts, holidays, wpSettings, 
         </div>
         <div className="bg-white rounded-xl border border-amber-200 p-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-amber-600">Tillegg (søndag/helligdag)</p>
+            <p className="text-xs text-amber-600">Tillegg (natt/søndag/helligdag)</p>
             <CalendarDays className="w-4 h-4 text-amber-400" />
           </div>
           <p className="text-xl font-bold text-amber-700 mt-1">+{totalBonus.toFixed(0)} kr</p>
@@ -102,7 +106,7 @@ export default function WorkerSalaryTab({ worker, shifts, holidays, wpSettings, 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-100">
           <h3 className="font-semibold text-slate-800 text-sm">Lønnsdetaljer</h3>
-          <p className="text-xs text-slate-400">Hver vakt med tillegg for søndag og helligdager</p>
+          <p className="text-xs text-slate-400">Hver vakt med natt-, søndag- og helligdagstillegg. Syk og ferie telles for seg.</p>
         </div>
         {rows.length === 0 ? (
           <div className="py-12 text-center text-sm text-slate-400">Ingen vakter denne måneden</div>
@@ -120,7 +124,7 @@ export default function WorkerSalaryTab({ worker, shifts, holidays, wpSettings, 
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-medium text-slate-800">{shift.start_time}–{shift.end_time}</span>
+                        <span className="text-sm font-medium text-slate-800">{breakdown.isAllDay ? 'Hele dagen' : `${shift.start_time}–${shift.end_time}`}</span>
                         <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${LABEL_STYLES[kind]}`}>{breakdown.label}</span>
                         {teamLabel && <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{teamLabel}</span>}
                       </div>

@@ -29,6 +29,7 @@ export const ENTITY_TABLES = {
   Availability: 'availability',
   MonthlyResult: 'monthly_results',
   StaffingBudget: 'staffing_budgets',
+  PayrollPeriodLock: 'payroll_period_locks',
 };
 
 const FUNCTION_NAMES = {
@@ -56,6 +57,9 @@ const TIMESTAMP_FIELDS = new Set([
   'stamp_in',
   'stamp_out',
   'approved_at',
+  'hours_approved_at',
+  'locked_at',
+  'unlocked_at',
   'completed_at',
   'created_date',
   'updated_date',
@@ -158,6 +162,29 @@ function withoutEmployerSignatory(payload) {
   return next;
 }
 
+const ROUND1_SHIFT_COLUMNS = ['all_day', 'break_manual', 'hours_approved', 'hours_approved_at', 'hours_approved_by'];
+
+function withoutRound1ShiftColumns(payload) {
+  const next = { ...payload };
+  for (const column of ROUND1_SHIFT_COLUMNS) delete next[column];
+  return next;
+}
+
+function withoutRound1WorkplaceColumns(payload) {
+  const next = { ...payload };
+  delete next.payroll_export_columns;
+  for (let i = 1; i <= 10; i += 1) {
+    delete next[`team${i}_break_rules`];
+    delete next[`team${i}_auto_break`];
+    delete next[`team${i}_night_enabled`];
+    delete next[`team${i}_night_from`];
+    delete next[`team${i}_night_to`];
+    delete next[`team${i}_night_extra_type`];
+    delete next[`team${i}_night_extra_amount`];
+  }
+  return next;
+}
+
 function workplaceColumns() {
   const cols = ['id', 'org_id', 'workplace_name', 'workplace_address', 'apningstid_fra', 'apningstid_til', 'latitude', 'longitude', 'radius_meters', 'full_time_hours_per_week', 'active_teams_count'];
   for (let i = 1; i <= 10; i += 1) {
@@ -167,6 +194,13 @@ function workplaceColumns() {
       `team${i}_sunday_extra_amount`,
       `team${i}_holiday_extra_type`,
       `team${i}_holiday_extra_amount`,
+      `team${i}_night_extra_type`,
+      `team${i}_night_extra_amount`,
+      `team${i}_night_enabled`,
+      `team${i}_night_from`,
+      `team${i}_night_to`,
+      `team${i}_auto_break`,
+      `team${i}_break_rules`,
       `team${i}_latitude`,
       `team${i}_longitude`,
       `team${i}_radius_meters`,
@@ -178,11 +212,11 @@ function workplaceColumns() {
       `team${i}_loomis_kundenr`,
     );
   }
-  cols.push('created_date', 'updated_date', 'created_by');
+  cols.push('payroll_export_columns', 'created_date', 'updated_date', 'created_by');
   return cols;
 }
 
-const workplaceWageFields = workplaceColumns().filter((col) => /_(sunday|holiday)_extra_/.test(col));
+const workplaceWageFields = workplaceColumns().filter((col) => /_(sunday|holiday|night)_extra_/.test(col));
 
 // Columns the wage migration stops butikksjef and employees from selecting.
 const WAGE_FIELDS = {
@@ -382,12 +416,21 @@ async function writeRow(table, payload, run) {
   try {
     return await runRead(table, (columns) => run(columns, payload));
   } catch (error) {
+    if (table === 'shifts' && isMissingColumn(error)) {
+      return runRead(table, (columns) => run(columns, withoutRound1ShiftColumns(payload)));
+    }
     if (table === 'workplace_settings' && isMissingColumn(error)) {
+      const base = withoutRound1WorkplaceColumns(payload);
       try {
-        return await runRead(table, (columns) => run(columns, withoutLoomisKundenr(payload)));
+        return await runRead(table, (columns) => run(columns, base));
       } catch (retryError) {
         if (!isMissingColumn(retryError)) throw retryError;
-        return runRead(table, (columns) => run(columns, withoutStoreWorkplaceColumns(withoutLoomisKundenr(payload))));
+        try {
+          return await runRead(table, (columns) => run(columns, withoutLoomisKundenr(base)));
+        } catch (loomisError) {
+          if (!isMissingColumn(loomisError)) throw loomisError;
+          return runRead(table, (columns) => run(columns, withoutStoreWorkplaceColumns(withoutLoomisKundenr(base))));
+        }
       }
     }
     if (table === 'organizations' && isMissingColumn(error) && (

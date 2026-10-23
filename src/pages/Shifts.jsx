@@ -9,13 +9,8 @@ import ShiftForm from '@/components/shifts/ShiftForm';
 import { format } from 'date-fns';
 import { nb } from 'date-fns/locale';
 import { flushNotifications } from '@/utils/notify';
-
-function calcHours(shift) {
-  const [sh, sm] = shift.start_time.split(':').map(Number);
-  const [eh, em] = shift.end_time.split(':').map(Number);
-  const total = (eh * 60 + em) - (sh * 60 + sm) - (shift.break_minutes || 0);
-  return Math.max(0, total / 60);
-}
+import { calcHours } from '@/utils/payCalc';
+import { shiftLabelName } from '@/utils/shiftLabels';
 
 export default function Shifts() {
   const [showForm, setShowForm] = useState(false);
@@ -104,8 +99,13 @@ export default function Shifts() {
                         </div>
                       </td>
                       <td className="px-5 py-3 text-slate-600">{shift.date ? format(new Date(shift.date + 'T00:00:00'), 'd. MMM yyyy', { locale: nb }) : ''}</td>
-                      <td className="px-5 py-3 text-slate-600">{shift.start_time} – {shift.end_time}</td>
-                      <td className="px-5 py-3 text-slate-500">{shift.break_minutes || 0}m</td>
+                      <td className="px-5 py-3 text-slate-600">
+                        {shift.all_day ? 'Hele dagen' : `${shift.start_time} – ${shift.end_time}`}
+                        {shiftLabelName(shift.shift_label) && (
+                          <span className="ml-2 text-xs text-slate-500">{shiftLabelName(shift.shift_label)}</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-slate-500">{shift.all_day ? '—' : `${shift.break_minutes || 0}m`}</td>
                       <td className="px-5 py-3 font-medium text-slate-700">{calcHours(shift).toFixed(1)}h</td>
                       <td className="px-5 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${

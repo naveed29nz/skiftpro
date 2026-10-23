@@ -80,6 +80,8 @@ test('copy keeps the shift times and lands on the chosen cell as a draft', () =>
     start_time: '08:00',
     end_time: '16:00',
     break_minutes: 30,
+    break_manual: true,
+    all_day: false,
     notes: 'kasse',
     shift_label: 'morning',
     status: 'scheduled',

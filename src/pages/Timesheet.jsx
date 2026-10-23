@@ -22,6 +22,10 @@ import { toast } from '@/components/ui/use-toast';
 import ShiftTouchSheet from '@/components/timesheet/ShiftTouchSheet';
 import { isShiftDropTarget, sameShiftCell, shiftCopyRecord, shiftMoveFields } from '@/timesheet/placeShift';
 import { isCoarsePointer, isTouchLikePointer, pressMovedPast, SHIFT_LONG_PRESS_MS, shiftGestureIsTouch } from '@/timesheet/touchShift';
+import { calcHours } from '@/utils/payCalc';
+import { isDateLocked } from '@/utils/payrollLock';
+import { shiftLabelName } from '@/utils/shiftLabels';
+import { effectiveAppRole } from '@/utils/wageAccess';
 
 const SHIFT_NO_CALLOUT = 'select-none [-webkit-touch-callout:none] [-webkit-user-select:none]';
 
@@ -61,19 +65,12 @@ function TouchDragGuard({ touchPointer, mouseGesture, lastTouchAt }) {
 
 const SHIFT_DRAG_SENSORS = [useMouseSensor, useKeyboardSensor];
 
-function calcHours(shift) {
-  const [sh, sm] = shift.start_time.split(':').map(Number);
-  const [eh, em] = shift.end_time.split(':').map(Number);
-  let minutes = (eh * 60 + em) - (sh * 60 + sm) - (shift.break_minutes || 0);
-  if (minutes < 0) minutes += 24 * 60; // overnight shift (e.g. 21:00–00:00)
-  return Math.max(0, minutes / 60);
-}
-
 const LABEL_STYLES = {
   morning: { cell: 'bg-green-50',  badge: 'bg-green-100 text-green-700 border border-green-200' },
   middle:  { cell: 'bg-slate-100', badge: 'bg-slate-200 text-slate-700 border border-slate-300' },
   evening: { cell: 'bg-slate-50',  badge: 'bg-slate-150 text-slate-600 border border-slate-250' },
   sick:    { cell: 'bg-red-50',    badge: 'bg-red-100 text-red-700 border border-red-200' },
+  ferie:   { cell: 'bg-sky-50',    badge: 'bg-sky-100 text-sky-700 border border-sky-200' },
 };
 
 const GROUPS = [
@@ -81,6 +78,7 @@ const GROUPS = [
   { label: 'middle',  name: 'Mellomvakt', icon: '☀️',  headerClass: 'bg-slate-600 text-white',    rowClass: 'bg-slate-100' },
   { label: 'evening', name: 'Kveld',      icon: '🌙', headerClass: 'bg-slate-500 text-white',  rowClass: 'bg-slate-50' },
   { label: 'sick',    name: 'Syk',        icon: '🤒', headerClass: 'bg-red-500 text-white',     rowClass: 'bg-red-50' },
+  { label: 'ferie',   name: 'Ferie',      icon: '🏖️', headerClass: 'bg-sky-600 text-white',     rowClass: 'bg-sky-50' },
 ];
 
 const LABEL_LEGEND = [
@@ -88,9 +86,10 @@ const LABEL_LEGEND = [
   { label: 'middle',  color: 'bg-slate-200 border-slate-300 text-slate-700',       icon: '☀️' },
   { label: 'evening', color: 'bg-slate-150 border-slate-250 text-slate-600', icon: '🌙' },
   { label: 'sick',    color: 'bg-red-100 border-red-300 text-red-700',          icon: '🤒' },
+  { label: 'ferie',   color: 'bg-sky-100 border-sky-300 text-sky-700',          icon: '🏖️' },
 ];
 
-const LABEL_SORT_ORDER = { morning: 0, middle: 1, evening: 2, sick: 3 };
+const LABEL_SORT_ORDER = { morning: 0, middle: 1, evening: 2, sick: 3, ferie: 4 };
 const PAYROLL_TAX = 0.243;
 
 // Display-only. Desktop keeps the full "HH:mm–HH:mm" string.
@@ -162,6 +161,7 @@ export default function Timesheet() {
   const isAdmin = user?.role === 'admin';
   // Rollene som får redigere vaktplan (legge til / slette / endre / kopiere / publisere)
   const canManageShifts = user?.role === 'admin' || user?.role === 'sub_admin' || user?.role === 'butikksjef';
+  const canApproveHours = ['admin', 'sub_admin'].includes(effectiveAppRole(user, currentWorker));
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
   const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
@@ -230,6 +230,18 @@ export default function Timesheet() {
   });
   const { data: wpSettings = [], refetch: refetchSettings } = useQuery({ queryKey: ['workplace-settings'], queryFn: () => base44.entities.WorkplaceSetting.list() });
   const wp = orgId ? wpSettings.find(s => s.org_id === orgId) : wpSettings[0];
+  const hoursOf = (shift) => calcHours(shift, wp, shift?.team);
+  const { data: payrollLocks = [] } = useQuery({
+    queryKey: ['payroll-locks', orgId],
+    queryFn: () => orgId ? base44.entities.PayrollPeriodLock.filter({ org_id: orgId }) : base44.entities.PayrollPeriodLock.list(),
+    enabled: !!orgId,
+  });
+  const dateLocked = (dayStr) => isDateLocked(payrollLocks, dayStr);
+  const refuseLocked = (dayStr) => {
+    if (!dateLocked(dayStr)) return false;
+    toast({ title: 'Lønnsperioden er låst', description: 'Lås opp perioden på lønnssiden før vakten kan endres.', variant: 'destructive' });
+    return true;
+  };
 
   // Henter tilgjengelighet (utilgjengelige dager) for den aktuelle uken og org
   const { data: availability = [] } = useQuery({
@@ -433,7 +445,7 @@ export default function Timesheet() {
   };
 
   const getWorkerWeekTotal = (workerId) =>
-    days.flatMap(day => getShiftsForCell(workerId, day)).reduce((sum, s) => sum + calcHours(s), 0);
+    days.flatMap(day => getShiftsForCell(workerId, day)).reduce((sum, s) => sum + hoursOf(s), 0);
 
   const getDayCost = (day) => {
     const dayStr = format(day, 'yyyy-MM-dd');
@@ -452,7 +464,7 @@ export default function Timesheet() {
       return workerPrimaryTeam === filterTeam;
     }).reduce((sum, s) => {
       const w = workers.find(x => x.id === s.worker_id);
-      return sum + calcHours(s) * (w?.hourly_rate || 0);
+      return sum + hoursOf(s) * (w?.hourly_rate || 0);
     }, 0);
   };
 
@@ -473,7 +485,7 @@ export default function Timesheet() {
       const w = workers.find(x => x.id === s.worker_id);
       const workerPrimaryTeam = (w?.teams || ['team1'])[0];
       return workerPrimaryTeam === filterTeam;
-    }).reduce((sum, s) => sum + calcHours(s), 0);
+    }).reduce((sum, s) => sum + hoursOf(s), 0);
   };
 
   const weekTotalCost = days.reduce((sum, day) => sum + getDayCost(day), 0);
@@ -524,6 +536,7 @@ export default function Timesheet() {
 
   const handleDeleteSelected = async () => {
     if (!selectedShifts.length) return;
+    if (selectedShifts.some((shift) => refuseLocked(shift.date))) return;
     if (!window.confirm(`Slette ${selectedShifts.length} vakt${selectedShifts.length !== 1 ? 'er' : ''}?`)) return;
     for (const s of selectedShifts) {
       try { await base44.entities.Shift.delete(s.id); } catch { /* already deleted */ }
@@ -537,11 +550,36 @@ export default function Timesheet() {
     const newShifts = selectedShifts.map(s => {
       const d = new Date(s.date + 'T00:00:00');
       d.setDate(d.getDate() + 7);
-      return { org_id: s.org_id, worker_id: s.worker_id, worker_name: s.worker_name, date: format(d, 'yyyy-MM-dd'), start_time: s.start_time, end_time: s.end_time, break_minutes: s.break_minutes || 0, notes: s.notes || '', shift_label: s.shift_label || '', status: 'scheduled', team: s.team || '' };
+      return { org_id: s.org_id, worker_id: s.worker_id, worker_name: s.worker_name, date: format(d, 'yyyy-MM-dd'), start_time: s.start_time, end_time: s.end_time, break_minutes: s.break_minutes || 0, break_manual: s.break_manual !== false, all_day: Boolean(s.all_day), notes: s.notes || '', shift_label: s.shift_label || '', status: 'scheduled', team: s.team || '' };
     });
+    if (newShifts.some((shift) => refuseLocked(shift.date))) return;
     await base44.entities.Shift.bulkCreate(newShifts);
     clearSelection();
     handleRefresh();
+  };
+
+  const setHoursApproved = async (list, approved) => {
+    const open = list.filter((shift) => !dateLocked(shift.date));
+    const skipped = list.length - open.length;
+    if (!open.length) {
+      toast({ title: 'Lønnsperioden er låst', description: 'Ingen av de valgte vaktene kan godkjennes.', variant: 'destructive' });
+      return;
+    }
+    try {
+      await base44.entities.Shift.updateMany(
+        { id: { $in: open.map((shift) => shift.id) } },
+        { $set: {
+          hours_approved: approved,
+          hours_approved_at: approved ? new Date().toISOString() : null,
+          hours_approved_by: approved ? (user?.id || null) : null,
+        } },
+      );
+      if (skipped) toast({ title: 'Noen vakter er i en låst periode', description: `${skipped} vakt${skipped === 1 ? '' : 'er'} ble ikke endret.` });
+      else toast({ title: approved ? 'Timer godkjent' : 'Godkjenning fjernet' });
+      handleRefresh();
+    } catch (error) {
+      toast({ title: 'Kunne ikke oppdatere godkjenningen', description: error.message, variant: 'destructive' });
+    }
   };
   const weekTotalHours = days.reduce((sum, day) => sum + getDayHours(day), 0);
   const handleRefresh = () => queryClient.invalidateQueries({ queryKey: ['shifts'], exact: false });
@@ -569,6 +607,7 @@ export default function Timesheet() {
 
   const handlePublishWeek = async () => {
     if (!hasDrafts) return;
+    if (draftShifts.some((shift) => refuseLocked(shift.date))) return;
     const ids = draftShifts.map(s => s.id);
     await base44.entities.Shift.updateMany({ id: { $in: ids } }, { $set: { published: true } });
     handleRefresh();
@@ -576,6 +615,7 @@ export default function Timesheet() {
 
   const startInlineEdit = (e, shift) => {
     e.stopPropagation();
+    if (shift.all_day || refuseLocked(shift.date)) return;
     setInlineEditId(shift.id);
     setInlineEditData({ start_time: shift.start_time, end_time: shift.end_time });
   };
@@ -731,7 +771,7 @@ export default function Timesheet() {
       if (source.droppableId === destination.droppableId) return;
       const [newWorkerId, newDate] = destination.droppableId.split('__');
       const shift = shifts.find(s => s.id === draggableId);
-      if (!shift) return;
+      if (!shift || refuseLocked(shift.date) || refuseLocked(newDate)) return;
       // Når en vakt flyttes i en spesifikk avdelingsvisning, behold avdelingen:
       // tagg vakten med aktiv team slik at den ikke "ghostes" til den nye
       // ansattes primæravdeling når de også jobber i en annen avdeling.
@@ -745,7 +785,7 @@ export default function Timesheet() {
       const newLabel = destParts[1];
       const newDate = destParts[2];
       const shift = shifts.find(s => s.id === draggableId);
-      if (!shift) return;
+      if (!shift || refuseLocked(shift.date) || refuseLocked(newDate)) return;
       await base44.entities.Shift.update(draggableId, {
         shift_label: newLabel,
         date: newDate,
@@ -765,6 +805,7 @@ export default function Timesheet() {
     const worker = displayWorkers.find(w => w.id === workerId);
     const cellId = `${workerId}__${dayStr}`;
     if (!isShiftDropTarget(worker) || sameShiftCell(shift, workerId, dayStr)) return;
+    if (refuseLocked(shift.date) || refuseLocked(dayStr)) return;
     if (touchPlace.mode === 'kopier' && touchPlace.placed.includes(cellId)) return;
     placeLock.current = true;
     try {
@@ -834,10 +875,10 @@ export default function Timesheet() {
       if (filterTeam !== 'all' && !(w.teams || (w.team ? [w.team] : ['team1'])).includes(filterTeam)) return false;
       return true;
     });
-    const totalHours = groupShifts.reduce((sum, s) => sum + calcHours(s), 0);
+    const totalHours = groupShifts.reduce((sum, s) => sum + hoursOf(s), 0);
     const totalCost = groupShifts.reduce((sum, s) => {
       const w = workers.find(x => x.id === s.worker_id);
-      return sum + calcHours(s) * (w?.hourly_rate || 0);
+      return sum + hoursOf(s) * (w?.hourly_rate || 0);
     }, 0);
     return { totalHours, totalCost, count: groupShifts.length };
   };
@@ -925,6 +966,16 @@ export default function Timesheet() {
               </Button>
             </>
           )}
+          {canApproveHours && viewMode === 'uke' && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => setHoursApproved(weekShifts, true)}
+            >
+              <CheckSquare className="w-3.5 h-3.5" /> Godkjenn uken
+            </Button>
+          )}
           {canManageShifts && hasDrafts && (
             <Button
               size="sm"
@@ -980,11 +1031,18 @@ export default function Timesheet() {
         </div>
       </div>
 
+      {days.some((day) => dateLocked(format(day, 'yyyy-MM-dd'))) && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <span className="font-medium">Lønnsperioden er låst.</span>
+          <span>Vakter i låste dager kan ikke endres før en administrator låser opp perioden.</span>
+        </div>
+      )}
+
       {/* Legend */}
       <div className="flex flex-wrap gap-2">
         {LABEL_LEGEND.map(l => (
           <span key={l.label} className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border font-medium capitalize ${l.color}`}>
-            {l.icon} {l.label}
+            {l.icon} {shiftLabelName(l.label)}
           </span>
         ))}
       </div>
@@ -1003,6 +1061,7 @@ export default function Timesheet() {
             if (anyWorker) setModalCell({ worker: anyWorker, day: selectedDay, defaultLabel: label });
           }}
           showWages={showWages}
+          wp={wp}
         />
       ) : sortByLabel ? (
         <DragDropContext onDragEnd={handleDragEnd} enableDefaultSensors={false} sensors={SHIFT_DRAG_SENSORS}>
@@ -1056,7 +1115,7 @@ export default function Timesheet() {
                                         {dayShifts.map((s, si) => {
                                           const w = workers.find(x => x.id === s.worker_id);
                                           return (
-                                            <Draggable key={s.id} draggableId={s.id} index={si}>
+                                            <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={dateLocked(s.date)}>
                                               {(shiftDrag, shiftSnapshot) => (
                                                 <div
                                                   ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...(shiftDrag.dragHandleProps || {})}
@@ -1124,6 +1183,16 @@ export default function Timesheet() {
               <Button size="sm" variant="outline" className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50" onClick={handleCopySelectedToNextWeek}>
                 <Copy className="w-3.5 h-3.5" /> Kopier til neste uke
               </Button>
+              {canApproveHours && (
+                <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setHoursApproved(selectedShifts, true)}>
+                  <CheckSquare className="w-3.5 h-3.5" /> Godkjenn timer
+                </Button>
+              )}
+              {canApproveHours && (
+                <Button size="sm" variant="outline" onClick={() => setHoursApproved(selectedShifts, false)}>
+                  Fjern godkjenning
+                </Button>
+              )}
               <button className="ml-auto text-xs text-slate-400 hover:text-slate-600" onClick={clearSelection}>Avbryt</button>
             </div>
           )}
@@ -1242,7 +1311,7 @@ export default function Timesheet() {
                                                  {cellShifts.map((s, si) => {
                                                    const labelStyle = LABEL_STYLES[s.shift_label];
                                                    return (
-                                                     <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={isReadOnly}>
+                                                     <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={isReadOnly || dateLocked(s.date)}>
                                                        {(shiftDrag, shiftSnapshot) => {
                                                          const card = (
                                                          <div ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...(shiftDrag.dragHandleProps || {})}
@@ -1256,6 +1325,7 @@ export default function Timesheet() {
                                                            }}
                                                            className={`flex flex-col items-center gap-0.5 max-md:gap-0 rounded px-1 py-1 max-md:px-0.5 max-md:py-0.5 text-center transition-shadow ${SHIFT_NO_CALLOUT} ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}
                                                              ${labelStyle?.cell || 'bg-slate-50'}
+                                                             ${s.hours_approved ? 'ring-1 ring-emerald-500' : ''}
                                                              ${pressingId === s.id ? 'ring-2 ring-blue-300' : ''}
                                                              ${touchPlace?.shiftId === s.id ? 'ring-2 ring-blue-600' : ''}
                                                              ${shiftSnapshot.isDragging ? 'shadow-2xl ring-2 ring-blue-400' : 'hover:shadow-sm'}`}
@@ -1274,13 +1344,17 @@ export default function Timesheet() {
                                                            </div>
                                                          ) : (
                                                            <>
+                                                             {s.all_day ? (
+                                                               <div className="text-xs max-md:text-[10px] text-slate-700 font-medium leading-tight">Hel dag</div>
+                                                             ) : (
                                                              <ShiftTimeText
                                                                start={s.start_time}
                                                                end={s.end_time}
                                                                className="text-xs max-md:text-[10px] text-slate-700 font-medium leading-tight max-md:leading-none max-md:whitespace-nowrap hover:text-blue-600 hover:underline"
                                                                onClick={e => { if (touchPlace || worker.isVirtual || gestureFrom(e)) return; startInlineEdit(e, s); }}
                                                              />
-                                                             {s.shift_label && <span className={`text-[10px] max-md:text-[8px] px-1 max-md:px-0.5 rounded font-medium capitalize leading-none ${labelStyle?.badge || 'bg-slate-100 text-slate-600'}`}>{s.shift_label}</span>}
+                                                             )}
+                                                             {s.shift_label && <span className={`text-[10px] max-md:text-[8px] px-1 max-md:px-0.5 rounded font-medium leading-none ${labelStyle?.badge || 'bg-slate-100 text-slate-600'}`}>{shiftLabelName(s.shift_label)}</span>}
                                                              {(() => {
                                                                const st = stampByWorkerDate.get(`${worker.id}__${dayStr}`);
                                                                const si = fmtStamp(st?.stamp_in);
@@ -1463,6 +1537,7 @@ export default function Timesheet() {
           worker={touchSheet.worker}
           day={touchSheet.day}
           busy={sheetBusy}
+          locked={dateLocked(touchSheet.shift?.date)}
           onClose={() => setTouchSheet(null)}
           onMove={() => startTouchPlace('flytt')}
           onCopy={() => startTouchPlace('kopier')}
@@ -1486,6 +1561,8 @@ export default function Timesheet() {
           currentTeam={filterTeam}
           teamNames={teamNames}
           defaultShiftLabel={modalCell.defaultLabel}
+          wp={wp}
+          locked={dateLocked(format(modalCell.day, 'yyyy-MM-dd'))}
         />
       )}
 
