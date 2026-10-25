@@ -22,6 +22,7 @@ import {
   suggestPercentage,
 } from '@/contracts/employment';
 import { fodselsnummerValid } from '@/contracts/fodselsnummer';
+import { SHOW_RESULTAT } from '@/lib/featureFlags';
 
 const COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'];
 
@@ -408,6 +409,7 @@ export default function WorkerForm({
         </fieldset>
       )}
 
+      {SHOW_RESULTAT && (
       <div className="space-y-1.5">
         <Label>Tilgang</Label>
         <div className="flex gap-4 flex-wrap mt-1">
@@ -420,6 +422,7 @@ export default function WorkerForm({
           </label>
         </div>
       </div>
+      )}
       <div className="space-y-1.5">
         <Label>Tillegg som gjelder</Label>
         <div className="flex gap-4 flex-wrap mt-1">
