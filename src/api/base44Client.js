@@ -227,7 +227,7 @@ const WAGE_FIELDS = {
 };
 
 const SAFE_COLUMNS = {
-  workers: ['id', 'org_id', 'name', 'email', 'phone', 'position', 'status', 'color', 'teams', 'role', 'team_roles', 'employment_type', 'employment_percentage', 'disabled_extras', 'can_see_resultat', 'address', 'ansettelsestype', 'tiltredelsesdato', 'opphorsdato', 'timer_per_uke', 'timer_per_dag', 'arbeidsoppgaver', 'provetid_mnd', 'created_date', 'updated_date', 'created_by'],
+  workers: ['id', 'org_id', 'name', 'email', 'phone', 'position', 'status', 'color', 'teams', 'role', 'team_roles', 'employment_type', 'employment_percentage', 'disabled_extras', 'can_see_resultat', 'address', 'ansettelsestype', 'tiltredelsesdato', 'opphorsdato', 'timer_per_uke', 'timer_per_dag', 'arbeidsoppgaver', 'provetid_mnd', 'break_after_hours', 'break_length_minutes', 'created_date', 'updated_date', 'created_by'],
   contracts: ['id', 'org_id', 'worker_id', 'worker_name', 'contract_type', 'status', 'org_name', 'worker_position', 'employment_percentage', 'weekly_hours', 'overtime_hours', 'full_time_hours_per_week', 'start_date', 'end_date', 'week_number', 'year', 'reason', 'notice_period_months', 'approved_by_worker_id', 'approved_at', 'generated_automatically', 'created_date', 'updated_date', 'created_by', 'template_key', 'template_version', 'contract_kind', 'parent_contract_id', 'employee_signed_at', 'employee_signed_by', 'employer_signed_at', 'employer_signed_by', 'content_sha256', 'pdf_sha256', 'rejection_reason', 'expires_at', 'opened_at', 'sent_at', 'signing_provider'],
   holidays: ['id', 'org_id', 'name', 'date', 'created_date', 'updated_date', 'created_by'],
   workplace_settings: workplaceColumns().filter((col) => !workplaceWageFields.includes(col)),
@@ -441,6 +441,15 @@ async function writeRow(table, payload, run) {
           return runRead(table, (columns) => run(columns, withoutStoreWorkplaceColumns(withoutLoomisKundenr(base))));
         }
       }
+    }
+    if (table === 'workers' && isMissingColumn(error) && (
+      Object.prototype.hasOwnProperty.call(payload, 'break_after_hours')
+      || Object.prototype.hasOwnProperty.call(payload, 'break_length_minutes')
+    )) {
+      const next = { ...payload };
+      delete next.break_after_hours;
+      delete next.break_length_minutes;
+      return runRead(table, (columns) => run(columns, next));
     }
     if (table === 'organizations' && isMissingColumn(error) && (
       Object.prototype.hasOwnProperty.call(payload, 'employer_signatory_user_id')

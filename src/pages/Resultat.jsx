@@ -57,7 +57,7 @@ function ResultatSheet({ teamKey, teamName, year, month, results, workers, shift
       const w = workers.find(w => w.id === s.worker_id);
       if (!w) return;
       const tk = getWorkerTeamKey(w);
-      total += getShiftBreakdown(s, w.hourly_rate || 0, tk, holidays, wp, w.disabled_extras || []).pay;
+      total += getShiftBreakdown(s, w.hourly_rate || 0, tk, holidays, wp, w.disabled_extras || [], w).pay;
     });
     return total * (1 + PAYROLL_TAX);
   }, [shifts, workers, holidays, wp, year, month, teamKey]);

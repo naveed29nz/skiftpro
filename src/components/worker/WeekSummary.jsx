@@ -3,7 +3,7 @@ import { format, addDays, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { calcHours } from '@/utils/payCalc';
 
-export default function WeekSummary({ allShifts = [], today, wp }) {
+export default function WeekSummary({ allShifts = [], today, wp, worker = null }) {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
@@ -11,7 +11,7 @@ export default function WeekSummary({ allShifts = [], today, wp }) {
   const weekShifts = allShifts.filter(s => s.date >= weekStartStr && s.date <= weekEndStr && s.status !== 'cancelled');
   const isCurrentWeek = weekStartStr === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const totalHours = weekShifts.reduce((sum, s) => sum + calcHours(s, wp, s.team), 0);
+  const totalHours = weekShifts.reduce((sum, s) => sum + calcHours(s, wp, s.team, worker), 0);
   const todayStr = today || format(new Date(), 'yyyy-MM-dd');
 
   return (
@@ -45,7 +45,7 @@ export default function WeekSummary({ allShifts = [], today, wp }) {
         {days.map(day => {
           const dayStr = format(day, 'yyyy-MM-dd');
           const dayShifts = weekShifts.filter(s => s.date === dayStr);
-          const dayHours = dayShifts.reduce((sum, s) => sum + calcHours(s), 0);
+          const dayHours = dayShifts.reduce((sum, s) => sum + calcHours(s, wp, s.team, worker), 0);
           const isToday = dayStr === todayStr;
           const isPast = dayStr < todayStr;
           const hasShift = dayShifts.length > 0;

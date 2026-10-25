@@ -27,6 +27,10 @@ export default function Shifts() {
     queryKey: ['shifts'],
     queryFn: () => base44.entities.Shift.list('-date', 200),
   });
+  const { data: wpSettings = [] } = useQuery({
+    queryKey: ['workplace-settings'],
+    queryFn: () => base44.entities.WorkplaceSetting.list(),
+  });
 
   const createMut = useMutation({
     mutationFn: d => base44.entities.Shift.create(d),
@@ -106,7 +110,7 @@ export default function Shifts() {
                         )}
                       </td>
                       <td className="px-5 py-3 text-slate-500">{shift.all_day ? '—' : `${shift.break_minutes || 0}m`}</td>
-                      <td className="px-5 py-3 font-medium text-slate-700">{calcHours(shift).toFixed(1)}h</td>
+                      <td className="px-5 py-3 font-medium text-slate-700">{calcHours(shift, wpSettings.find((row) => row.org_id === shift.org_id) || wpSettings[0], shift.team, worker).toFixed(1)}h</td>
                       <td className="px-5 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                           shift.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :

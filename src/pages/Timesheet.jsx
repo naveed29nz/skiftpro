@@ -230,7 +230,7 @@ export default function Timesheet() {
   });
   const { data: wpSettings = [], refetch: refetchSettings } = useQuery({ queryKey: ['workplace-settings'], queryFn: () => base44.entities.WorkplaceSetting.list() });
   const wp = orgId ? wpSettings.find(s => s.org_id === orgId) : wpSettings[0];
-  const hoursOf = (shift) => calcHours(shift, wp, shift?.team);
+  const hoursOf = (shift) => calcHours(shift, wp, shift?.team, workers.find((worker) => worker.id === shift.worker_id));
   const { data: payrollLocks = [] } = useQuery({
     queryKey: ['payroll-locks', orgId],
     queryFn: () => orgId ? base44.entities.PayrollPeriodLock.filter({ org_id: orgId }) : base44.entities.PayrollPeriodLock.list(),

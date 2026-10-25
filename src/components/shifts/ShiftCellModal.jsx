@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 import { nb } from 'date-fns/locale';
 import { base44 } from '@/api/base44Client';
 import { flushNotifications } from '@/utils/notify';
-import { breakRulesForTeam, effectiveBreakMinutes } from '@/utils/payCalc';
+import { breakRulesForTeam, effectiveBreakMinutes, workerBreakOverride } from '@/utils/payCalc';
 import { isFullDayAbsence, shiftLabelName } from '@/utils/shiftLabels';
 
 const LABEL_STYLES = {
@@ -38,8 +38,9 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
   const workerTeams = w?.teams || ['team1'];
   const showTeamSelector = workerTeams.length > 1;
   const team = data.team || defaultTeam || workerTeams[0] || 'team1';
-  const hasBreakRule = breakRulesForTeam(wp, team).length > 0;
-  const automaticBreak = effectiveBreakMinutes({ ...data, team, break_manual: false, all_day: false }, wp, team);
+  const personalBreak = workerBreakOverride(w);
+  const hasBreakRule = personalBreak != null || breakRulesForTeam(wp, team).length > 0;
+  const automaticBreak = effectiveBreakMinutes({ ...data, team, break_manual: false, all_day: false }, wp, team, w);
   const absence = isFullDayAbsence(data.shift_label);
   const wholeDay = absence && data.all_day;
 
@@ -112,7 +113,7 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
                 checked={!data.break_manual}
                 onChange={(event) => setData(d => ({ ...d, break_manual: !event.target.checked, break_minutes: event.target.checked ? automaticBreak : d.break_minutes }))}
               />
-              Automatisk ({automaticBreak} min)
+              {personalBreak != null ? 'Egen pauseregel' : 'Automatisk'} ({automaticBreak} min)
             </label>
           ) : null}
           <Input
@@ -154,13 +155,13 @@ function shiftPayload(data, workerRecord, dayStr, team, wp) {
   const label = data.shift_label === 'none' ? '' : (data.shift_label || '');
   const allDay = Boolean(data.all_day) && isFullDayAbsence(label);
   const resolvedTeam = data.team || team || (workerRecord.teams || ['team1'])[0];
-  const hasRule = breakRulesForTeam(wp, resolvedTeam).length > 0;
+  const hasRule = workerBreakOverride(workerRecord) != null || breakRulesForTeam(wp, resolvedTeam).length > 0;
   const manual = allDay || !hasRule || data.break_manual !== false;
   const minutes = allDay
     ? 0
     : (manual
       ? (Number(data.break_minutes) || 0)
-      : effectiveBreakMinutes({ ...data, team: resolvedTeam, break_manual: false, all_day: false }, wp, resolvedTeam));
+      : effectiveBreakMinutes({ ...data, team: resolvedTeam, break_manual: false, all_day: false }, wp, resolvedTeam, workerRecord));
   return {
     worker_id: workerRecord.id,
     worker_name: workerRecord.name,
@@ -191,7 +192,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
       team: defaultTeam,
       shift_label: label,
       all_day: isFullDayAbsence(label),
-      break_manual: breakRulesForTeam(wp, team).length === 0,
+      break_manual: workerBreakOverride(worker) == null && breakRulesForTeam(wp, team).length === 0,
     };
   });
   const [editingId, setEditingId] = useState(null);
@@ -219,7 +220,17 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
     flushNotifications();
   };
 
-  const resetNewShift = () => setNewShift({ ...emptyShift, worker_id: worker.id, team: defaultTeam, shift_label: defaultShiftLabel || emptyShift.shift_label });
+  const resetNewShift = () => {
+    const team = defaultTeam || worker.teams?.[0] || 'team1';
+    setNewShift({
+      ...emptyShift,
+      worker_id: worker.id,
+      team: defaultTeam,
+      shift_label: defaultShiftLabel || emptyShift.shift_label,
+      all_day: isFullDayAbsence(defaultShiftLabel),
+      break_manual: workerBreakOverride(worker) == null && breakRulesForTeam(wp, team).length === 0,
+    });
+  };
 
   const handleEdit = async (shiftId) => {
     setLoading(true);

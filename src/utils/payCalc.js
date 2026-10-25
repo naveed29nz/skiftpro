@@ -117,12 +117,33 @@ export function automaticBreakMinutes(gross, rules) {
   return chosen;
 }
 
-export function effectiveBreakMinutes(shift, wpSettings, teamKey) {
+/**
+ * Personal break rule. Both fields must be filled. An empty pair means the
+ * department rule still applies. A length of 0 turns automatic break off
+ * for this employee. Returns null when there is no override.
+ */
+export function workerBreakOverride(worker) {
+  if (!worker || typeof worker !== 'object') return null;
+  const afterRaw = worker.break_after_hours;
+  const lengthRaw = worker.break_length_minutes;
+  if (afterRaw == null || afterRaw === '' || lengthRaw == null || lengthRaw === '') return null;
+  const afterHours = Number(afterRaw);
+  const breakMinutes = Number(lengthRaw);
+  if (!Number.isFinite(afterHours) || afterHours <= 0) return null;
+  if (!Number.isFinite(breakMinutes) || breakMinutes < 0) return null;
+  if (breakMinutes === 0) return [];
+  return [{ afterMinutes: Math.round(afterHours * 60), breakMinutes }];
+}
+
+export function effectiveBreakMinutes(shift, wpSettings, teamKey, worker) {
   if (!shift || shift.all_day) return 0;
   if (shift.break_manual === true) return Math.max(0, Number(shift.break_minutes) || 0);
-  const rules = breakRulesForTeam(wpSettings, shift.team || teamKey || 'team1');
+  const override = workerBreakOverride(worker);
+  const rules = override == null
+    ? breakRulesForTeam(wpSettings, shift.team || teamKey || 'team1')
+    : override;
   if (rules.length === 0) {
-    if (shift.break_manual === false) return 0;
+    if (override != null || shift.break_manual === false) return 0;
     return Math.max(0, Number(shift.break_minutes) || 0);
   }
   return automaticBreakMinutes(grossMinutes(shift), rules);
@@ -155,12 +176,12 @@ function nightOverlapMinutes(start, end, from, to) {
   return total;
 }
 
-export function nightMinutes(shift, wpSettings, teamKey) {
+export function nightMinutes(shift, wpSettings, teamKey, worker) {
   if (!shift || shift.all_day || isAbsenceLabel(shift.shift_label)) return 0;
   const start = clockMinutes(shift.start_time);
   if (start == null) return 0;
   const gross = grossMinutes(shift);
-  const breakMinutes = Math.min(gross, effectiveBreakMinutes(shift, wpSettings, teamKey));
+  const breakMinutes = Math.min(gross, effectiveBreakMinutes(shift, wpSettings, teamKey, worker));
   const worked = gross - breakMinutes;
   if (worked <= 0) return 0;
   const night = nightSupplement(wpSettings, shift.team || teamKey);
@@ -171,10 +192,10 @@ export function nightMinutes(shift, wpSettings, teamKey) {
   return nightOverlapMinutes(start, start + worked, from, to);
 }
 
-export function calcHours(shift, wpSettings, teamKey) {
+export function calcHours(shift, wpSettings, teamKey, worker) {
   if (shift?.all_day) return fullDayHours(wpSettings);
   const gross = grossMinutes(shift);
-  const breakMinutes = Math.min(gross, effectiveBreakMinutes(shift, wpSettings, teamKey));
+  const breakMinutes = Math.min(gross, effectiveBreakMinutes(shift, wpSettings, teamKey, worker));
   return Math.max(0, (gross - breakMinutes) / 60);
 }
 
@@ -197,9 +218,9 @@ const EMPTY_SPLIT = {
  * disabledExtras lists supplements that do not apply to this worker
  * ('sunday', 'holiday', 'night'). Checked off means the hours are regular.
  */
-export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettings, disabledExtras = []) {
+export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettings, disabledExtras = [], worker = null) {
   const resolvedTeam = shift?.team || teamKey || 'team1';
-  const hours = calcHours(shift, wpSettings, resolvedTeam);
+  const hours = calcHours(shift, wpSettings, resolvedTeam, worker);
   const rate = Number(workerRate) || 0;
   const date = new Date(`${shift.date}T00:00:00`);
   const gross = shift?.all_day ? hours : grossMinutes(shift) / 60;
@@ -271,7 +292,7 @@ export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettin
   }
 
   const nightApplies = !disabledExtras.includes('night');
-  const nightHours = nightApplies ? nightMinutes(shift, wpSettings, resolvedTeam) / 60 : 0;
+  const nightHours = nightApplies ? nightMinutes(shift, wpSettings, resolvedTeam, worker) / 60 : 0;
   let nightBonus = 0;
   if (nightHours > 0) {
     const night = nightSupplement(wpSettings, resolvedTeam);
