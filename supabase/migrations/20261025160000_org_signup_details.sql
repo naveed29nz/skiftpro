@@ -1,7 +1,8 @@
 -- Business signup must store the company and the contact person separately,
 -- and every new organization gets the next 5-digit customer number.
--- Existing rows are not updated. A customer who already lacks an organisation
--- number keeps that row until their own admin submits the completion form.
+-- 00779 is already assigned. The sequence continues after the highest stored
+-- number, so the next issued number is at least 00780 and no existing number
+-- is reused. Existing rows are not updated.
 -- Do not apply this file from the app. It is applied separately.
 
 create or replace function public.org_number_valid(p_value text)
@@ -40,25 +41,55 @@ create sequence public.organization_customer_number_seq as bigint;
 
 do $$
 declare
-  floor_value bigint := 778;
+  -- 00779 is already in use. A database with no higher number issues 00780.
+  floor_value bigint := 779;
   current_max bigint;
+  seq_last bigint;
+  seq_called boolean;
+  anchored bigint;
 begin
-  select max(customer_number::bigint)
+  select max(btrim(customer_number)::bigint)
     into current_max
   from public.organizations
-  where customer_number ~ '^[0-9]{1,12}$';
+  where btrim(customer_number) ~ '^[0-9]{1,12}$';
 
-  -- is_called true: the next nextval is one past the current maximum.
-  -- Floor 778 keeps a database whose highest number is 00778 issuing 00779.
-  perform setval(
-    'public.organization_customer_number_seq',
-    greatest(floor_value, coalesce(current_max, 0)),
-    true
-  );
+  anchored := greatest(floor_value, coalesce(current_max, 0));
+  -- is_called true: the next nextval is one past the highest existing number.
+  perform setval('public.organization_customer_number_seq', anchored, true);
+
+  select last_value, is_called into seq_last, seq_called
+  from public.organization_customer_number_seq;
+  if seq_last < anchored or not seq_called then
+    raise exception 'customer number sequence must continue after the highest existing number';
+  end if;
 end
 $$;
 
 revoke all on sequence public.organization_customer_number_seq from public, anon, authenticated, service_role;
+
+create or replace function public.next_organization_customer_number()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  candidate_n bigint;
+begin
+  loop
+    candidate_n := nextval('public.organization_customer_number_seq');
+    exit when not exists (
+      select 1
+      from public.organizations o
+      where btrim(o.customer_number) ~ '^[0-9]{1,12}$'
+        and btrim(o.customer_number)::bigint = candidate_n
+    );
+  end loop;
+  return lpad(candidate_n::text, 5, '0');
+end;
+$$;
+
+revoke all on function public.next_organization_customer_number() from public;
 
 create or replace function public.assign_organization_customer_number()
 returns trigger
@@ -68,7 +99,7 @@ set search_path = public
 as $$
 begin
   if tg_op = 'INSERT' then
-    new.customer_number := lpad(nextval('public.organization_customer_number_seq')::text, 5, '0');
+    new.customer_number := public.next_organization_customer_number();
   end if;
   return new;
 end;
@@ -242,7 +273,7 @@ begin
 
   assigned := nullif(btrim(coalesce(target.customer_number, '')), '');
   if assigned is null then
-    assigned := lpad(nextval('public.organization_customer_number_seq')::text, 5, '0');
+    assigned := public.next_organization_customer_number();
   end if;
 
   update public.organizations

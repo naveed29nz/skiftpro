@@ -32,7 +32,21 @@ declare
   got_teams integer;
   got_admin_user text;
   max_before integer;
+  seq_last bigint;
+  seq_called boolean;
+  number_max bigint;
 begin
+  select last_value, is_called into seq_last, seq_called
+  from public.organization_customer_number_seq;
+  select coalesce(max(btrim(customer_number)::bigint), 0) into number_max
+  from public.organizations
+  where btrim(customer_number) ~ '^[0-9]{1,12}$';
+  insert into rls_results values (
+    'customer number sequence stays past 00779 and every stored number',
+    seq_called and seq_last >= 779 and seq_last >= number_max,
+    'last=' || coalesce(seq_last::text, '') || ' max=' || coalesce(number_max::text, '')
+  );
+
   insert into public.organizations (id, name, status, plan)
   values ('org-emp', 'Ansattbutikken', 'active', 'basic');
 
@@ -291,10 +305,46 @@ begin
       and got_admin_user = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa10'
       and got_full_name = 'Omar Altarshan'
       and got_stores = 4
-      and got_customer ~ '^[0-9]{5}$',
+      and got_customer ~ '^[0-9]{5}$'
+      and got_customer::bigint > 779
+      and not exists (
+        select 1
+        from public.organizations o2
+        where o2.id <> 'org-omar'
+          and btrim(o2.customer_number) ~ '^[0-9]{1,12}$'
+          and btrim(o2.customer_number)::bigint = got_customer::bigint
+      ),
     detail || ' name=' || coalesce(got_name, '') || ' kunde=' || coalesce(got_customer, '')
   );
 
+  alter table public.organizations disable trigger organizations_assign_customer_number;
+  insert into public.organizations (
+    id, name, admin_user_id, admin_email, status, plan, customer_number
+  ) values (
+    'org-keep', 'Allerede nummerert', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa11', 'keep@example.com',
+    'active', 'basic', '00779'
+  );
+  alter table public.organizations enable trigger organizations_assign_customer_number;
+  insert into public.profiles (id, email, full_name, role, terms_accepted_at)
+  values (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa11', 'keep@example.com', 'Beholder', 'admin', now()
+  );
+  perform set_config('request.jwt.claims', json_build_object('sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa11')::text, true);
+  begin
+    perform public.complete_organization_profile('Allerede nummerert AS', '999999999', 'Beholder Nummer', '90022233', 1);
+    detail := 'ok';
+  exception when others then
+    detail := sqlerrm;
+  end;
+  select customer_number, name into got_customer, got_name
+  from public.organizations where id = 'org-keep';
+  insert into rls_results values (
+    'an organization that already has 00779 keeps that customer number',
+    detail = 'ok' and got_customer = '00779' and got_name = 'Allerede nummerert AS',
+    detail || ' kunde=' || coalesce(got_customer, '')
+  );
+
+  perform set_config('request.jwt.claims', json_build_object('sub', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa10')::text, true);
   begin
     perform public.complete_organization_profile('Annet navn', '999999999', 'Annen Person', '111', 1);
     detail := 'ok';
@@ -306,6 +356,25 @@ begin
     'completed organisation is not edited again through the completion form',
     detail = 'Organisasjonsnummeret er allerede registrert' and got_name = 'Narvesen Moss jbst',
     detail || ' name=' || coalesce(got_name, '')
+  );
+
+  select coalesce(max(btrim(customer_number)::bigint), 0) into number_max
+  from public.organizations
+  where btrim(customer_number) ~ '^[0-9]{1,12}$';
+  -- The next raw sequence value would be a number that is already stored.
+  perform setval('public.organization_customer_number_seq', number_max, false);
+  select public.next_organization_customer_number() into got_customer;
+  insert into rls_results values (
+    'issuer skips a customer number that is already in use',
+    got_customer ~ '^[0-9]{5}$'
+      and got_customer::bigint > number_max
+      and not exists (
+        select 1
+        from public.organizations o
+        where btrim(o.customer_number) ~ '^[0-9]{1,12}$'
+          and btrim(o.customer_number)::bigint = got_customer::bigint
+      ),
+    got_customer || ' above ' || number_max::text
   );
 
   insert into auth.users (id, email, raw_user_meta_data)
