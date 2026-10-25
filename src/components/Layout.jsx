@@ -12,6 +12,7 @@ import { useOrg } from '@/hooks/useOrg';
 import { queryClientInstance } from '@/lib/query-client';
 import { claimOrgId, resolveSignupGate, resolveSignupKind } from '@/lib/signupGate';
 import { findWorkerByEmail } from '@/lib/workerLookup';
+import { defaultPageForRole, isPageEnabled, visibleNavItems } from '@/lib/featureFlags';
 
 async function claimWorkerOrg() {
   const { data, error } = await supabase.rpc('claim_worker_card');
@@ -128,9 +129,13 @@ function NavItems({ items, location, onClick }) {
   );
 }
 
-const subAdminAllowed = ['/WorkerPortal', '/Workers', '/Timesheet', '/Tasks', '/Salary', '/Settings', '/Dagsoppgjor', '/Loddtelling', '/Innskudd', '/Contracts', '/Resultat'];
-const butikksjefAllowed = ['/WorkerPortal', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Innskudd', '/Settings', '/Resultat', '/Contracts'];
-const workerAllowed = ['/WorkerPortal', '/Dagsoppgjor', '/Loddtelling', '/Innskudd'];
+function allowedPaths(paths) {
+  return paths.filter((path) => isPageEnabled(path));
+}
+
+const subAdminAllowed = allowedPaths(['/WorkerPortal', '/Workers', '/Timesheet', '/Tasks', '/Salary', '/Settings', '/Dagsoppgjor', '/Loddtelling', '/Innskudd', '/Contracts', '/Resultat']);
+const butikksjefAllowed = allowedPaths(['/WorkerPortal', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Innskudd', '/Settings', '/Resultat', '/Contracts']);
+const workerAllowed = allowedPaths(['/WorkerPortal', '/Dagsoppgjor', '/Loddtelling', '/Innskudd']);
 
 export default function Layout() {
   const location = useLocation();
@@ -278,13 +283,20 @@ export default function Layout() {
   const workerNavDynamic = canSeeResultat && userRole === 'user'
     ? [...workerNav, { path: '/Resultat', label: 'Resultat', icon: BarChart }]
     : workerNav;
-  const navItems = userRole === 'superadmin'
+  const roleNav = userRole === 'superadmin'
     ? (isImpersonating ? adminNav : superAdminOnlyNav)
     : userRole === 'admin' ? adminNav
     : userRole === 'sub_admin' ? subAdminNav
     : userRole === 'butikksjef' ? butikksjeflNav
     : userRole === 'user' ? workerNavDynamic
     : [];
+  const navItems = visibleNavItems(roleNav);
+
+  useEffect(() => {
+    if (!userRole || isPageEnabled(location.pathname)) return;
+    const home = defaultPageForRole(userRole, { impersonating: isImpersonating });
+    if (location.pathname !== home) navigate(home, { replace: true });
+  }, [userRole, isImpersonating, location.pathname, navigate]);
   const allNavItems = [...superAdminOnlyNav, ...adminNav, ...subAdminNav, ...butikksjeflNav, ...workerNav];
   const currentPage = allNavItems.find(n => n.path === location.pathname);
 

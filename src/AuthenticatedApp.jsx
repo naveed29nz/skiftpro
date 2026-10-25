@@ -24,6 +24,7 @@ import ContractSign from '@/pages/ContractSign';
 import EmployeeSignedThanks from '@/components/contracts/EmployeeSignedThanks';
 import ResetPassword from '@/pages/ResetPassword';
 import Resultat from '@/pages/Resultat';
+import { SHOW_DAGSOPPGJOR, SHOW_RESULTAT } from '@/lib/featureFlags';
 
 export default function AuthenticatedApp() {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, needsNewPassword, passwordLinkError } = useAuth();
@@ -59,7 +60,7 @@ export default function AuthenticatedApp() {
           <Route path="/Salary" element={<Salary />} />
           <Route path="/Tasks" element={<Tasks />} />
           <Route path="/WorkerPortal" element={<WorkerPortal />} />
-          <Route path="/Dagsoppgjor" element={<Dagsoppgjor />} />
+          <Route path="/Dagsoppgjor" element={SHOW_DAGSOPPGJOR ? <Dagsoppgjor /> : null} />
           <Route path="/Innskudd" element={<Innskudd />} />
           <Route path="/Loddtelling" element={<Loddtelling />} />
           <Route path="/Ukeplan" element={<Ukeplan />} />
@@ -71,7 +72,7 @@ export default function AuthenticatedApp() {
           <Route path="/Contracts" element={<Contracts />} />
           <Route path="/kontrakt/:contractId/takk" element={<EmployeeSignedThanks />} />
           <Route path="/kontrakt/:contractId" element={<ContractSign />} />
-          <Route path="/Resultat" element={<Resultat />} />
+          <Route path="/Resultat" element={SHOW_RESULTAT ? <Resultat /> : null} />
         </Route>
         <Route path="*" element={<PageNotFound />} />
     </Routes>
