@@ -9,10 +9,15 @@ import {
   ANSETTELSESTYPER,
   BUTIKKSJEF_CHECKLIST,
   BUTIKKSJEF_HELP,
+  EKSTRAHJELP_HOURS_HINT,
   MERARBEID_INFO,
   PROVETID_HELP,
   STILLINGSPROSENT_HELP,
+  ansettelsestypePatch,
   contractDeadlineState,
+  employmentHourValues,
+  initialEmploymentHours,
+  isEkstrahjelp,
   missingEmploymentFields,
   suggestPercentage,
 } from '@/contracts/employment';
@@ -58,7 +63,7 @@ export default function WorkerForm({
     role: worker?.role || 'user',
     team_roles: worker?.team_roles || {},
     employment_type: worker?.employment_type || 'timelønn',
-    employment_percentage: worker?.employment_percentage ?? 100,
+    ...initialEmploymentHours(worker),
     disabled_extras: worker?.disabled_extras || [],
     can_see_resultat: worker?.can_see_resultat || false,
     birth_date: worker?.birth_date || '',
@@ -99,9 +104,11 @@ export default function WorkerForm({
     const payload = {
       ...form,
       role: highestRole,
-      employment_percentage: numberOrNull(form.employment_percentage),
-      timer_per_uke: numberOrNull(form.timer_per_uke),
-      timer_per_dag: numberOrNull(form.timer_per_dag),
+      ...employmentHourValues(form.ansettelsestype, {
+        employment_percentage: numberOrNull(form.employment_percentage),
+        timer_per_uke: numberOrNull(form.timer_per_uke),
+        timer_per_dag: numberOrNull(form.timer_per_dag),
+      }),
       provetid_mnd: numberOrNull(form.provetid_mnd),
       birth_date: form.birth_date || null,
       tiltredelsesdato: form.tiltredelsesdato || null,
@@ -147,6 +154,7 @@ export default function WorkerForm({
 
   const deadline = contractDeadlineState({ ...form, id: worker?.id }, []);
   const fullTime = Number(employerSettings?.alminnelig_ukentlig_arbeidstid || workplace?.full_time_hours_per_week || 37.5);
+  const ekstrahjelp = isEkstrahjelp(form.ansettelsestype);
 
   return (
     <form onSubmit={(event) => handleSubmit(event, false)} className="space-y-4">
@@ -165,10 +173,22 @@ export default function WorkerForm({
           <Input type="number" step="0.01" min="0" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: e.target.value })} placeholder="0.00" required />
         </div>
         )}
-        <div className="space-y-1.5">
-          <Label title={STILLINGSPROSENT_HELP}>Stillingsprosent (%)</Label>
-          <Input type="number" min="1" max="100" step="0.01" value={form.employment_percentage} onChange={(e) => setForm({ ...form, employment_percentage: e.target.value })} placeholder="100" />
-          <p className="text-xs text-slate-400" title={STILLINGSPROSENT_HELP}>Stillingsprosent = timer per uke × 100 / alminnelig arbeidstid.</p>
+        <div className={`space-y-1.5 ${ekstrahjelp ? 'opacity-60' : ''}`}>
+          <Label title={ekstrahjelp ? EKSTRAHJELP_HOURS_HINT : STILLINGSPROSENT_HELP}>Stillingsprosent (%)</Label>
+          <Input
+            type="number"
+            min="1"
+            max="100"
+            step="0.01"
+            disabled={ekstrahjelp}
+            value={form.employment_percentage}
+            onChange={(e) => setForm({ ...form, employment_percentage: e.target.value })}
+            placeholder=""
+            className={ekstrahjelp ? 'bg-slate-100 text-slate-400' : ''}
+          />
+          <p className="text-xs text-slate-400" title={ekstrahjelp ? undefined : STILLINGSPROSENT_HELP}>
+            {ekstrahjelp ? EKSTRAHJELP_HOURS_HINT : 'Stillingsprosent = timer per uke × 100 / alminnelig arbeidstid.'}
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label>Lønnstype</Label>
@@ -253,8 +273,7 @@ export default function WorkerForm({
                 value={form.ansettelsestype}
                 onValueChange={(value) => setForm((current) => ({
                   ...current,
-                  ansettelsestype: value,
-                  provetid_mnd: value === 'fast' || value === 'butikksjef_ledende' ? 6 : current.provetid_mnd,
+                  ...ansettelsestypePatch(value, current),
                 }))}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -296,13 +315,22 @@ export default function WorkerForm({
                 <Input type="date" value={form.opphorsdato || ''} onChange={(e) => setForm({ ...form, opphorsdato: e.target.value })} />
               </div>
             )}
-            <div className="space-y-1.5">
+            <div className={`space-y-1.5 ${ekstrahjelp ? 'opacity-60' : ''}`}>
               <Label>Timer per uke (snitt)</Label>
               <div className="flex gap-2">
-                <Input type="number" min="0" step="0.25" value={form.timer_per_uke} onChange={(e) => setForm({ ...form, timer_per_uke: e.target.value })} />
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  disabled={ekstrahjelp}
+                  value={form.timer_per_uke}
+                  onChange={(e) => setForm({ ...form, timer_per_uke: e.target.value })}
+                  className={ekstrahjelp ? 'bg-slate-100 text-slate-400' : ''}
+                />
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={ekstrahjelp}
                   onClick={() => setForm((current) => ({
                     ...current,
                     employment_percentage: suggestPercentage(current.timer_per_uke, fullTime),
@@ -312,10 +340,21 @@ export default function WorkerForm({
                 </Button>
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className={`space-y-1.5 ${ekstrahjelp ? 'opacity-60' : ''}`}>
               <Label>Timer per dag (snitt)</Label>
-              <Input type="number" min="0" step="0.25" value={form.timer_per_dag} onChange={(e) => setForm({ ...form, timer_per_dag: e.target.value })} />
+              <Input
+                type="number"
+                min="0"
+                step="0.25"
+                disabled={ekstrahjelp}
+                value={form.timer_per_dag}
+                onChange={(e) => setForm({ ...form, timer_per_dag: e.target.value })}
+                className={ekstrahjelp ? 'bg-slate-100 text-slate-400' : ''}
+              />
             </div>
+            {ekstrahjelp && (
+              <p className="text-xs text-slate-400 sm:col-span-2">{EKSTRAHJELP_HOURS_HINT}</p>
+            )}
             {form.ansettelsestype !== 'tilkalling' && (
               <div className="space-y-1.5">
                 <Label title={PROVETID_HELP}>Prøvetid (måneder)</Label>

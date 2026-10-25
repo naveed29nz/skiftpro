@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contractTeamKey, customerAdminOptions, employerCompanyName, employerContractAddress, employerOrgNumber, employerSignerName, missingEmploymentFields, resolveEmployerSignerName, storeFieldsForWorker } from './employment.js';
+import { ansettelsestypePatch, contractTeamKey, customerAdminOptions, employerCompanyName, employerContractAddress, employerOrgNumber, employerSignerName, employmentHourValues, initialEmploymentHours, missingEmploymentFields, resolveEmployerSignerName, stillingsprosentText, storeFieldsForWorker } from './employment.js';
 
 const settings = {
   selskap: 'Kiosk AS',
@@ -29,6 +29,81 @@ function worker(teams) {
     teams,
   };
 }
+
+test('ekstrahjelp clears stillingsprosent and average hours and stores them as null', () => {
+  const current = {
+    ansettelsestype: 'fast',
+    employment_percentage: 80,
+    timer_per_uke: 30,
+    timer_per_dag: 6,
+    provetid_mnd: 6,
+  };
+  const cleared = ansettelsestypePatch('tilkalling', current);
+  assert.equal(cleared.ansettelsestype, 'tilkalling');
+  assert.equal(cleared.employment_percentage, '');
+  assert.equal(cleared.timer_per_uke, '');
+  assert.equal(cleared.timer_per_dag, '');
+
+  const back = ansettelsestypePatch('fast', cleared);
+  assert.equal(back.ansettelsestype, 'fast');
+  assert.equal(back.provetid_mnd, 6);
+  assert.equal(Object.hasOwn(back, 'employment_percentage'), false);
+
+  assert.deepEqual(employmentHourValues('tilkalling', {
+    employment_percentage: 80,
+    timer_per_uke: 30,
+    timer_per_dag: 6,
+  }), { employment_percentage: null, timer_per_uke: null, timer_per_dag: null });
+  assert.deepEqual(employmentHourValues('fast', {
+    employment_percentage: 50,
+    timer_per_uke: 18.75,
+    timer_per_dag: 4,
+  }), { employment_percentage: 50, timer_per_uke: 18.75, timer_per_dag: 4 });
+
+  assert.deepEqual(initialEmploymentHours({ ansettelsestype: 'tilkalling', employment_percentage: 100, timer_per_uke: 37.5 }), {
+    employment_percentage: '',
+    timer_per_uke: '',
+    timer_per_dag: '',
+  });
+  assert.equal(initialEmploymentHours({ ansettelsestype: 'fast' }).employment_percentage, 100);
+});
+
+test('the employee list hides stillingsprosent for ekstrahjelp', () => {
+  assert.equal(stillingsprosentText({ ansettelsestype: 'tilkalling', employment_percentage: 100 }), null);
+  assert.equal(stillingsprosentText({ ansettelsestype: 'tilkalling', employment_percentage: null }), null);
+  assert.equal(stillingsprosentText({ ansettelsestype: 'fast', employment_percentage: 60 }), '60%');
+  assert.equal(stillingsprosentText({ ansettelsestype: 'fast', employment_percentage: null }), '100%');
+});
+
+test('an ekstrahjelp contract does not require stillingsprosent or average hours', () => {
+  const ekstra = {
+    ...worker(['team1']),
+    ansettelsestype: 'tilkalling',
+    employment_percentage: null,
+    timer_per_uke: null,
+    timer_per_dag: null,
+    provetid_mnd: null,
+  };
+  const missing = missingEmploymentFields({
+    worker: ekstra,
+    settings,
+    workplace: { workplace_address: 'Gate 1', apningstid_fra: '07:00', apningstid_til: '23:00' },
+    showWages: true,
+  });
+  assert.equal(missing.includes('Stillingsprosent'), false);
+  assert.equal(missing.includes('Timer per uke (snitt)'), false);
+  assert.equal(missing.includes('Timer per dag (snitt)'), false);
+
+  const fastMissing = missingEmploymentFields({
+    worker: { ...worker(['team1']), employment_percentage: null, timer_per_uke: null, timer_per_dag: null },
+    settings,
+    workplace: { workplace_address: 'Gate 1', apningstid_fra: '07:00', apningstid_til: '23:00' },
+    showWages: true,
+  });
+  assert.equal(fastMissing.includes('Stillingsprosent'), true);
+  assert.equal(fastMissing.includes('Timer per uke (snitt)'), true);
+  assert.equal(fastMissing.includes('Timer per dag (snitt)'), true);
+});
 
 test('contract team is the first team1–team10 value', () => {
   assert.equal(contractTeamKey({ teams: ['team2', 'team1'] }), 'team2');

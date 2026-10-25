@@ -9,6 +9,61 @@ export const ANSETTELSESTYPER = [
   { value: 'butikksjef_ledende', label: 'Butikksjef, ledende stilling (aml. § 10-12 (2))', template: 'butikksjef_ledende' },
 ];
 
+/** Option value for Tilkalling / ekstrahjelp on the employee card. */
+export const EKSTRAHJELP_TYPE = 'tilkalling';
+
+export const EKSTRAHJELP_HOURS_HINT = 'Gjelder ikke for ekstrahjelp';
+
+export function isEkstrahjelp(ansettelsestype) {
+  return ansettelsestype === EKSTRAHJELP_TYPE;
+}
+
+/** Empty hour fields for a new or edited card. Ekstrahjelp never starts at 100 %. */
+export function initialEmploymentHours(worker) {
+  if (isEkstrahjelp(worker?.ansettelsestype)) {
+    return { employment_percentage: '', timer_per_uke: '', timer_per_dag: '' };
+  }
+  return {
+    employment_percentage: worker?.employment_percentage ?? 100,
+    timer_per_uke: worker?.timer_per_uke ?? '',
+    timer_per_dag: worker?.timer_per_dag ?? '',
+  };
+}
+
+/** Switching to ekstrahjelp drops stillingsprosent and average hours. Other types keep what is typed. */
+export function ansettelsestypePatch(value, current) {
+  const next = {
+    ansettelsestype: value,
+    provetid_mnd: value === 'fast' || value === 'butikksjef_ledende' ? 6 : current?.provetid_mnd,
+  };
+  if (isEkstrahjelp(value)) {
+    next.employment_percentage = '';
+    next.timer_per_uke = '';
+    next.timer_per_dag = '';
+  }
+  return next;
+}
+
+/** Values written to the worker. Ekstrahjelp stores null so percentage math stays unused. */
+export function employmentHourValues(ansettelsestype, hours) {
+  if (isEkstrahjelp(ansettelsestype)) {
+    return { employment_percentage: null, timer_per_uke: null, timer_per_dag: null };
+  }
+  return {
+    employment_percentage: hours?.employment_percentage ?? null,
+    timer_per_uke: hours?.timer_per_uke ?? null,
+    timer_per_dag: hours?.timer_per_dag ?? null,
+  };
+}
+
+/** List-card text. Null means the row should stay hidden. */
+export function stillingsprosentText(worker) {
+  if (isEkstrahjelp(worker?.ansettelsestype)) return null;
+  const value = worker?.employment_percentage;
+  if (value == null || value === '') return '100%';
+  return `${value}%`;
+}
+
 export const BUTIKKSJEF_CHECKLIST = [
   { key: 'lederfunksjoner', label: 'Har arbeidstakeren en stilling med klare lederfunksjoner, for eksempel budsjettansvar, resultatansvar og personalansvar?' },
   { key: 'egen_arbeidstid', label: 'Kan arbeidstakeren kontrollere sin egen arbeidstid? Personen kan stå på bemanningsplanen, men avgjør selv når og om det er behov for avvik. Stillingen er også unntatt fra registrering av arbeidstid.' },
