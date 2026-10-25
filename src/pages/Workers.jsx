@@ -13,7 +13,7 @@ import { useOrg } from '@/hooks/useOrg';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import { releaseUpcomingShifts } from '@/utils/workerLifecycle';
 import { canSeeWageCosts } from '@/utils/wageAccess';
-import { resolveEmployerSignerName } from '@/contracts/employment';
+import { resolveEmployerSignerName, stillingsprosentText } from '@/contracts/employment';
 import { sameEmail } from '@/lib/emails';
 
 const ROLE_OPTIONS = [
@@ -349,10 +349,12 @@ export default function Workers() {
                   <span className="font-semibold text-slate-800">{fodselsnummerMask[worker.id]}</span>
                 </div>
                 )}
+                {stillingsprosentText(worker) != null && (
                 <div className="flex items-center justify-between">
                   <span>Stillingsprosent</span>
-                  <span className="font-semibold text-slate-800">{worker.employment_percentage ?? 100}%</span>
+                  <span className="font-semibold text-slate-800">{stillingsprosentText(worker)}</span>
                 </div>
+                )}
                 {worker.email && <div className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />{worker.email}</div>}
                 {worker.phone && <div className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />{worker.phone}</div>}
               </div>
