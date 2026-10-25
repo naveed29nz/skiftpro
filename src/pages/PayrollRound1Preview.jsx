@@ -2,9 +2,15 @@ import { useState } from 'react';
 import PayrollRulesCard from '@/components/settings/PayrollRulesCard';
 import PayrollExportColumns from '@/components/payroll/PayrollExportColumns';
 import PayrollLockCard from '@/components/payroll/PayrollLockCard';
+import { Checkbox } from '@/components/ui/checkbox';
+import { WORKER_SUPPLEMENTS } from '@/components/workers/WorkerForm';
 import { TeamPaySection } from '@/pages/Settings';
 import { DEFAULT_PAYROLL_COLUMN_KEYS } from '@/utils/payrollExport';
 import { getShiftBreakdown } from '@/utils/payCalc';
+
+function hoursOrDash(value) {
+  return value > 0 ? `${value.toFixed(1)}t` : '—';
+}
 
 const INITIAL = {
   workplace_name: 'Narvesen',
@@ -33,6 +39,16 @@ export default function PayrollRound1Preview() {
   const [locks, setLocks] = useState(SAMPLE_LOCKS);
   const [columns, setColumns] = useState(DEFAULT_PAYROLL_COLUMN_KEYS);
   const [busy, setBusy] = useState(false);
+  const [disabledExtras, setDisabledExtras] = useState(['sunday', 'holiday']);
+  const toggleExtra = (key) => {
+    setDisabledExtras((current) => (
+      current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
+    ));
+  };
+  const workerExamples = [
+    { name: 'Søndag 25.10', date: '2026-10-25', start_time: '10:00', end_time: '16:00', team: 'team2', break_manual: true, break_minutes: 0 },
+    { name: 'Kveld 21.10', date: '2026-10-21', start_time: '18:00', end_time: '23:00', team: 'team2', break_manual: true, break_minutes: 0 },
+  ].map((shift) => ({ shift, breakdown: getShiftBreakdown(shift, 230, 'team2', [], form, disabledExtras) }));
   const examples = [
     { name: 'Kari Nord', date: '2026-10-20', start_time: '08:00', end_time: '16:30', break_minutes: 0, break_manual: false, shift_label: '', team: 'team2' },
     { name: 'Kari Nord', date: '2026-10-21', start_time: '22:00', end_time: '06:30', break_minutes: 0, break_manual: false, shift_label: '', team: 'team2' },
@@ -78,6 +94,46 @@ export default function PayrollRound1Preview() {
 
         <section data-screen="eksport">
           <PayrollExportColumns selected={columns} onChange={setColumns} />
+        </section>
+
+        <section className="bg-white rounded-xl border border-slate-200 p-6 space-y-3" data-screen="ansatt-tillegg">
+          <h2 className="text-base font-semibold text-slate-800">Tillegg som gjelder</h2>
+          <p className="text-xs text-slate-400">
+            Avkrysset tillegg telles som vanlige timer. Natt krever at både butikken og den ansatte har nattillegg på. Timesats 230 kr.
+          </p>
+          <div className="flex gap-4 flex-wrap">
+            {WORKER_SUPPLEMENTS.map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={!disabledExtras.includes(key)}
+                  onCheckedChange={() => toggleExtra(key)}
+                />
+                <span className="text-sm text-slate-700">{label}</span>
+              </label>
+            ))}
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-slate-400">
+                <th className="py-2 text-left">Vakt</th>
+                <th className="py-2 text-right">Vanlige</th>
+                <th className="py-2 text-right">Søndag</th>
+                <th className="py-2 text-right">Natt</th>
+                <th className="py-2 text-right">Lønn</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workerExamples.map(({ shift, breakdown }) => (
+                <tr key={shift.date} className="border-t border-slate-100">
+                  <td className="py-2">{shift.name}</td>
+                  <td className="py-2 text-right">{hoursOrDash(breakdown.regularHours)}</td>
+                  <td className="py-2 text-right">{hoursOrDash(breakdown.sundayHours)}</td>
+                  <td className="py-2 text-right">{hoursOrDash(breakdown.nightHours)}</td>
+                  <td className="py-2 text-right">{breakdown.pay.toFixed(0)} kr</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
 
         <section className="bg-white rounded-xl border border-slate-200 overflow-hidden" data-screen="timeliste">

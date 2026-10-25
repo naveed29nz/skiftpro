@@ -162,6 +162,144 @@ test('break rules and night supplement stay off until the store enables them', (
   assert.equal(nightMinutes(shift, {}, 'team2'), 0);
 });
 
+test('sunday hours stay regular when the worker has søndagstillegg turned off', () => {
+  const sunday = {
+    date: '2026-10-25',
+    start_time: '10:00',
+    end_time: '16:00',
+    team: 'team2',
+    break_manual: true,
+    break_minutes: 0,
+  };
+  const off = getShiftBreakdown(sunday, 230, 'team2', [], osloTeam2, ['sunday', 'holiday']);
+  assert.equal(off.hours, 6);
+  assert.equal(off.sundayHours, 0);
+  assert.equal(off.sundayBonus, 0);
+  assert.equal(off.holidayHours, 0);
+  assert.equal(off.regularHours, 6);
+  assert.equal(off.extraHours, 0);
+  assert.equal(off.isExtra, false);
+  assert.equal(off.label, 'Vanlig');
+  assert.equal(off.pay, 1380);
+
+  const on = getShiftBreakdown(sunday, 230, 'team2', [], osloTeam2, []);
+  assert.equal(on.sundayHours, 6);
+  assert.equal(on.sundayBonus, 690);
+  assert.equal(on.regularHours, 0);
+  assert.equal(on.pay, 2070);
+});
+
+test('a holiday the worker has turned off is paid as regular hours without the multiplier', () => {
+  const shift = {
+    date: '2026-10-22',
+    start_time: '10:00',
+    end_time: '16:00',
+    team: 'team2',
+    break_manual: true,
+    break_minutes: 0,
+  };
+  const holidays = [{ date: '2026-10-22', name: 'Egen dag', pay_multiplier: 2 }];
+  const settings = {
+    ...osloTeam2,
+    team2_holiday_extra_type: 'percentage',
+    team2_holiday_extra_amount: 50,
+  };
+  const off = getShiftBreakdown(shift, 200, 'team2', holidays, settings, ['holiday']);
+  assert.equal(off.holidayHours, 0);
+  assert.equal(off.holidayBonus, 0);
+  assert.equal(off.sundayHours, 0);
+  assert.equal(off.regularHours, 6);
+  assert.equal(off.basePay, 1200);
+  assert.equal(off.pay, 1200);
+  assert.equal(off.label, 'Vanlig');
+
+  const on = getShiftBreakdown(shift, 200, 'team2', holidays, settings, []);
+  assert.equal(on.holidayHours, 6);
+  assert.equal(on.regularHours, 0);
+  assert.equal(on.basePay, 2400);
+  assert.equal(on.holidayBonus, 1200);
+  assert.equal(on.pay, 3600);
+});
+
+test('a public holiday stays regular when helligdagstillegg is off, including when that day is a Sunday', () => {
+  const labourDay = {
+    date: '2026-05-01',
+    start_time: '08:00',
+    end_time: '16:00',
+    team: 'team2',
+    break_manual: true,
+    break_minutes: 0,
+  };
+  const settings = {
+    ...osloTeam2,
+    team2_holiday_extra_type: 'percentage',
+    team2_holiday_extra_amount: 50,
+  };
+  const off = getShiftBreakdown(labourDay, 200, 'team2', [], settings, ['holiday']);
+  assert.equal(off.holidayHours, 0);
+  assert.equal(off.holidayBonus, 0);
+  assert.equal(off.regularHours, 8);
+  assert.equal(off.pay, 1600);
+
+  const on = getShiftBreakdown(labourDay, 200, 'team2', [], settings, []);
+  assert.equal(on.holidayHours, 8);
+  assert.equal(on.holidayBonus, 800);
+  assert.equal(on.regularHours, 0);
+
+  const constitutionDay = { ...labourDay, date: '2026-05-17' };
+  const sundayHolidayOff = getShiftBreakdown(constitutionDay, 200, 'team2', [], settings, ['holiday']);
+  assert.equal(sundayHolidayOff.holidayHours, 0);
+  assert.equal(sundayHolidayOff.sundayHours, 0);
+  assert.equal(sundayHolidayOff.regularHours, 8);
+  assert.equal(sundayHolidayOff.pay, 1600);
+});
+
+test('night supplement applies only when the store and the worker both have it on', () => {
+  const evening = {
+    date: '2026-10-21',
+    start_time: '18:00',
+    end_time: '23:00',
+    team: 'team2',
+    break_manual: true,
+    break_minutes: 0,
+    shift_label: 'evening',
+  };
+  const workerOff = getShiftBreakdown(evening, 200, 'team2', [], osloTeam2, ['night']);
+  assert.equal(workerOff.nightHours, 0);
+  assert.equal(workerOff.nightBonus, 0);
+  assert.equal(workerOff.regularHours, 5);
+  assert.equal(workerOff.pay, 1000);
+
+  const bothOn = getShiftBreakdown(evening, 200, 'team2', [], osloTeam2, []);
+  assert.equal(bothOn.nightHours, 2);
+  assert.equal(bothOn.nightBonus, 200);
+
+  const storeOff = {
+    ...osloTeam2,
+    team2_night_enabled: false,
+  };
+  const workerOnStoreOff = getShiftBreakdown(evening, 200, 'team2', [], storeOff, []);
+  assert.equal(workerOnStoreOff.nightHours, 0);
+  assert.equal(workerOnStoreOff.nightBonus, 0);
+  assert.equal(workerOnStoreOff.pay, 1000);
+
+  const sundayNight = {
+    date: '2026-10-25',
+    start_time: '21:00',
+    end_time: '23:00',
+    team: 'team2',
+    break_manual: true,
+    break_minutes: 0,
+  };
+  const sundayOffNightOn = getShiftBreakdown(sundayNight, 200, 'team2', [], osloTeam2, ['sunday']);
+  assert.equal(sundayOffNightOn.sundayHours, 0);
+  assert.equal(sundayOffNightOn.sundayBonus, 0);
+  assert.equal(sundayOffNightOn.regularHours, 2);
+  assert.equal(sundayOffNightOn.nightHours, 2);
+  assert.equal(sundayOffNightOn.nightBonus, 200);
+  assert.equal(sundayOffNightOn.pay, 600);
+});
+
 test('ferie can be a full day without clock times and is counted apart from work', () => {
   const ferie = {
     date: '2026-07-01',

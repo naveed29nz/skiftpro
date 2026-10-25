@@ -1,7 +1,10 @@
 /**
  * Shared pay calculation.
  * Hours deduct the effective unpaid break. Sunday, holiday and night
- * supplements stack. Sick and ferie are counted apart from worked hours.
+ * supplements stack when they apply. A supplement the worker has turned off
+ * (workers.disabled_extras) contributes neither hours nor pay: those hours
+ * stay regular. Night applies only when the store has nattillegg on and the
+ * worker has not disabled it. Sick and ferie are counted apart from work.
  */
 
 function getEaster(year) {
@@ -191,6 +194,8 @@ const EMPTY_SPLIT = {
 /**
  * Full shift pay breakdown.
  * Night hours are a supplement on top of weekday, Sunday or holiday pay.
+ * disabledExtras lists supplements that do not apply to this worker
+ * ('sunday', 'holiday', 'night'). Checked off means the hours are regular.
  */
 export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettings, disabledExtras = []) {
   const resolvedTeam = shift?.team || teamKey || 'team1';
@@ -237,42 +242,38 @@ export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettin
   let sundayHours = 0;
   let holidayHours = 0;
 
-  if (holiday) {
+  const holidayOff = disabledExtras.includes('holiday');
+  const sundayOff = disabledExtras.includes('sunday');
+
+  if (holiday && !holidayOff) {
     isExtra = true;
     holidayHours = hours;
-    if (disabledExtras.includes('holiday')) {
-      label = `Helligdag: ${holiday.name} (ingen tillegg)`;
-    } else {
-      const multiplier = holiday.pay_multiplier || 2;
-      basePay = hours * rate * multiplier;
-      label = `Helligdag: ${holiday.name} ×${multiplier}`;
-      const et = holiday.extra_type;
-      const ea = holiday.extra_amount || 0;
-      if (et === 'percentage') holidayBonus += basePay * (ea / 100);
-      else if (et === 'fixed_per_shift' || et === 'fixed_per_day') holidayBonus += ea;
-      const { extraType, extraAmount } = getTeamExtra(wpSettings, resolvedTeam, 'holiday');
-      holidayBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
-    }
-  } else if (isNorwegianHoliday) {
+    const multiplier = holiday.pay_multiplier || 2;
+    basePay = hours * rate * multiplier;
+    label = `Helligdag: ${holiday.name} ×${multiplier}`;
+    const et = holiday.extra_type;
+    const ea = holiday.extra_amount || 0;
+    if (et === 'percentage') holidayBonus += basePay * (ea / 100);
+    else if (et === 'fixed_per_shift' || et === 'fixed_per_day') holidayBonus += ea;
+    const { extraType, extraAmount } = getTeamExtra(wpSettings, resolvedTeam, 'holiday');
+    holidayBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
+  } else if (!holiday && isNorwegianHoliday && !holidayOff) {
     isExtra = true;
     holidayHours = hours;
-    if (!disabledExtras.includes('holiday')) {
-      const { extraType, extraAmount } = getTeamExtra(wpSettings, resolvedTeam, 'holiday');
-      holidayBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
-    }
-  } else if (isSunday) {
+    const { extraType, extraAmount } = getTeamExtra(wpSettings, resolvedTeam, 'holiday');
+    holidayBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
+  } else if (!holiday && !isNorwegianHoliday && isSunday && !sundayOff) {
     label = 'Søndag';
     isExtra = true;
     sundayHours = hours;
-    if (!disabledExtras.includes('sunday')) {
-      const { extraType, extraAmount } = getTeamExtra(wpSettings, resolvedTeam, 'sunday');
-      sundayBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
-    }
+    const { extraType, extraAmount } = getTeamExtra(wpSettings, resolvedTeam, 'sunday');
+    sundayBonus += calcExtraAmount(basePay, hours, extraType, extraAmount);
   }
 
-  const nightHours = nightMinutes(shift, wpSettings, resolvedTeam) / 60;
+  const nightApplies = !disabledExtras.includes('night');
+  const nightHours = nightApplies ? nightMinutes(shift, wpSettings, resolvedTeam) / 60 : 0;
   let nightBonus = 0;
-  if (nightHours > 0 && !disabledExtras.includes('night')) {
+  if (nightHours > 0) {
     const night = nightSupplement(wpSettings, resolvedTeam);
     nightBonus = calcExtraAmount(nightHours * rate, nightHours, night.extraType, night.extraAmount);
   }
