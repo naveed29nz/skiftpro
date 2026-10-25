@@ -38,13 +38,19 @@ export function useOrg() {
 
   // Impersonation: a superadmin may temporarily "enter" a customer org to help/support.
   // The override is stored in localStorage so it survives navigation/reload.
-  const [impersonateOrgId, setImpersonateOrgId] = useState(null);
+  const [impersonateOrgId, setImpersonateOrgId] = useState(() => {
+    try {
+      return localStorage.getItem('impersonate_org_id') || null;
+    } catch {
+      return null;
+    }
+  });
   useEffect(() => {
     setImpersonateOrgId(localStorage.getItem('impersonate_org_id') || null);
   }, []);
 
   // Find org where this user is the admin
-  const { data: orgs = [] } = useQuery({
+  const { data: orgs = [], isSuccess: orgsLoaded } = useQuery({
     queryKey: ['organizations'],
     queryFn: () => base44.entities.Organization.list(),
     enabled: !!userId,
@@ -79,6 +85,8 @@ export function useOrg() {
     impersonatedOrg: impersonatedOrg,
     exitImpersonation: () => localStorage.removeItem('impersonate_org_id'),
     isOrgAdmin: !!myOrg,
+    adminOrg: myOrg,
+    orgsLoaded: Boolean(userId) && orgsLoaded,
     userId,
     userEmail,
     userRole,

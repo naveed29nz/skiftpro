@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import { supabase } from '@/api/supabaseClient';
 import OrgOnboarding from '@/components/OrgOnboarding';
+import CompanyDetailsPrompt from '@/components/CompanyDetailsPrompt';
 import EmployeeNoInvite from '@/components/EmployeeNoInvite';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
 import LegalFooter from '@/components/LegalFooter';
@@ -13,6 +14,7 @@ import { queryClientInstance } from '@/lib/query-client';
 import { claimOrgId, resolveSignupGate, resolveSignupKind } from '@/lib/signupGate';
 import { findWorkerByEmail } from '@/lib/workerLookup';
 import { defaultPageForRole, isPageEnabled, visibleNavItems } from '@/lib/featureFlags';
+import { needsCompanyDetails } from '@/lib/orgNumber';
 
 async function claimWorkerOrg() {
   const { data, error } = await supabase.rpc('claim_worker_card');
@@ -150,7 +152,10 @@ export default function Layout() {
   const [onboardingUser, setOnboardingUser] = useState(null);
   const [linkAttempt, setLinkAttempt] = useState(0);
   const [linking, setLinking] = useState(false);
-  const { isImpersonating } = useOrg();
+  const { isImpersonating, adminOrg, orgsLoaded, userId, userEmail } = useOrg();
+  const showCompanyDetails = Boolean(
+    orgsLoaded && needsCompanyDetails(adminOrg, { userId, userEmail, impersonating: isImpersonating })
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -315,6 +320,10 @@ export default function Layout() {
 
   if (needsOnboarding && onboardingUser) {
     return <OrgOnboarding userId={onboardingUser.id} userEmail={onboardingUser.email} />;
+  }
+
+  if (showCompanyDetails) {
+    return <CompanyDetailsPrompt org={adminOrg} userEmail={userEmail} />;
   }
 
   return (
