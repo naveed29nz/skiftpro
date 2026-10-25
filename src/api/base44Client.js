@@ -412,10 +412,19 @@ async function selectRows(table, { sort, limit, filters } = {}) {
   return rows.slice(0, cap).map(normalizeRow);
 }
 
+function withoutEkstrahjelpPeriode(payload) {
+  const next = { ...payload };
+  delete next.ekstrahjelp_periode;
+  return next;
+}
+
 async function writeRow(table, payload, run) {
   try {
     return await runRead(table, (columns) => run(columns, payload));
   } catch (error) {
+    if (table === 'employer_settings' && isMissingColumn(error) && Object.prototype.hasOwnProperty.call(payload, 'ekstrahjelp_periode')) {
+      return runRead(table, (columns) => run(columns, withoutEkstrahjelpPeriode(payload)));
+    }
     if (table === 'shifts' && isMissingColumn(error)) {
       return runRead(table, (columns) => run(columns, withoutRound1ShiftColumns(payload)));
     }

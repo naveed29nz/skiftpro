@@ -30,7 +30,13 @@ where id = 'org-a';
 insert into public.employer_settings (id, org_id, selskap, org_nr, adresse, signatur_navn, signatur_stilling)
 values (
   'es-a', 'org-a', 'Annet navn AS', '000000000', 'Firma 1', 'Kari Person', 'Daglig leder'
-);
+)
+on conflict (org_id) do update set
+  selskap = excluded.selskap,
+  org_nr = excluded.org_nr,
+  adresse = excluded.adresse,
+  signatur_navn = excluded.signatur_navn,
+  signatur_stilling = excluded.signatur_stilling;
 
 insert into public.contracts (
   id, org_id, worker_id, worker_name, contract_type, status, template_key, body_snapshot

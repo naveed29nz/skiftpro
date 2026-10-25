@@ -1,14 +1,11 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-function getWeekStartEnd(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(d.setDate(diff));
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+function monthBounds(dateStr) {
+  const [year, month] = dateStr.split('-').map(Number);
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 0));
   const fmt = (dt) => dt.toISOString().slice(0, 10);
-  return { start: fmt(monday), end: fmt(sunday) };
+  return { start: fmt(start), end: fmt(end), days: end.getUTCDate() };
 }
 
 function getISOWeek(dateStr) {
@@ -45,44 +42,52 @@ Deno.serve(async (req) => {
       return Response.json({ status: 'skipped', reason: 'worker not found or inactive' });
     }
 
-    const empPct = worker.employment_percentage || 100;
-    if (empPct >= 100) {
-      return Response.json({ status: 'skipped', reason: 'worker already 100%+' });
+    if (worker.ansettelsestype === 'tilkalling') {
+      return Response.json({ status: 'skipped', reason: 'ekstrahjelp har ingen stillingsprosent' });
+    }
+    if (worker.ansettelsestype === 'butikksjef_ledende') {
+      return Response.json({ status: 'skipped', reason: 'ledende stilling' });
     }
 
-    const { start: weekStart, end: weekEnd } = getWeekStartEnd(shiftDate);
-    const weekNum = getISOWeek(shiftDate);
-    const year = new Date(shiftDate + 'T00:00:00').getFullYear();
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const { start: monthStart, end: monthEnd, days } = monthBounds(shiftDate);
+    const weekNum = getISOWeek(monthStart);
+    const year = Number(monthStart.slice(0, 4));
 
-    const weekShifts = await base44.entities.Shift.filter({
+    const monthShifts = await base44.entities.Shift.filter({
       worker_id: workerId,
-      date: { $gte: weekStart, $lte: weekEnd },
+      date: { $gte: monthStart, $lte: monthEnd },
       status: { $ne: 'cancelled' }
     });
 
-    const totalHours = weekShifts.reduce((sum, s) => sum + calcShiftHours(s), 0);
+    const totalHours = monthShifts.reduce((sum, s) => sum + calcShiftHours(s), 0);
 
     const wpSettings = await base44.entities.WorkplaceSetting.list();
     const wp = wpSettings[0];
     const fullTimeHours = wp?.full_time_hours_per_week || 37.5;
+    const weeklyHours = worker.timer_per_uke != null && worker.timer_per_uke !== ''
+      ? Number(worker.timer_per_uke)
+      : fullTimeHours * ((worker.employment_percentage ?? 100) / 100);
+    if (weeklyHours + 0.01 >= fullTimeHours) {
+      return Response.json({ status: 'skipped', reason: 'worker already full time' });
+    }
 
-    const contractedHours = fullTimeHours * (empPct / 100);
+    const contractedHours = weeklyHours * (days / 7);
     const overtimeHours = totalHours - contractedHours;
 
-    if (overtimeHours <= 0) {
-      return Response.json({ status: 'skipped', reason: 'no overtime', totalHours, contractedHours });
+    if (overtimeHours <= 0.01) {
+      return Response.json({ status: 'skipped', reason: 'no overtime', totalHours, contractedHours, period: 'maned' });
     }
 
     const existingContracts = await base44.entities.Contract.filter({
       worker_id: workerId,
-      week_number: weekNum,
-      year: year,
-      contract_type: 'ekstrahjelp'
+      start_date: monthStart,
+      end_date: monthEnd
     });
 
     const activeContract = existingContracts.find(c =>
-      c.status === 'utkast' || c.status === 'sendt' || c.status === 'godkjent'
+      c.generated_automatically
+      && (c.contract_type === 'merarbeid' || c.contract_type === 'ekstrahjelp')
+      && (c.status === 'utkast' || c.status === 'sendt' || c.status === 'apnet' || c.status === 'godkjent')
     );
 
     const orgs = await base44.entities.Organization.list();
@@ -100,17 +105,17 @@ Deno.serve(async (req) => {
       org_id: orgId,
       worker_id: workerId,
       worker_name: worker.name,
-      contract_type: 'ekstrahjelp',
+      contract_type: 'merarbeid',
       status: 'utkast',
       org_name: orgName,
       worker_position: worker.position || 'Selger',
       hourly_rate: worker.hourly_rate || 0,
-      employment_percentage: empPct,
-      weekly_hours: totalHours,
+      employment_percentage: worker.employment_percentage ?? null,
+      weekly_hours: Math.round((totalHours / (days / 7)) * 100) / 100,
       overtime_hours: Math.round(overtimeHours * 100) / 100,
       full_time_hours_per_week: fullTimeHours,
-      start_date: weekStart,
-      end_date: weekEnd,
+      start_date: monthStart,
+      end_date: monthEnd,
       week_number: weekNum,
       year: year,
       reason: 'sesong',
@@ -120,11 +125,12 @@ Deno.serve(async (req) => {
 
     if (activeContract) {
       await base44.entities.Contract.update(activeContract.id, {
-        weekly_hours: totalHours,
+        weekly_hours: Math.round((totalHours / (days / 7)) * 100) / 100,
         overtime_hours: Math.round(overtimeHours * 100) / 100,
-        end_date: weekEnd
+        start_date: monthStart,
+        end_date: monthEnd
       });
-      return Response.json({ status: 'updated', contractId: activeContract.id, totalHours, overtimeHours });
+      return Response.json({ status: 'updated', contractId: activeContract.id, totalHours, overtimeHours, period: 'maned' });
     } else {
       const created = await base44.entities.Contract.create(contractData);
       return Response.json({ status: 'created', contractId: created.id, totalHours, overtimeHours });
