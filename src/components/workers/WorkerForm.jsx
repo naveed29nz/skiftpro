@@ -20,6 +20,12 @@ import { fodselsnummerValid } from '@/contracts/fodselsnummer';
 
 const COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'];
 
+export const WORKER_SUPPLEMENTS = [
+  ['sunday', 'Søndagstillegg'],
+  ['holiday', 'Helligdagstillegg'],
+  ['night', 'Nattillegg'],
+];
+
 function numberOrNull(value) {
   if (value === '' || value == null) return null;
   const parsed = Number(value);
@@ -378,7 +384,7 @@ export default function WorkerForm({
       <div className="space-y-1.5">
         <Label>Tillegg som gjelder</Label>
         <div className="flex gap-4 flex-wrap mt-1">
-          {[['sunday', 'Søndagstillegg'], ['holiday', 'Helligdagstillegg']].map(([key, label]) => (
+          {WORKER_SUPPLEMENTS.map(([key, label]) => (
             <label key={key} className="flex items-center gap-2 cursor-pointer">
               <Checkbox
                 checked={!form.disabled_extras.includes(key)}
