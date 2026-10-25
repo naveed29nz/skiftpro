@@ -25,42 +25,50 @@ const EMPTY = {
   ub_tillegg: [],
   oppsigelsesfrist_mnd_midlertidig: 1,
   send_tilleggsavtaler_automatisk: false,
+  ekstratimer_periode: 'maaned',
   signing_provider: 'simple_otp',
   signering_frist_dager: 14,
   oppbevaring_mnd_etter_opphor: 60,
   tilkalling_grunnlag: 'vikar',
 };
 
-export default function EmployerSettingsCard({ orgId }) {
+export default function EmployerSettingsCard({ orgId, previewValues = null, periodOnly = false, onValuesChange }) {
+  const preview = previewValues != null;
   const queryClient = useQueryClient();
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState(() => (
+    preview ? { ...EMPTY, ...previewValues, ub_tillegg: previewValues.ub_tillegg || [] } : EMPTY
+  ));
   const [saved, setSaved] = useState(false);
 
   const { data: rows = [], isLoading, error } = useQuery({
     queryKey: ['employer-settings', orgId],
     queryFn: () => base44.entities.EmployerSetting.filter({ org_id: orgId }),
-    enabled: !!orgId,
+    enabled: !!orgId && !preview,
   });
   const existing = rows[0];
 
   useEffect(() => {
-    if (existing) {
-      setForm({ ...EMPTY, ...existing, ub_tillegg: existing.ub_tillegg || [] });
-    }
-  }, [existing]);
+    if (preview || !existing) return;
+    setForm({ ...EMPTY, ...existing, ub_tillegg: existing.ub_tillegg || [] });
+  }, [existing, preview]);
 
   const saveMut = useMutation({
     mutationFn: async (data) => {
+      if (preview) return data;
       if (existing) return base44.entities.EmployerSetting.update(existing.id, data);
       return base44.entities.EmployerSetting.create({ ...data, org_id: orgId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['employer-settings', orgId] });
+      if (!preview) queryClient.invalidateQueries({ queryKey: ['employer-settings', orgId] });
       setSaved(true);
     },
   });
 
-  const setField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const setField = (key, value) => setForm((current) => {
+    const next = { ...current, [key]: value };
+    onValuesChange?.(next);
+    return next;
+  });
 
   const updateUb = (index, key, value) => {
     const next = [...(form.ub_tillegg || [])];
@@ -88,11 +96,12 @@ export default function EmployerSettingsCard({ orgId }) {
       oppsigelsesfrist_mnd_midlertidig: Number(form.oppsigelsesfrist_mnd_midlertidig) || 1,
       signering_frist_dager: Number(form.signering_frist_dager) || 14,
       oppbevaring_mnd_etter_opphor: Number(form.oppbevaring_mnd_etter_opphor) || 60,
+      ekstratimer_periode: form.ekstratimer_periode === 'uke' ? 'uke' : 'maaned',
     });
   };
 
-  if (!orgId) return null;
-  if (isLoading) return null;
+  if (!orgId && !preview) return null;
+  if (!preview && isLoading) return null;
   if (error && /does not exist|schema cache|Could not find the table/i.test(error.message || '')) return null;
 
   return (
@@ -101,6 +110,19 @@ export default function EmployerSettingsCard({ orgId }) {
         <h2 className="text-base font-semibold text-slate-800">Arbeidsgiver i avtalene</h2>
         <p className="text-xs text-slate-500 mt-1">Bare admin ser disse opplysningene. De fylles inn i arbeidsavtalen.</p>
       </div>
+      <div className="space-y-1.5 max-w-sm">
+        <Label htmlFor="ekstratimer-periode">Vurdering av ekstratimer</Label>
+        <Select value={form.ekstratimer_periode === 'uke' ? 'uke' : 'maaned'} onValueChange={(value) => setField('ekstratimer_periode', value)}>
+          <SelectTrigger id="ekstratimer-periode"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="maaned">Måned</SelectItem>
+            <SelectItem value="uke">Uke</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-slate-500">Måned sammenligner hele kalendermåneden med avtalt tid. En uke med flere timer kan veies opp av en uke med færre timer. Uke vurderer hver uke for seg.</p>
+      </div>
+      {!periodOnly && (
+      <>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Juridisk navn</Label>
@@ -173,10 +195,6 @@ export default function EmployerSettingsCard({ orgId }) {
         <Checkbox checked={form.otp !== false} onCheckedChange={(value) => setField('otp', value === true)} />
         OTP er opprettet
       </label>
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox checked={!!form.send_tilleggsavtaler_automatisk} onCheckedChange={(value) => setField('send_tilleggsavtaler_automatisk', value === true)} />
-        Send tilleggsavtaler automatisk (merarbeid og bilag). Av er utkast.
-      </label>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -224,6 +242,13 @@ export default function EmployerSettingsCard({ orgId }) {
           <p className="text-xs text-slate-400">BankID brukes ikke før avtale med Idura eller Signicat og med Stø. Fødselsnummer hentes ikke.</p>
         </div>
       </div>
+      </>
+      )}
+
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={!!form.send_tilleggsavtaler_automatisk} onCheckedChange={(value) => setField('send_tilleggsavtaler_automatisk', value === true)} />
+        Send tilleggsavtaler automatisk når vurderingen er Uke. En månedlig avtale blir liggende som utkast.
+      </label>
 
       {saveMut.error && <p className="text-sm text-red-600">{saveMut.error.message}</p>}
       {saved && <p className="text-sm text-emerald-700">Arbeidsgiveropplysningene er lagret.</p>}

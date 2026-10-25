@@ -38,6 +38,7 @@ declare
   n integer;
   doc text;
   rendered text;
+  sent_before integer;
 begin
   rendered := public.render_mustache(
     E'Hei {{navn}}\n{{#tariff}}Tariff{{/tariff}}\n{{^tariff}}Ikke{{/tariff}}\n{{#ub_tillegg}}{{navn}} {{sats}}\n{{/ub_tillegg}}',
@@ -169,6 +170,17 @@ begin
     detail
   );
 
+  insert into public.employer_settings (id, org_id, send_tilleggsavtaler_automatisk, ekstratimer_periode, alminnelig_ukentlig_arbeidstid)
+  values ('es-month', 'org-a', true, 'maaned', 37.5);
+
+  insert into public.contracts (
+    id, org_id, worker_id, worker_name, contract_type, status,
+    start_date, end_date, generated_automatically, body_snapshot, metadata, contract_kind
+  ) values (
+    'c-weekly-ot', 'org-a', 'w-ot', 'Overtid', 'merarbeid', 'utkast',
+    date '2026-10-12', date '2026-10-18', true, 'UKENTLIG UTKAST', '{}'::jsonb, 'merarbeid'
+  );
+
   insert into public.shifts (
     id, org_id, worker_id, worker_name, date, start_time, end_time, break_minutes, status, team
   ) values
@@ -179,29 +191,174 @@ begin
     ('ot-5', 'org-a', 'w-ot', 'Overtid', date '2026-10-20', '08:00', '16:00', 0, 'scheduled', 'team1'),
     ('ot-6', 'org-a', 'w-ot', 'Overtid', date '2026-10-21', '08:00', '16:00', 0, 'scheduled', 'team1');
 
-  n := (select count(*) from public.contracts where worker_id = 'w-ot' and contract_type = 'merarbeid' and status <> 'trukket');
+  n := (select count(*) from public.contracts where worker_id = 'w-ot' and coalesce(metadata ->> 'periode', '') = 'maaned');
   insert into rls_results values (
-    'extra-hours trigger merges consecutive weeks into one period',
-    n = 1
-      and (select start_date = date '2026-10-12' and end_date = date '2026-10-25' from public.contracts where worker_id = 'w-ot' and contract_type = 'merarbeid' and status <> 'trukket'),
+    'weeks over the weekly rate offset inside the month and create no contract',
+    n = 0
+      and (select status = 'utkast' and start_date = date '2026-10-12' and end_date = date '2026-10-18' and body_snapshot = 'UKENTLIG UTKAST' from public.contracts where id = 'c-weekly-ot'),
     n::text
   );
 
-  perform public.check_overtime_for_shift('w-ot', date '2026-10-12');
-  n := (select count(*) from public.contracts where worker_id = 'w-ot' and contract_type = 'merarbeid' and status <> 'trukket');
+  insert into public.shifts (
+    id, org_id, worker_id, worker_name, date, start_time, end_time, break_minutes, status, team
+  ) values
+    ('ot-7', 'org-a', 'w-ot', 'Overtid', date '2026-10-05', '08:00', '16:00', 0, 'scheduled', 'team1'),
+    ('ot-8', 'org-a', 'w-ot', 'Overtid', date '2026-10-06', '08:00', '16:00', 0, 'scheduled', 'team1'),
+    ('ot-9', 'org-a', 'w-ot', 'Overtid', date '2026-10-07', '08:00', '16:00', 0, 'scheduled', 'team1'),
+    ('ot-10', 'org-a', 'w-ot', 'Overtid', date '2026-10-08', '08:00', '16:00', 0, 'scheduled', 'team1'),
+    ('ot-11', 'org-a', 'w-ot', 'Overtid', date '2026-10-09', '08:00', '16:00', 0, 'scheduled', 'team1');
+
+  n := (select count(*) from public.contracts where worker_id = 'w-ot' and coalesce(metadata ->> 'periode', '') = 'maaned');
   insert into rls_results values (
-    'extra-hours trigger is idempotent',
+    'eighty eight hours stays inside the october quota of twenty hours times 31/7',
+    n = 0,
+    n::text
+  );
+
+  sent_before := (
+    select count(*) from public.notification_outbox
+    where org_id = 'org-a' and kind = 'contract_sent'
+  );
+  insert into public.shifts (
+    id, org_id, worker_id, worker_name, date, start_time, end_time, break_minutes, status, team
+  ) values (
+    'ot-12', 'org-a', 'w-ot', 'Overtid', date '2026-10-26', '08:00', '16:00', 0, 'scheduled', 'team1'
+  );
+
+  select format(
+    'status=%s %s..%s ot=%s wh=%s sent_events=%s notes=%s body=%s',
+    c.status, c.start_date, c.end_date, c.overtime_hours, c.weekly_hours,
+    (select count(*) from public.contract_events e where e.contract_id = c.id and e.event_type = 'sendt'),
+    (select count(*) from public.notification_outbox nfy where nfy.org_id = 'org-a' and nfy.kind = 'contract_sent') - sent_before,
+    left(c.body_snapshot, 240)
+  )
+  into detail
+  from public.contracts c
+  where c.worker_id = 'w-ot' and coalesce(c.metadata ->> 'periode', '') = 'maaned' and c.status <> 'trukket';
+
+  n := (select count(*) from public.contracts where worker_id = 'w-ot' and coalesce(metadata ->> 'periode', '') = 'maaned' and status <> 'trukket');
+  insert into rls_results values (
+    'one monthly draft covers the calendar month with the excess hours and is not sent',
+    n = 1
+      and exists (
+        select 1 from public.contracts c
+        where c.worker_id = 'w-ot'
+          and coalesce(c.metadata ->> 'periode', '') = 'maaned'
+          and c.status = 'utkast'
+          and c.start_date = date '2026-10-01'
+          and c.end_date = date '2026-10-31'
+          and abs(c.overtime_hours - 7.43) < 0.001
+          and abs(c.weekly_hours - 21.68) < 0.001
+          and c.body_snapshot like '%01.10.2026%'
+          and c.body_snapshot like '%31.10.2026%'
+          and c.body_snapshot like '%88,57%'
+          and c.body_snapshot like '%7,43%'
+          and c.sent_at is null
+      )
+      and (select count(*) from public.contract_events e join public.contracts c on c.id = e.contract_id where c.worker_id = 'w-ot' and coalesce(c.metadata ->> 'periode', '') = 'maaned' and e.event_type = 'sendt') = 0
+      and (select count(*) from public.notification_outbox where org_id = 'org-a' and kind = 'contract_sent') = sent_before
+      and (select status = 'utkast' and start_date = date '2026-10-12' and end_date = date '2026-10-18' and body_snapshot = 'UKENTLIG UTKAST' from public.contracts where id = 'c-weekly-ot'),
+    coalesce(detail, 'missing')
+  );
+
+  perform public.check_overtime_for_shift('w-ot', date '2026-10-12');
+  n := (select count(*) from public.contracts where worker_id = 'w-ot' and coalesce(metadata ->> 'periode', '') = 'maaned' and status <> 'trukket');
+  insert into rls_results values (
+    'monthly extra-hours trigger is idempotent',
     n = 1,
     n::text
   );
 
   update public.shifts set status = 'cancelled' where worker_id = 'w-ot';
-  n := (select count(*) from public.contracts where worker_id = 'w-ot' and status = 'trukket');
   insert into rls_results values (
-    'unsigned extra-hours agreement is withdrawn when the shifts go away',
-    n = 1,
+    'unsigned monthly agreement is withdrawn and the weekly draft stays',
+    (select count(*) from public.contracts where worker_id = 'w-ot' and coalesce(metadata ->> 'periode', '') = 'maaned' and status = 'trukket') = 1
+      and (select status = 'utkast' and body_snapshot = 'UKENTLIG UTKAST' and start_date = date '2026-10-12' and end_date = date '2026-10-18' from public.contracts where id = 'c-weekly-ot'),
+    (select status from public.contracts where id = 'c-weekly-ot')
+  );
+
+  insert into public.workers (
+    id, org_id, name, email, role, teams, hourly_rate, employment_percentage,
+    ansettelsestype, timer_per_uke, status
+  ) values (
+    'w-pct', 'org-a', 'Prosent', 'pct@example.com', 'user', array['team1'],
+    200, 50, 'fast', null, 'active'
+  );
+  insert into public.shifts (
+    id, org_id, worker_id, worker_name, date, start_time, end_time, break_minutes, status, team
+  )
+  select 'pct-' || g, 'org-a', 'w-pct', 'Prosent', date '2026-10-01' + (g - 1), '08:00', '16:00', 0, 'scheduled', 'team1'
+  from generate_series(1, 10) as g;
+  n := (select count(*) from public.contracts where worker_id = 'w-pct' and coalesce(metadata ->> 'periode', '') = 'maaned' and status <> 'trukket');
+  insert into rls_results values (
+    'stillingsprosent under the monthly quota creates no contract',
+    n = 0,
     n::text
   );
+  insert into public.shifts (
+    id, org_id, worker_id, worker_name, date, start_time, end_time, break_minutes, status, team
+  ) values (
+    'pct-11', 'org-a', 'w-pct', 'Prosent', date '2026-10-11', '08:00', '16:00', 0, 'scheduled', 'team1'
+  );
+  select format('status=%s ot=%s body=%s', c.status, c.overtime_hours, left(c.body_snapshot, 200))
+  into detail
+  from public.contracts c
+  where c.worker_id = 'w-pct' and coalesce(c.metadata ->> 'periode', '') = 'maaned' and c.status <> 'trukket';
+  insert into rls_results values (
+    'stillingsprosent over the monthly quota creates one draft',
+    (select count(*) from public.contracts where worker_id = 'w-pct' and coalesce(metadata ->> 'periode', '') = 'maaned' and status = 'utkast') = 1
+      and exists (
+        select 1 from public.contracts c
+        where c.worker_id = 'w-pct'
+          and c.start_date = date '2026-10-01'
+          and c.end_date = date '2026-10-31'
+          and c.body_snapshot like '%83,04%'
+          and c.body_snapshot like '%4,96%'
+          and c.sent_at is null
+      ),
+    coalesce(detail, 'missing')
+  );
+
+  update public.employer_settings
+    set ekstratimer_periode = 'uke', send_tilleggsavtaler_automatisk = false
+    where org_id = 'org-a';
+  insert into public.workers (
+    id, org_id, name, email, role, teams, hourly_rate, employment_percentage,
+    ansettelsestype, timer_per_uke, status
+  ) values (
+    'w-week', 'org-a', 'Uke', 'week@example.com', 'user', array['team1'],
+    210, 50, 'fast', 20, 'active'
+  );
+  insert into public.shifts (
+    id, org_id, worker_id, worker_name, date, start_time, end_time, break_minutes, status, team
+  ) values
+    ('wk-1', 'org-a', 'w-week', 'Uke', date '2026-10-12', '08:00', '16:00', 0, 'scheduled', 'team1'),
+    ('wk-2', 'org-a', 'w-week', 'Uke', date '2026-10-13', '08:00', '16:00', 0, 'scheduled', 'team1'),
+    ('wk-3', 'org-a', 'w-week', 'Uke', date '2026-10-14', '08:00', '16:00', 0, 'scheduled', 'team1'),
+    ('wk-4', 'org-a', 'w-week', 'Uke', date '2026-10-19', '08:00', '16:00', 0, 'scheduled', 'team1'),
+    ('wk-5', 'org-a', 'w-week', 'Uke', date '2026-10-20', '08:00', '16:00', 0, 'scheduled', 'team1'),
+    ('wk-6', 'org-a', 'w-week', 'Uke', date '2026-10-21', '08:00', '16:00', 0, 'scheduled', 'team1');
+  select format('%s %s..%s', status, start_date, end_date)
+  into detail
+  from public.contracts
+  where worker_id = 'w-week' and contract_type = 'merarbeid' and status <> 'trukket';
+  insert into rls_results values (
+    'week setting still merges consecutive weeks into one period',
+    (select count(*) from public.contracts where worker_id = 'w-week' and contract_type = 'merarbeid' and status <> 'trukket') = 1
+      and exists (
+        select 1 from public.contracts
+        where worker_id = 'w-week'
+          and start_date = date '2026-10-12'
+          and end_date = date '2026-10-25'
+          and status = 'utkast'
+          and coalesce(metadata ->> 'periode', '') is distinct from 'maaned'
+      )
+      and (select status = 'utkast' and body_snapshot = 'UKENTLIG UTKAST' from public.contracts where id = 'c-weekly-ot')
+      and (select status = 'utkast' and start_date = date '2026-10-01' from public.contracts where worker_id = 'w-pct' and coalesce(metadata ->> 'periode', '') = 'maaned'),
+    coalesce(detail, 'missing')
+  );
+
+  delete from public.employer_settings where org_id = 'org-a';
 end
 $do$;
 
