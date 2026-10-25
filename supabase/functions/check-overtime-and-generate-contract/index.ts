@@ -1,8 +1,10 @@
 import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.ts";
 
 // Port of base44/functions/checkOvertimeAndGenerateContract.
-// The shift trigger calls the same SQL function on insert/update. This HTTP
-// entry point remains so the app (or a manual replay) can invoke it.
+// The shift trigger calls public.check_overtime_for_shift. That function
+// reads the organization's period (uke or maned, default maned) and only
+// writes a draft. This HTTP entry point replays the same SQL. It never
+// sends the contract to the employee.
 
 Deno.serve(async (req) => {
   const opt = handleOptions(req);

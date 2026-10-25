@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import EkstrahjelpPeriodeField from '@/components/settings/EkstrahjelpPeriodeField';
 
 const EMPTY = {
   selskap: '',
@@ -25,6 +26,7 @@ const EMPTY = {
   ub_tillegg: [],
   oppsigelsesfrist_mnd_midlertidig: 1,
   send_tilleggsavtaler_automatisk: false,
+  ekstrahjelp_periode: 'maned',
   signing_provider: 'simple_otp',
   signering_frist_dager: 14,
   oppbevaring_mnd_etter_opphor: 60,
@@ -173,10 +175,10 @@ export default function EmployerSettingsCard({ orgId }) {
         <Checkbox checked={form.otp !== false} onCheckedChange={(value) => setField('otp', value === true)} />
         OTP er opprettet
       </label>
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox checked={!!form.send_tilleggsavtaler_automatisk} onCheckedChange={(value) => setField('send_tilleggsavtaler_automatisk', value === true)} />
-        Send tilleggsavtaler automatisk (merarbeid og bilag). Av er utkast.
-      </label>
+      <EkstrahjelpPeriodeField
+        value={form.ekstrahjelp_periode || 'maned'}
+        onChange={(value) => setField('ekstrahjelp_periode', value)}
+      />
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">

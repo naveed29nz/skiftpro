@@ -185,7 +185,7 @@ export default function Contracts({ fixture = null, wagesVisible = null, loadPdf
           <div className="py-16 text-center">
             <FileText className="w-12 h-12 text-slate-200 mx-auto mb-4" />
             <p className="text-slate-500 font-medium">Ingen kontrakter funnet</p>
-            <p className="text-sm text-slate-400 mt-1">Kontrakter genereres automatisk når ansatte går over stillingsprosent</p>
+            <p className="text-sm text-slate-400 mt-1">Merarbeid opprettes som utkast når perioden går over stillingen. Standard er kalendermåned, og avtalen sendes ikke automatisk.</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">

@@ -169,6 +169,9 @@ begin
     detail
   );
 
+  insert into public.employer_settings (id, org_id, ekstrahjelp_periode, send_tilleggsavtaler_automatisk)
+  values ('es-a', 'org-a', 'uke', true);
+
   insert into public.shifts (
     id, org_id, worker_id, worker_name, date, start_time, end_time, break_minutes, status, team
   ) values
@@ -193,6 +196,23 @@ begin
     'extra-hours trigger is idempotent',
     n = 1,
     n::text
+  );
+
+  insert into rls_results values (
+    'weekly extra-hours agreement stays a draft even when auto-send is on',
+    (select status = 'utkast' and sent_at is null
+       from public.contracts
+      where worker_id = 'w-ot' and contract_type = 'merarbeid' and status <> 'trukket')
+    and not exists (
+      select 1
+      from public.contract_events e
+      join public.contracts c on c.id = e.contract_id
+      where c.worker_id = 'w-ot' and e.event_type = 'sendt'
+    ),
+    (select status || coalesce(' sent=' || sent_at::text, '')
+       from public.contracts
+      where worker_id = 'w-ot' and contract_type = 'merarbeid' and status <> 'trukket'
+      limit 1)
   );
 
   update public.shifts set status = 'cancelled' where worker_id = 'w-ot';
