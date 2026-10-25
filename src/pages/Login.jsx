@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Link } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import LegalFooter from '@/components/LegalFooter';
+import CompanyDetailsFields from '@/components/CompanyDetailsFields';
+import { businessSignupMetadata, companyDetailsError } from '@/lib/orgNumber';
 
 function safeNextPath(raw) {
   if (!raw) return '/Dashboard';
@@ -29,6 +31,13 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState(params.get('mode') === 'signup' ? 'signup' : 'password');
   const [fullName, setFullName] = useState('');
+  const [company, setCompany] = useState({
+    companyName: '',
+    orgNumber: '',
+    contactName: '',
+    phone: '',
+    storeCount: '1',
+  });
   const [accountKind, setAccountKind] = useState('employee');
   const [consent, setConsent] = useState(false);
   const [message, setMessage] = useState('');
@@ -51,6 +60,13 @@ export default function Login() {
 
   const handleSignup = async (event) => {
     event.preventDefault();
+    if (accountKind === 'business') {
+      const problem = companyDetailsError(company);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+    }
     if (!consent) {
       setError('Du må godta vilkårene og personvernerklæringen.');
       return;
@@ -58,13 +74,15 @@ export default function Login() {
     setPending(true);
     setError('');
     setMessage('');
-    const metadata = {
-      signup: 'self_serve',
-      signup_kind: accountKind,
-      terms_accepted: 'true',
-      full_name: fullName,
-      role: 'user',
-    };
+    const metadata = accountKind === 'business'
+      ? businessSignupMetadata(company)
+      : {
+        signup: 'self_serve',
+        signup_kind: accountKind,
+        terms_accepted: 'true',
+        full_name: fullName,
+        role: 'user',
+      };
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -117,7 +135,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex items-start justify-center p-4 py-8">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-8 w-full max-w-md">
         <div className="text-center mb-6">
           <div className="w-14 h-14 bg-blue-950 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -143,7 +161,7 @@ export default function Login() {
                   name="accountKind"
                   value="employee"
                   checked={accountKind === 'employee'}
-                  onChange={() => setAccountKind('employee')}
+                  onChange={() => { setAccountKind('employee'); setError(''); }}
                 />
                 Jeg er ansatt
               </label>
@@ -153,18 +171,27 @@ export default function Login() {
                   name="accountKind"
                   value="business"
                   checked={accountKind === 'business'}
-                  onChange={() => setAccountKind('business')}
+                  onChange={() => { setAccountKind('business'); setError(''); }}
                 />
                 Registrer ny bedrift
               </label>
             </fieldset>
           )}
-          {mode === 'signup' && (
+          {mode === 'signup' && accountKind === 'employee' && (
             <div className="space-y-1.5">
               <Label htmlFor="name">Navn</Label>
               <Input id="name" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
             </div>
           )}
+          {mode === 'signup' && accountKind === 'business' && (
+            <CompanyDetailsFields
+              value={company}
+              onChange={setCompany}
+              email={email}
+              onEmailChange={setEmail}
+            />
+          )}
+          {(mode !== 'signup' || accountKind !== 'business') && (
           <div className="space-y-1.5">
             <Label htmlFor="email">E-post</Label>
             <Input
@@ -176,6 +203,7 @@ export default function Login() {
               required
             />
           </div>
+          )}
           {mode !== 'reset' && (
             <div className="space-y-1.5">
               <Label htmlFor="password">Passord</Label>

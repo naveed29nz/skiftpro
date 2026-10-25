@@ -229,15 +229,9 @@ export default function SuperAdmin() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizations'] }),
   });
 
-  const nextCustomerNumber = () => {
-    const nums = orgs.map(o => parseInt(o.customer_number, 10)).filter(n => !isNaN(n));
-    const max = nums.length ? Math.max(...nums) : 776; // start sequence at 00777
-    return String(max + 1).padStart(5, '0');
-  };
-
   const handleSubmit = (data) => {
     if (editing) updateMut.mutate({ id: editing.id, data });
-    else createMut.mutate({ ...data, customer_number: nextCustomerNumber() });
+    else createMut.mutate(data);
   };
 
   // SuperAdmin "enters" a customer org to support/make changes on their behalf.
