@@ -95,6 +95,82 @@ test('an employee break override replaces the store rule', () => {
   assert.deepEqual(workerBreakOverride({ break_after_hours: 5.5, break_length_minutes: 30 }), [{ afterMinutes: 330, breakMinutes: 30 }]);
 });
 
+test('a sick shift longer than 6 hours takes the same 30 minute break and no holiday supplement', () => {
+  const holidays = [{ date: '2026-05-01', name: 'Arbeidernes dag', pay_multiplier: 2, extra_type: 'percentage', extra_amount: 50 }];
+  const settings = {
+    ...osloTeam2,
+    team2_holiday_extra_type: 'percentage',
+    team2_holiday_extra_amount: 100,
+  };
+  const timed = {
+    date: '2026-05-01',
+    start_time: '08:00',
+    end_time: '16:00',
+    team: 'team2',
+    break_manual: false,
+    break_minutes: 0,
+  };
+  const exact = { ...timed, end_time: '14:00' };
+  const sick = { ...timed, shift_label: 'sick' };
+  const sickExact = { ...exact, shift_label: 'sick' };
+  const sickAllDayWithTimes = { ...sick, all_day: true };
+  const sickWholeDay = {
+    ...sick,
+    all_day: true,
+    start_time: '00:00',
+    end_time: '00:00',
+  };
+
+  assert.equal(effectiveBreakMinutes(exact, settings, 'team2'), 0);
+  assert.equal(effectiveBreakMinutes(timed, settings, 'team2'), 30);
+  assert.equal(effectiveBreakMinutes(sickExact, settings, 'team2'), 0);
+  assert.equal(effectiveBreakMinutes(sick, settings, 'team2'), 30);
+  assert.equal(effectiveBreakMinutes(sickAllDayWithTimes, settings, 'team2'), 30);
+  assert.equal(effectiveBreakMinutes(sickWholeDay, settings, 'team2'), 0);
+
+  const sickPay = getShiftBreakdown(sick, 200, 'team2', holidays, settings, []);
+  assert.equal(sickPay.label, 'Syk');
+  assert.equal(sickPay.isSick, true);
+  assert.equal(sickPay.hours, 7.5);
+  assert.equal(sickPay.sickHours, 7.5);
+  assert.equal(sickPay.breakHours, 0.5);
+  assert.equal(sickPay.holidayHours, 0);
+  assert.equal(sickPay.holidayBonus, 0);
+  assert.equal(sickPay.sundayHours, 0);
+  assert.equal(sickPay.nightHours, 0);
+  assert.equal(sickPay.regularHours, 0);
+  assert.equal(sickPay.pay, 1500);
+
+  const worked = getShiftBreakdown(timed, 200, 'team2', holidays, settings, []);
+  assert.equal(worked.holidayHours, 7.5);
+  assert.equal(worked.sickHours, 0);
+  assert.equal(worked.basePay, 3000);
+  assert.equal(worked.holidayBonus, 4500);
+  assert.equal(worked.pay, 7500);
+
+  const sickSundayHoliday = getShiftBreakdown({
+    date: '2026-05-17',
+    start_time: '10:00',
+    end_time: '16:00',
+    team: 'team2',
+    break_manual: false,
+    break_minutes: 0,
+    shift_label: 'sick',
+  }, 200, 'team2', [], settings, []);
+  assert.equal(sickSundayHoliday.sickHours, 6);
+  assert.equal(sickSundayHoliday.breakHours, 0);
+  assert.equal(sickSundayHoliday.holidayHours, 0);
+  assert.equal(sickSundayHoliday.sundayHours, 0);
+  assert.equal(sickSundayHoliday.pay, 1200);
+
+  const wholeDay = getShiftBreakdown(sickWholeDay, 200, 'team2', holidays, settings, []);
+  assert.equal(wholeDay.sickHours, 7.5);
+  assert.equal(wholeDay.breakHours, 0);
+  assert.equal(wholeDay.holidayHours, 0);
+  assert.equal(wholeDay.holidayBonus, 0);
+  assert.equal(wholeDay.pay, 1500);
+});
+
 test('a manual break overrides the store rule', () => {
   const shift = {
     date: '2026-10-21',
