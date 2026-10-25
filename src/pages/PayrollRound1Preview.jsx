@@ -55,6 +55,8 @@ export default function PayrollRound1Preview() {
     { name: 'Kari Nord', date: '2026-10-25', start_time: '12:00', end_time: '20:00', break_minutes: 0, break_manual: false, shift_label: '', team: 'team2' },
     { name: 'Ola Berg', date: '2026-10-19', start_time: '00:00', end_time: '00:00', all_day: true, shift_label: 'sick', team: 'team2' },
     { name: 'Ola Berg', date: '2026-10-22', start_time: '00:00', end_time: '00:00', all_day: true, shift_label: 'ferie', team: 'team2' },
+    { name: 'Syk 1. mai', date: '2026-05-01', start_time: '08:00', end_time: '16:00', break_minutes: 0, break_manual: false, shift_label: 'sick', team: 'team2' },
+    { name: 'Jobber 1. mai', date: '2026-05-01', start_time: '08:00', end_time: '16:00', break_minutes: 0, break_manual: false, shift_label: '', team: 'team2' },
   ].map((shift) => ({ shift, breakdown: getShiftBreakdown(shift, 200, 'team2', [], form, []) }));
 
   return (
@@ -198,17 +200,21 @@ export default function PayrollRound1Preview() {
                   <th className="text-left">Type</th>
                   <th className="text-right">Timer</th>
                   <th className="text-right">Pause</th>
+                  <th className="text-right">Syk</th>
+                  <th className="text-right">Helligdag</th>
                   <th className="text-right">Natt</th>
                   <th className="text-right">Lønn</th>
                 </tr>
               </thead>
               <tbody>
                 {examples.map(({ shift, breakdown }) => (
-                  <tr key={shift.date} className="border-t border-slate-50">
-                    <td className="py-1">{shift.date}</td>
+                  <tr key={`${shift.name}-${shift.date}`} className="border-t border-slate-50">
+                    <td className="py-1">{shift.name}</td>
                     <td>{breakdown.label}</td>
                     <td className="text-right">{breakdown.hours.toFixed(1)}</td>
                     <td className="text-right">{breakdown.breakHours.toFixed(1)}</td>
+                    <td className="text-right">{breakdown.sickHours.toFixed(1)}</td>
+                    <td className="text-right">{breakdown.holidayHours.toFixed(1)}</td>
                     <td className="text-right">{breakdown.nightHours.toFixed(1)}</td>
                     <td className="text-right">{breakdown.pay.toFixed(0)} kr</td>
                   </tr>

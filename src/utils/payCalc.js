@@ -1,10 +1,13 @@
 /**
  * Shared pay calculation.
- * Hours deduct the effective unpaid break. Sunday, holiday and night
- * supplements stack when they apply. A supplement the worker has turned off
- * (workers.disabled_extras) contributes neither hours nor pay: those hours
- * stay regular. Night applies only when the store has nattillegg on and the
- * worker has not disabled it. Sick and ferie are counted apart from work.
+ * Hours deduct the effective unpaid break. The usual store rule is 30 minutes
+ * when the shift is longer than 6 hours. A sick shift with clock times uses
+ * that same break. Sunday, holiday and night supplements stack when they
+ * apply. A supplement the worker has turned off (workers.disabled_extras)
+ * contributes neither hours nor pay: those hours stay regular. Night applies
+ * only when the store has nattillegg on and the worker has not disabled it.
+ * Sick and ferie are counted apart from work. Sick hours do not receive a
+ * holiday supplement.
  */
 
 function getEaster(year) {
@@ -117,6 +120,23 @@ export function automaticBreakMinutes(gross, rules) {
   return chosen;
 }
 
+/** A whole-day row without a real clock span. 00:00–00:00 is that placeholder. */
+function hasClockSpan(shift) {
+  const start = clockMinutes(shift?.start_time);
+  const end = clockMinutes(shift?.end_time);
+  if (start == null || end == null || start === end) return false;
+  return true;
+}
+
+/**
+ * Whole-day ferie and a sick day without clock times have no gross length.
+ * A sick shift that still has start and end uses the same break as a normal shift.
+ */
+function usesClockLength(shift) {
+  if (!shift?.all_day) return true;
+  return shift.shift_label === 'sick' && hasClockSpan(shift);
+}
+
 /**
  * Personal break rule. Both fields must be filled. An empty pair means the
  * department rule still applies. A length of 0 turns automatic break off
@@ -136,7 +156,7 @@ export function workerBreakOverride(worker) {
 }
 
 export function effectiveBreakMinutes(shift, wpSettings, teamKey, worker) {
-  if (!shift || shift.all_day) return 0;
+  if (!shift || !usesClockLength(shift)) return 0;
   if (shift.break_manual === true) return Math.max(0, Number(shift.break_minutes) || 0);
   const override = workerBreakOverride(worker);
   const rules = override == null
@@ -193,7 +213,7 @@ export function nightMinutes(shift, wpSettings, teamKey, worker) {
 }
 
 export function calcHours(shift, wpSettings, teamKey, worker) {
-  if (shift?.all_day) return fullDayHours(wpSettings);
+  if (shift?.all_day && !usesClockLength(shift)) return fullDayHours(wpSettings);
   const gross = grossMinutes(shift);
   const breakMinutes = Math.min(gross, effectiveBreakMinutes(shift, wpSettings, teamKey, worker));
   return Math.max(0, (gross - breakMinutes) / 60);
@@ -223,8 +243,9 @@ export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettin
   const hours = calcHours(shift, wpSettings, resolvedTeam, worker);
   const rate = Number(workerRate) || 0;
   const date = new Date(`${shift.date}T00:00:00`);
-  const gross = shift?.all_day ? hours : grossMinutes(shift) / 60;
-  const breakHours = shift?.all_day ? 0 : Math.max(0, gross - hours);
+  const clock = usesClockLength(shift);
+  const gross = clock ? grossMinutes(shift) / 60 : hours;
+  const breakHours = clock ? Math.max(0, gross - hours) : 0;
 
   if (isAbsenceLabel(shift.shift_label)) {
     const basePay = hours * rate;
@@ -236,15 +257,15 @@ export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettin
       isExtra: false,
       isSick: !isFerie,
       isFerie,
-      isAllDay: Boolean(shift.all_day),
+      isAllDay: Boolean(shift.all_day) && !clock,
       basePay,
       extraBonus: 0,
       pay: basePay,
       regularHours: 0,
       extraHours: 0,
       ...EMPTY_SPLIT,
-      grossHours: shift.all_day ? hours : gross,
-      breakHours: shift.all_day ? 0 : Math.max(0, gross - hours),
+      grossHours: gross,
+      breakHours,
       sickHours: isFerie ? 0 : hours,
       ferieHours: isFerie ? hours : 0,
     };

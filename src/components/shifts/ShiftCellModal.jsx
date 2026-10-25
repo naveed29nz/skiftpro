@@ -96,7 +96,9 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
           <Select value={data.shift_label || 'none'} onValueChange={v => setData(d => ({
             ...d,
             shift_label: v,
-            all_day: v === 'sick' || v === 'ferie' ? true : false,
+            all_day: v === 'ferie',
+            start_time: v === 'ferie' ? '00:00' : (d.start_time === '00:00' ? '08:00' : d.start_time),
+            end_time: v === 'ferie' ? '00:00' : (d.end_time === '00:00' ? '16:00' : d.end_time),
           }))}>
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Ingen merking" /></SelectTrigger>
             <SelectContent>
@@ -191,7 +193,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
       worker_id: worker.id,
       team: defaultTeam,
       shift_label: label,
-      all_day: isFullDayAbsence(label),
+      all_day: label === 'ferie',
       break_manual: workerBreakOverride(worker) == null && breakRulesForTeam(wp, team).length === 0,
     };
   });
@@ -227,7 +229,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
       worker_id: worker.id,
       team: defaultTeam,
       shift_label: defaultShiftLabel || emptyShift.shift_label,
-      all_day: isFullDayAbsence(defaultShiftLabel),
+      all_day: defaultShiftLabel === 'ferie',
       break_manual: workerBreakOverride(worker) == null && breakRulesForTeam(wp, team).length === 0,
     });
   };

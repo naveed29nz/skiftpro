@@ -26,20 +26,20 @@ export default function ShiftForm({ shift, workers, onSubmit, onCancel }) {
     notes: shift?.notes || '',
     status: shift?.status || 'scheduled',
     shift_label: initialLabel,
-    all_day: Boolean(shift?.all_day) || isFullDayAbsence(initialLabel),
+    all_day: Boolean(shift?.all_day) || initialLabel === 'ferie',
   });
 
   const selectedWorker = workers.find(w => w.id === form.worker_id);
   const wholeDay = isFullDayAbsence(form.shift_label) && form.all_day;
 
   const setLabel = (value) => {
-    const absence = isFullDayAbsence(value);
+    const wholeDay = value === 'ferie';
     setForm((current) => ({
       ...current,
       shift_label: value,
-      all_day: absence ? true : false,
-      start_time: absence ? '00:00' : (current.start_time === '00:00' ? '09:00' : current.start_time),
-      end_time: absence ? '00:00' : (current.end_time === '00:00' ? '17:00' : current.end_time),
+      all_day: wholeDay,
+      start_time: wholeDay ? '00:00' : (current.start_time === '00:00' ? '09:00' : current.start_time),
+      end_time: wholeDay ? '00:00' : (current.end_time === '00:00' ? '17:00' : current.end_time),
     }));
   };
 
