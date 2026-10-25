@@ -1,8 +1,9 @@
 import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.ts";
 
-// Port of base44/functions/checkOvertimeAndGenerateContract.
-// The shift trigger calls the same SQL function on insert/update. This HTTP
-// entry point remains so the app (or a manual replay) can invoke it.
+// Calls check_overtime_for_shift. The shift trigger uses the same SQL.
+// The period comes from employer_settings.ekstratimer_periode (default
+// maaned). A monthly agreement is one utkast for the calendar month and is
+// not sent. This HTTP entry point remains for a manual replay.
 
 Deno.serve(async (req) => {
   const opt = handleOptions(req);

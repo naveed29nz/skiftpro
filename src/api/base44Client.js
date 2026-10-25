@@ -440,6 +440,11 @@ async function writeRow(table, payload, run) {
     )) {
       return runRead(table, (columns) => run(columns, withoutEmployerSignatory(payload)));
     }
+    if (table === 'employer_settings' && isMissingColumn(error) && Object.prototype.hasOwnProperty.call(payload, 'ekstratimer_periode')) {
+      const next = { ...payload };
+      delete next.ekstratimer_periode;
+      return runRead(table, (columns) => run(columns, next));
+    }
     throw error;
   }
 }

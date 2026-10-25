@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import WorkerForm from '@/components/workers/WorkerForm';
+import EmployerSettingsCard from '@/components/settings/EmployerSettingsCard';
 import ContractSignPanel from '@/components/contracts/ContractSignPanel';
+import { formatNoNumber, merarbeidAgreementText, monthlyExtraHours } from '@/contracts/extraHours';
 import ContractCertificate from '@/components/contracts/ContractCertificate';
 import ContractEmployerStatus from '@/components/contracts/ContractEmployerStatus';
 import { employeeSignedLine } from '@/contracts/confirmation';
@@ -98,6 +100,73 @@ const SAMPLE_EVENTS = [
   { id: '6', event_type: 'motsignert', actor_role: 'arbeidsgiver', actor_id: 'admin-1', ip: '203.0.113.10', user_agent: 'Mozilla/5.0', created_at: '2026-10-15T10:02:40.000Z' },
 ];
 
+function MonthlyExtraPreview() {
+  const [period, setPeriod] = useState('maaned');
+  const generated = useMemo(() => monthlyExtraHours({
+    year: 2026,
+    month: 10,
+    workedHours: 96,
+    timerPerUke: 20,
+    employmentPercentage: 50,
+    fullTimeWeeklyHours: 37.5,
+  }), []);
+  const offset = useMemo(() => monthlyExtraHours({
+    year: 2026,
+    month: 10,
+    workedHours: 48,
+    timerPerUke: 20,
+  }), []);
+  const body = useMemo(() => merarbeidAgreementText({
+    company: 'Kiosken Oslo AS',
+    workerName: 'Ola Nordmann',
+    place: 'Kiosk Karl Johan',
+    hourlyRate: 210,
+    balance: generated,
+    signatoryName: 'Naveed Zafar',
+    signatoryRole: 'Daglig leder',
+  }), [generated]);
+
+  return (
+    <div className="max-w-6xl mx-auto grid items-start gap-6 lg:grid-cols-2">
+      <EmployerSettingsCard
+        periodOnly
+        previewValues={{
+          ekstratimer_periode: 'maaned',
+          send_tilleggsavtaler_automatisk: false,
+          selskap: 'Kiosken Oslo AS',
+        }}
+        onValuesChange={(next) => setPeriod(next.ekstratimer_periode === 'uke' ? 'uke' : 'maaned')}
+      />
+      {period === 'maaned' ? (
+        <article className="space-y-4 rounded-xl border border-slate-200 bg-white p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold text-slate-900">Avtale om merarbeid</h2>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Utkast</span>
+            <span className="text-xs text-slate-500">Ikke sendt til den ansatte</span>
+          </div>
+          <p className="text-sm text-slate-700">
+            Ola Nordmann · 01.10.2026–31.10.2026 · {formatNoNumber(generated.worked)} timer arbeidet · avtalt {formatNoNumber(generated.agreed)} · merarbeid {formatNoNumber(generated.extra)}
+          </p>
+          <p className="text-sm text-slate-600">
+            To uker med 24 timer veies opp av resten av måneden. {formatNoNumber(offset.worked)} timer mot {formatNoNumber(offset.agreed)} avtalte gir ingen avtale.
+          </p>
+          <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm leading-6 text-slate-800">{body}</pre>
+        </article>
+      ) : (
+        <article className="space-y-3 rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="text-base font-semibold text-slate-900">Ukesvurdering</h2>
+          <p className="text-sm text-slate-700">
+            Hver uke vurderes for seg. To uker med 24 timer mot 20 avtalte blir én avtale for 12.10.2026–25.10.2026.
+          </p>
+          <p className="text-sm text-slate-600">
+            Måned gjør ikke det for de samme ukene: {formatNoNumber(offset.worked)} timer mot {formatNoNumber(offset.agreed)} avtalte i oktober gir ingen avtale.
+          </p>
+        </article>
+      )}
+    </div>
+  );
+}
+
 export default function ContractScreensPreview() {
   const [params] = useSearchParams();
   const screen = params.get('skjerm') || 'skjema';
@@ -110,6 +179,7 @@ export default function ContractScreensPreview() {
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
+      {screen === 'merarbeid' && <MonthlyExtraPreview />}
       {screen === 'skjema' && (
         <div className="max-w-2xl mx-auto bg-white rounded-2xl border border-slate-200 p-6">
           <h1 className="text-lg font-bold text-slate-900 mb-4">Ny ansatt</h1>
