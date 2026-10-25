@@ -6,6 +6,7 @@ import {
   effectiveBreakMinutes,
   getShiftBreakdown,
   nightMinutes,
+  workerBreakOverride,
 } from './payCalc.js';
 
 const osloTeam2 = {
@@ -40,6 +41,58 @@ test('Oslo S Nord N.417 rule deducts 30 minutes only when the shift is longer th
   assert.equal(calcHours(longShift, osloTeam2, 'team2'), 7.5);
   const exact = { ...longShift, end_time: '14:00' };
   assert.equal(calcHours(exact, osloTeam2, 'team2'), 6);
+});
+
+const storeFiveAndAHalf = {
+  ...osloTeam2,
+  team2_break_rules: [{ after_minutes: 330, break_minutes: 30 }],
+};
+
+test('a store rule of 30 minutes after 5.5 hours does not apply at exactly 5.5 hours', () => {
+  const exact = {
+    date: '2026-10-21',
+    start_time: '08:00',
+    end_time: '13:30',
+    team: 'team2',
+    break_manual: false,
+    break_minutes: 0,
+  };
+  const longer = { ...exact, end_time: '14:00' };
+  assert.equal(effectiveBreakMinutes(exact, storeFiveAndAHalf, 'team2'), 0);
+  assert.equal(calcHours(exact, storeFiveAndAHalf, 'team2'), 5.5);
+  assert.equal(effectiveBreakMinutes(longer, storeFiveAndAHalf, 'team2'), 30);
+  assert.equal(calcHours(longer, storeFiveAndAHalf, 'team2'), 5.5);
+});
+
+test('an employee break override replaces the store rule', () => {
+  const elif = { break_after_hours: 6, break_length_minutes: 30 };
+  assert.deepEqual(workerBreakOverride(elif), [{ afterMinutes: 360, breakMinutes: 30 }]);
+  assert.equal(workerBreakOverride({}), null);
+  assert.equal(workerBreakOverride({ break_after_hours: 6 }), null);
+  const sixHours = {
+    date: '2026-10-21',
+    start_time: '08:00',
+    end_time: '14:00',
+    team: 'team2',
+    break_manual: false,
+    break_minutes: 0,
+  };
+  const pastSix = { ...sixHours, end_time: '14:30' };
+  assert.equal(effectiveBreakMinutes(sixHours, storeFiveAndAHalf, 'team2'), 30);
+  assert.equal(effectiveBreakMinutes(sixHours, storeFiveAndAHalf, 'team2', elif), 0);
+  assert.equal(calcHours(sixHours, storeFiveAndAHalf, 'team2', elif), 6);
+  assert.equal(effectiveBreakMinutes(pastSix, storeFiveAndAHalf, 'team2', elif), 30);
+  assert.equal(calcHours(pastSix, storeFiveAndAHalf, 'team2', elif), 6);
+  const manual = { ...pastSix, break_manual: true, break_minutes: 15 };
+  assert.equal(effectiveBreakMinutes(manual, storeFiveAndAHalf, 'team2', elif), 15);
+  const breakdown = getShiftBreakdown(pastSix, 200, 'team2', [], storeFiveAndAHalf, [], elif);
+  assert.equal(breakdown.hours, 6);
+  assert.equal(breakdown.breakHours, 0.5);
+  const noBreak = { break_after_hours: 6, break_length_minutes: 0 };
+  assert.equal(effectiveBreakMinutes(pastSix, storeFiveAndAHalf, 'team2', noBreak), 0);
+  const storeOff = { ...storeFiveAndAHalf, team2_auto_break: false };
+  assert.equal(effectiveBreakMinutes(pastSix, storeOff, 'team2', elif), 30);
+  assert.deepEqual(workerBreakOverride({ break_after_hours: 5.5, break_length_minutes: 30 }), [{ afterMinutes: 330, breakMinutes: 30 }]);
 });
 
 test('a manual break overrides the store rule', () => {

@@ -39,7 +39,7 @@ export default function WorkerSalaryTab({ worker, shifts, holidays, wpSettings, 
       .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
     return monthShifts.map(s => {
       const shiftTeamKey = s.team || fallbackTeamKey;
-      const b = getShiftBreakdown(s, worker.hourly_rate || 0, shiftTeamKey, holidays, wp, worker.disabled_extras || []);
+      const b = getShiftBreakdown(s, worker.hourly_rate || 0, shiftTeamKey, holidays, wp, worker.disabled_extras || [], worker);
       return { shift: s, breakdown: b };
     });
   }, [shifts, worker, holidays, wp, monthStart, monthEnd, fallbackTeamKey]);

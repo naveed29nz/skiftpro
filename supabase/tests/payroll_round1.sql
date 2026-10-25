@@ -177,6 +177,18 @@ begin
 end;
 $do$;
 
+insert into rls_results (name, ok, detail)
+select
+  'employee can read a personal break override',
+  public._rls_exec(
+    '55555555-5555-5555-5555-555555555555',
+    $q$select break_after_hours, break_length_minutes from public.workers where id = 'w-ansatt-a'$q$
+  ) = 'ok',
+  public._rls_exec(
+    '55555555-5555-5555-5555-555555555555',
+    $q$select break_after_hours from public.workers where id = 'w-ansatt-a'$q$
+  );
+
 select name, case when ok then 'PASS' else 'FAIL' end as result, detail
 from rls_results
 order by ok, name;

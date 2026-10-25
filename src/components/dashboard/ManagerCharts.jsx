@@ -58,7 +58,7 @@ export default function ManagerCharts() {
       if (!worker) return;
       const teamKey = shift.team || getWorkerTeamKey(worker);
       if (!data[teamKey]) data[teamKey] = { hours: 0, cost: 0 };
-      const breakdown = getShiftBreakdown(shift, worker.hourly_rate || 0, teamKey, holidays, wp, worker.disabled_extras || []);
+      const breakdown = getShiftBreakdown(shift, worker.hourly_rate || 0, teamKey, holidays, wp, worker.disabled_extras || [], worker);
       data[teamKey].hours += breakdown.hours;
       data[teamKey].cost += breakdown.pay * SOCIAL_FACTOR;
     });
@@ -82,7 +82,7 @@ export default function ManagerCharts() {
           const worker = workers.find(w => w.id === shift.worker_id);
           if (!worker) return;
           const teamKey = getWorkerTeamKey(worker);
-          cost += getShiftBreakdown(shift, worker.hourly_rate || 0, teamKey, holidays, wp, worker.disabled_extras || []).pay * SOCIAL_FACTOR;
+          cost += getShiftBreakdown(shift, worker.hourly_rate || 0, teamKey, holidays, wp, worker.disabled_extras || [], worker).pay * SOCIAL_FACTOR;
         });
       return {
         name: `Uke ${format(weekStart, 'w')}`,

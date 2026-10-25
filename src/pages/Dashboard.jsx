@@ -119,7 +119,7 @@ export default function Dashboard() {
       const w = allWorkers.find(w => w.id === s.worker_id);
       if (!w) return;
       const teamKey = getWorkerTeamKey(w);
-      total += getShiftBreakdown(s, w.hourly_rate || 0, teamKey, holidays, wp, w.disabled_extras || []).pay;
+      total += getShiftBreakdown(s, w.hourly_rate || 0, teamKey, holidays, wp, w.disabled_extras || [], w).pay;
     });
     return total * (1 + PAYROLL_TAX);
   }, [allShifts, allWorkers, holidays, wp, isManagerOrAdmin]);
@@ -192,7 +192,7 @@ export default function Dashboard() {
                   <p className="text-xs text-slate-400">{s.notes || s.shift_label || 'Vakt i dag'}</p>
                 </div>
                 <span className="text-xs font-medium bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">
-                  {calcHours(s, wp, s.team).toFixed(1)}t
+                  {calcHours(s, wp, s.team, myWorker).toFixed(1)}t
                 </span>
               </div>
             ))}

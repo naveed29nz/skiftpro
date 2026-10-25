@@ -95,12 +95,12 @@ export default function WorkerPortal() {
     .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || '').localeCompare(b.start_time || ''))
     .slice(0, 8);
 
-  const monthHours = monthShifts.reduce((sum, s) => sum + calcHours(s), 0);
-  const weekHours = weekShifts.reduce((sum, s) => sum + calcHours(s), 0);
+  const monthHours = monthShifts.reduce((sum, s) => sum + calcHours(s, workplaceSetting, s.team, worker), 0);
+  const weekHours = weekShifts.reduce((sum, s) => sum + calcHours(s, workplaceSetting, s.team, worker), 0);
   const teamKey = getWorkerTeamKey(worker);
   const monthPay = monthShifts.reduce((sum, s) => {
     const shiftTeamKey = s.team || teamKey;
-    return sum + getShiftBreakdown(s, worker.hourly_rate || 0, shiftTeamKey, holidays, workplaceSetting, worker.disabled_extras || []).pay;
+    return sum + getShiftBreakdown(s, worker.hourly_rate || 0, shiftTeamKey, holidays, workplaceSetting, worker.disabled_extras || [], worker).pay;
   }, 0);
   const tabs = TABS;
 
@@ -210,7 +210,7 @@ export default function WorkerPortal() {
               todayStamp={todayStamp}
               onStampChange={setTodayStamp}
             />
-            <WeekSummary allShifts={myShifts} today={today} wp={workplaceSetting} />
+            <WeekSummary allShifts={myShifts} today={today} wp={workplaceSetting} worker={worker} />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <StampCorrections worker={worker} user={currentUser} />
@@ -258,7 +258,7 @@ export default function WorkerPortal() {
                     const isSunday = d.getDay() === 0;
                     const holiday = holidays.find(h => h.date === shift.date);
                     const isToday = shift.date === today;
-                    const hours = calcHours(shift);
+                    const hours = calcHours(shift, workplaceSetting, shift.team, worker);
                     return (
                       <div key={shift.id} className={`px-5 py-3.5 flex items-center justify-between ${isToday ? 'bg-blue-50/50' : ''}`}>
                         <div className="flex items-center gap-3">
@@ -279,7 +279,7 @@ export default function WorkerPortal() {
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-semibold text-slate-700">{hours.toFixed(1)}t</p>
-                          <p className="text-xs text-slate-400">{getShiftBreakdown(shift, worker.hourly_rate || 0, shift.team || teamKey, holidays, workplaceSetting, worker.disabled_extras || []).pay.toFixed(0)} kr</p>
+                          <p className="text-xs text-slate-400">{getShiftBreakdown(shift, worker.hourly_rate || 0, shift.team || teamKey, holidays, workplaceSetting, worker.disabled_extras || [], worker).pay.toFixed(0)} kr</p>
                         </div>
                       </div>
                     );

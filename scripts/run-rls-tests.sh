@@ -88,6 +88,7 @@ psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/202610211400
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261022150000_round1_payroll.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261025160000_org_signup_details.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261025160000_monthly_ekstrahjelp.sql"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261025180000_worker_break_override.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/rls_isolation.sql" | tee /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/contract_signing.sql" | tee -a /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/ekstrahjelp_monthly.sql" | tee -a /tmp/rls-test.out

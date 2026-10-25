@@ -121,7 +121,7 @@ export default function Salary() {
         if (s.team) return s.team === filterTeam;
         return (worker.teams?.[0] || 'team1') === filterTeam;
       });
-      const breakdowns = workerShifts.map(s => getShiftBreakdown(s, worker.hourly_rate || 0, s.team || teamKey, holidays, wp, worker.disabled_extras || []));
+      const breakdowns = workerShifts.map(s => getShiftBreakdown(s, worker.hourly_rate || 0, s.team || teamKey, holidays, wp, worker.disabled_extras || [], worker));
       const regularHours = sumField(breakdowns, 'regularHours');
       const sundayHours = sumField(breakdowns, 'sundayHours');
       const holidayHours = sumField(breakdowns, 'holidayHours');
