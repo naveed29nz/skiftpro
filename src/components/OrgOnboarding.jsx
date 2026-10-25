@@ -1,31 +1,56 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/api/supabaseClient';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import BillingCard from '@/components/BillingCard';
+import CompanyDetailsFields from '@/components/CompanyDetailsFields';
+import { companyDetailsError, startOrganizationArgs } from '@/lib/orgNumber';
 
 export default function OrgOnboarding({ userId, userEmail }) {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ name: '', org_number: '', contact_phone: '', store_name: '' });
+  const [form, setForm] = useState({
+    companyName: '',
+    orgNumber: '',
+    contactName: '',
+    phone: '',
+    storeCount: '1',
+  });
   const [invites, setInvites] = useState('');
   const [orgId, setOrgId] = useState(null);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return;
+      const meta = data?.user?.user_metadata || {};
+      setForm((current) => ({
+        companyName: current.companyName || meta.company_name || '',
+        orgNumber: current.orgNumber || meta.org_number || '',
+        contactName: current.contactName || meta.full_name || '',
+        phone: current.phone || meta.contact_phone || '',
+        storeCount: meta.store_count || current.storeCount || '1',
+      }));
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const createOrg = async (event) => {
     event.preventDefault();
+    const problem = companyDetailsError(form);
+    if (problem) {
+      setError(problem);
+      return;
+    }
     setPending(true);
     setError('');
-    const { data, error: rpcError } = await supabase.rpc('start_organization', {
-      p_name: form.name,
-      p_org_number: form.org_number,
-      p_phone: form.contact_phone,
-      p_store_name: form.store_name || form.name,
-    });
+    const { data, error: rpcError } = await supabase.rpc('start_organization', startOrganizationArgs(form));
     setPending(false);
     if (rpcError) {
       setError(rpcError.message);
@@ -54,7 +79,7 @@ export default function OrgOnboarding({ userId, userEmail }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex items-start justify-center p-4 py-8">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-8 w-full max-w-md space-y-4">
         <div className="text-center">
           <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -69,22 +94,7 @@ export default function OrgOnboarding({ userId, userEmail }) {
             <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               Er du ansatt? Ikke opprett bedrift – be lederen din om invitasjon.
             </p>
-            <div className="space-y-1.5">
-              <Label>Organisasjonsnavn *</Label>
-              <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Første butikk</Label>
-              <Input value={form.store_name} onChange={(event) => setForm({ ...form, store_name: event.target.value })} placeholder="Butikknavn" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Org.nummer</Label>
-              <Input value={form.org_number} onChange={(event) => setForm({ ...form, org_number: event.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Telefon</Label>
-              <Input value={form.contact_phone} onChange={(event) => setForm({ ...form, contact_phone: event.target.value })} />
-            </div>
+            <CompanyDetailsFields value={form} onChange={setForm} email={userEmail} />
             <Button type="submit" className="w-full" disabled={pending}>{pending ? 'Oppretter…' : 'Opprett organisasjon'}</Button>
           </form>
         )}

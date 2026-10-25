@@ -217,14 +217,14 @@ begin
 
   detail := public._rls_exec(
     '77777777-7777-7777-7777-777777777777',
-    $q$select public.start_organization('Ny Kiosk', '999999999', '12345678', 'Sentrum')$q$
+    $q$select public.start_organization('Ny Kiosk', '999999999', '12345678', 'Sentrum', 'Ny kunde', 2)$q$
   );
   insert into rls_results values (
     'self-serve creates own org and not the other customer',
     detail = 'ok'
-      and (select role = 'admin' from public.profiles where id = '77777777-7777-7777-7777-777777777777')
+      and (select role = 'admin' and full_name = 'Ny kunde' from public.profiles where id = '77777777-7777-7777-7777-777777777777')
       and public._rls_count('77777777-7777-7777-7777-777777777777', $q$select id from public.workers where org_id = 'org-b'$q$) = 0
-      and public._rls_count('77777777-7777-7777-7777-777777777777', $q$select id from public.organizations where name = 'Ny Kiosk'$q$) = 1,
+      and public._rls_count('77777777-7777-7777-7777-777777777777', $q$select id from public.organizations where name = 'Ny Kiosk' and org_number = '999999999' and contact_name = 'Ny kunde' and contact_phone = '12345678' and store_quantity = 2 and customer_number ~ '^[0-9]{5}$' and admin_email = 'ny@example.com'$q$) = 1,
     detail
   );
 end;
