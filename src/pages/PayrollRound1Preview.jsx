@@ -2,6 +2,7 @@ import { useState } from 'react';
 import PayrollRulesCard from '@/components/settings/PayrollRulesCard';
 import PayrollExportColumns from '@/components/payroll/PayrollExportColumns';
 import PayrollLockCard from '@/components/payroll/PayrollLockCard';
+import ShiftCellModal from '@/components/shifts/ShiftCellModal';
 import { Checkbox } from '@/components/ui/checkbox';
 import { WORKER_SUPPLEMENTS } from '@/components/workers/WorkerForm';
 import { TeamPaySection } from '@/pages/Settings';
@@ -38,6 +39,7 @@ export default function PayrollRound1Preview() {
   const [form, setForm] = useState(INITIAL);
   const [locks, setLocks] = useState(SAMPLE_LOCKS);
   const [columns, setColumns] = useState(DEFAULT_PAYROLL_COLUMN_KEYS);
+  const [showMerking, setShowMerking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [disabledExtras, setDisabledExtras] = useState(['sunday', 'holiday']);
   const toggleExtra = (key) => {
@@ -56,6 +58,8 @@ export default function PayrollRound1Preview() {
     { name: 'Ola Berg', date: '2026-10-19', start_time: '00:00', end_time: '00:00', all_day: true, shift_label: 'sick', team: 'team2' },
     { name: 'Ola Berg', date: '2026-10-22', start_time: '00:00', end_time: '00:00', all_day: true, shift_label: 'ferie', team: 'team2' },
     { name: 'Syk 1. mai', date: '2026-05-01', start_time: '08:00', end_time: '16:00', break_minutes: 0, break_manual: false, shift_label: 'sick', team: 'team2' },
+    { name: 'Egenmelding 2. mai', date: '2026-05-02', start_time: '08:00', end_time: '16:00', break_minutes: 0, break_manual: false, shift_label: 'sick_self', team: 'team2' },
+    { name: 'Sykmelding 17. mai', date: '2026-05-17', start_time: '10:00', end_time: '16:00', break_minutes: 0, break_manual: false, shift_label: 'sick_doctor', team: 'team2' },
     { name: 'Jobber 1. mai', date: '2026-05-01', start_time: '08:00', end_time: '16:00', break_minutes: 0, break_manual: false, shift_label: '', team: 'team2' },
   ].map((shift) => ({ shift, breakdown: getShiftBreakdown(shift, 200, 'team2', [], form, []) }));
 
@@ -138,6 +142,18 @@ export default function PayrollRound1Preview() {
           </table>
         </section>
 
+        <section className="bg-white rounded-xl border border-slate-200 p-6 space-y-3" data-screen="merking">
+          <h2 className="text-base font-semibold text-slate-800">Merking</h2>
+          <p className="text-xs text-slate-400">Nye vakter kan merkes som egenmelding eller sykmelding. Eldre vakter med Syk vises fortsatt slik.</p>
+          <button
+            type="button"
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
+            onClick={() => setShowMerking(true)}
+          >
+            Åpne vaktdialog
+          </button>
+        </section>
+
         <section className="bg-white rounded-xl border border-slate-200 overflow-hidden" data-screen="timeliste">
           <div className="px-4 py-3 border-b border-amber-200 bg-amber-50 text-sm text-amber-900">
             Lønnsperioden er låst 1.–15. oktober. Vakter i perioden kan ikke endres.
@@ -201,6 +217,8 @@ export default function PayrollRound1Preview() {
                   <th className="text-right">Timer</th>
                   <th className="text-right">Pause</th>
                   <th className="text-right">Syk</th>
+                  <th className="text-right">Egenmelding</th>
+                  <th className="text-right">Sykmelding</th>
                   <th className="text-right">Helligdag</th>
                   <th className="text-right">Natt</th>
                   <th className="text-right">Lønn</th>
@@ -214,6 +232,8 @@ export default function PayrollRound1Preview() {
                     <td className="text-right">{breakdown.hours.toFixed(1)}</td>
                     <td className="text-right">{breakdown.breakHours.toFixed(1)}</td>
                     <td className="text-right">{breakdown.sickHours.toFixed(1)}</td>
+                    <td className="text-right">{breakdown.egenmeldingHours.toFixed(1)}</td>
+                    <td className="text-right">{breakdown.sykmeldingHours.toFixed(1)}</td>
                     <td className="text-right">{breakdown.holidayHours.toFixed(1)}</td>
                     <td className="text-right">{breakdown.nightHours.toFixed(1)}</td>
                     <td className="text-right">{breakdown.pay.toFixed(0)} kr</td>
@@ -223,6 +243,32 @@ export default function PayrollRound1Preview() {
             </table>
           </div>
         </section>
+        {showMerking && (
+          <ShiftCellModal
+            worker={{ id: 'preview-worker', name: 'Hasham Khan', teams: ['team2'], hourly_rate: 200, color: '#0ea5e9' }}
+            day={new Date(2026, 9, 28)}
+            shifts={[{
+              id: 'legacy-sick',
+              worker_id: 'preview-worker',
+              worker_name: 'Hasham Khan',
+              start_time: '18:00',
+              end_time: '22:00',
+              break_minutes: 0,
+              break_manual: false,
+              all_day: false,
+              shift_label: 'sick',
+              notes: '',
+              team: 'team2',
+              status: 'scheduled',
+            }]}
+            workers={[{ id: 'preview-worker', name: 'Hasham Khan', teams: ['team2'], hourly_rate: 200, color: '#0ea5e9' }]}
+            onClose={() => setShowMerking(false)}
+            onRefresh={() => {}}
+            currentTeam="team2"
+            teamNames={{ team2: 'Oslo S Nord N.417' }}
+            wp={{ ...form, team2_auto_break: true, team2_break_rules: [{ after_minutes: 360, break_minutes: 30 }] }}
+          />
+        )}
       </div>
     </div>
   );

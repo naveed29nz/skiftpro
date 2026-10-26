@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import ManagerCharts from '@/components/dashboard/ManagerCharts';
 import { calcHours, getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
+import { shiftLabelName } from '@/utils/shiftLabels';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { format, parseISO, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, startOfMonth, endOfMonth } from 'date-fns';
@@ -189,7 +190,7 @@ export default function Dashboard() {
               <div key={s.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
                 <div>
                   <p className="font-semibold text-slate-800">{s.start_time} – {s.end_time}</p>
-                  <p className="text-xs text-slate-400">{s.notes || s.shift_label || 'Vakt i dag'}</p>
+                  <p className="text-xs text-slate-400">{s.notes || shiftLabelName(s.shift_label) || 'Vakt i dag'}</p>
                 </div>
                 <span className="text-xs font-medium bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full">
                   {calcHours(s, wp, s.team, myWorker).toFixed(1)}t
@@ -258,7 +259,7 @@ export default function Dashboard() {
                   <div className="flex-1 bg-slate-100 rounded-xl px-4 py-2.5 flex items-center justify-between">
                     <div>
                       <p className="font-semibold text-slate-800 text-sm">{s.start_time} – {s.end_time}</p>
-                      <p className="text-xs text-slate-500">{s.notes || s.shift_label || ''}</p>
+                      <p className="text-xs text-slate-500">{s.notes || shiftLabelName(s.shift_label) || ''}</p>
                       {hasStamps && (
                         <p className="flex items-center gap-1 text-xs text-emerald-600 mt-0.5 font-medium">
                           <Clock className="w-3 h-3" /> {stampIn || '--:--'} – {stampOut || '--:--'}

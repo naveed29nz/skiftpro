@@ -10,24 +10,17 @@ import { nb } from 'date-fns/locale';
 import { base44 } from '@/api/base44Client';
 import { flushNotifications } from '@/utils/notify';
 import { breakRulesForTeam, effectiveBreakMinutes, workerBreakOverride } from '@/utils/payCalc';
-import { isFullDayAbsence, shiftLabelName } from '@/utils/shiftLabels';
+import { isFullDayAbsence, shiftLabelChoices, shiftLabelName } from '@/utils/shiftLabels';
 
 const LABEL_STYLES = {
   morning: 'bg-amber-100 text-amber-700 border border-amber-200',
   middle:  'bg-blue-100 text-blue-700 border border-blue-200',
   evening: 'bg-purple-100 text-purple-700 border border-purple-200',
-  sick:    'bg-red-100 text-red-700 border border-red-200',
-  ferie:   'bg-sky-100 text-sky-700 border border-sky-200',
+  sick:        'bg-red-100 text-red-700 border border-red-200',
+  sick_self:   'bg-red-100 text-red-700 border border-red-200',
+  sick_doctor: 'bg-rose-100 text-rose-700 border border-rose-200',
+  ferie:       'bg-sky-100 text-sky-700 border border-sky-200',
 };
-
-const LABEL_OPTIONS = [
-  { value: 'none', label: 'Ingen merking' },
-  { value: 'morning', label: '🌅 Morgen' },
-  { value: 'middle', label: '☀️ Midt på dagen' },
-  { value: 'evening', label: '🌙 Kveld' },
-  { value: 'sick', label: '🤒 Syk' },
-  { value: 'ferie', label: '🏖️ Ferie' },
-];
 
 const emptyShift = { worker_id: '', start_time: '08:00', end_time: '16:00', break_minutes: 30, break_manual: true, all_day: false, notes: '', shift_label: 'none', team: '' };
 
@@ -102,7 +95,7 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
           }))}>
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Ingen merking" /></SelectTrigger>
             <SelectContent>
-              {LABEL_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              {shiftLabelChoices(data.shift_label).map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

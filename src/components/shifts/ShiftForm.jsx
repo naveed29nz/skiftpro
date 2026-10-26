@@ -4,16 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { isFullDayAbsence } from '@/utils/shiftLabels';
-
-const LABEL_OPTIONS = [
-  { value: 'none', label: 'Vanlig vakt' },
-  { value: 'morning', label: 'Morgen' },
-  { value: 'middle', label: 'Mellom' },
-  { value: 'evening', label: 'Kveld' },
-  { value: 'sick', label: 'Syk' },
-  { value: 'ferie', label: 'Ferie' },
-];
+import { isFullDayAbsence, shiftLabelChoices } from '@/utils/shiftLabels';
 
 export default function ShiftForm({ shift, workers, onSubmit, onCancel }) {
   const initialLabel = shift?.shift_label || 'none';
@@ -82,7 +73,7 @@ export default function ShiftForm({ shift, workers, onSubmit, onCancel }) {
           <Select value={form.shift_label || 'none'} onValueChange={setLabel}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {LABEL_OPTIONS.map((option) => (
+              {shiftLabelChoices(form.shift_label, { noneLabel: 'Vanlig vakt' }).map((option) => (
                 <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
               ))}
             </SelectContent>

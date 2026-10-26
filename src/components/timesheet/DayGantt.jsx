@@ -9,8 +9,10 @@ const SHIFT_ROWS = [
   { key: 'morning', name: 'Morgen',        headerClass: 'bg-green-600 text-white',  rowClass: 'bg-green-50/40',  blockClass: 'bg-green-200 text-green-900 border border-green-300' },
   { key: 'middle',  name: 'Mellomvakt',    headerClass: 'bg-sky-600 text-white',     rowClass: 'bg-sky-50/40',    blockClass: 'bg-sky-200 text-sky-900 border border-sky-300' },
   { key: 'evening', name: 'Kveldsvakt',    headerClass: 'bg-slate-600 text-white',   rowClass: 'bg-slate-100/40', blockClass: 'bg-slate-300 text-slate-900 border border-slate-400' },
-  { key: 'sick',    name: 'Syk',           headerClass: 'bg-red-600 text-white',     rowClass: 'bg-red-50/40',    blockClass: 'bg-red-200 text-red-900 border border-red-300' },
-  { key: 'ferie',   name: 'Ferie',         headerClass: 'bg-sky-600 text-white',     rowClass: 'bg-sky-50/40',    blockClass: 'bg-sky-200 text-sky-900 border border-sky-300' },
+  { key: 'sick',        name: 'Syk',         headerClass: 'bg-red-600 text-white',  rowClass: 'bg-red-50/40',  blockClass: 'bg-red-200 text-red-900 border border-red-300' },
+  { key: 'sick_self',   name: 'Egenmelding', headerClass: 'bg-red-600 text-white',  rowClass: 'bg-red-50/40',  blockClass: 'bg-red-200 text-red-900 border border-red-300' },
+  { key: 'sick_doctor', name: 'Sykmelding',  headerClass: 'bg-rose-600 text-white', rowClass: 'bg-rose-50/40', blockClass: 'bg-rose-200 text-rose-900 border border-rose-300' },
+  { key: 'ferie',       name: 'Ferie',       headerClass: 'bg-sky-600 text-white',  rowClass: 'bg-sky-50/40',  blockClass: 'bg-sky-200 text-sky-900 border border-sky-300' },
   { key: '',        name: 'Ing. kategori', headerClass: 'bg-gray-500 text-white',   rowClass: 'bg-gray-50/40',   blockClass: 'bg-gray-200 text-gray-900 border border-gray-300' },
 ];
 
@@ -166,7 +168,7 @@ export default function DayGantt({ day, workers, shifts, availability, filterTea
                     );
                   })}
                   {/* Legg til vakt på denne kategorien */}
-                  {groupShifts.length === 0 && (
+                  {groupShifts.length === 0 && row.key !== 'sick' && (
                     <button
                       onClick={() => onAdd(row.key)}
                       className="absolute right-1 top-1 w-6 h-6 rounded-full bg-white border border-dashed border-slate-300 text-slate-400 hover:text-blue-500 hover:border-blue-400 flex items-center justify-center"
