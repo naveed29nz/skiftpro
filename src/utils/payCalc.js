@@ -7,8 +7,11 @@
  * contributes neither hours nor pay: those hours stay regular. Night applies
  * only when the store has nattillegg on and the worker has not disabled it.
  * Sick and ferie are counted apart from work. Sick hours do not receive a
- * holiday supplement.
+ * holiday supplement. Egenmelding and sykmelding are sick labels; stored
+ * `sick` stays a sick label for older shifts.
  */
+
+import { isSick, shiftLabelName } from './shiftLabels.js';
 
 function getEaster(year) {
   const a = year % 19, b = Math.floor(year / 100), c = year % 100;
@@ -63,7 +66,7 @@ export function calcExtraAmount(basePay, hours, extraType, extraAmount) {
 }
 
 export function isAbsenceLabel(label) {
-  return label === 'sick' || label === 'ferie';
+  return isSick(label) || label === 'ferie';
 }
 
 function clockMinutes(time) {
@@ -134,7 +137,7 @@ function hasClockSpan(shift) {
  */
 function usesClockLength(shift) {
   if (!shift?.all_day) return true;
-  return shift.shift_label === 'sick' && hasClockSpan(shift);
+  return isSick(shift.shift_label) && hasClockSpan(shift);
 }
 
 /**
@@ -226,6 +229,8 @@ const EMPTY_SPLIT = {
   sundayHours: 0,
   holidayHours: 0,
   sickHours: 0,
+  egenmeldingHours: 0,
+  sykmeldingHours: 0,
   ferieHours: 0,
   nightBonus: 0,
   sundayBonus: 0,
@@ -253,7 +258,7 @@ export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettin
     return {
       shift,
       hours,
-      label: isFerie ? 'Ferie' : 'Syk',
+      label: shiftLabelName(shift.shift_label) || (isFerie ? 'Ferie' : 'Syk'),
       isExtra: false,
       isSick: !isFerie,
       isFerie,
@@ -267,6 +272,8 @@ export function getShiftBreakdown(shift, workerRate, teamKey, holidays, wpSettin
       grossHours: gross,
       breakHours,
       sickHours: isFerie ? 0 : hours,
+      egenmeldingHours: shift.shift_label === 'sick_self' ? hours : 0,
+      sykmeldingHours: shift.shift_label === 'sick_doctor' ? hours : 0,
       ferieHours: isFerie ? hours : 0,
     };
   }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { format, startOfWeek, addDays, addWeeks, subWeeks } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { shiftLabelName } from '@/utils/shiftLabels';
 
 export default function TeamSchedule({ shifts, workers, currentWorker, wpSettings = [] }) {
   const myTeams = currentWorker?.teams || ['team1'];
@@ -34,6 +35,8 @@ export default function TeamSchedule({ shifts, workers, currentWorker, wpSetting
     middle: 'bg-blue-100 text-blue-700',
     evening: 'bg-purple-100 text-purple-700',
     sick: 'bg-red-100 text-red-700',
+    sick_self: 'bg-red-100 text-red-700',
+    sick_doctor: 'bg-rose-100 text-rose-700',
     ferie: 'bg-sky-100 text-sky-700',
   };
 
@@ -107,7 +110,7 @@ export default function TeamSchedule({ shifts, workers, currentWorker, wpSetting
                           <div className="space-y-0.5">
                             {dayShifts.map(s => (
                               <div key={s.id} className={`rounded px-1.5 py-1 text-center ${s.shift_label ? (LABEL_COLORS[s.shift_label] || 'bg-slate-100 text-slate-600') : 'bg-slate-100 text-slate-700'}`}>
-                                <div className="font-medium leading-tight">{s.all_day ? (s.shift_label === 'ferie' ? 'Ferie' : 'Syk') : `${s.start_time}–${s.end_time}`}</div>
+                                <div className="font-medium leading-tight">{s.all_day ? (shiftLabelName(s.shift_label) || 'Hele dagen') : `${s.start_time}–${s.end_time}`}</div>
                               </div>
                             ))}
                           </div>

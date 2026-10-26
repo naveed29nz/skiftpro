@@ -10,11 +10,13 @@ const LABEL_STYLES = {
   extra: 'bg-blue-100 text-blue-700',
   regular: 'bg-slate-100 text-slate-500',
   sick: 'bg-red-100 text-red-700',
+  sick_doctor: 'bg-rose-100 text-rose-700',
   ferie: 'bg-sky-100 text-sky-700',
 };
 
 function labelKind(b) {
   if (b.isFerie) return 'ferie';
+  if (b.shift?.shift_label === 'sick_doctor') return 'sick_doctor';
   if (b.isSick) return 'sick';
   if (b.label?.startsWith('Helligdag')) return 'holiday';
   if (b.label === 'Søndag') return 'sunday';
