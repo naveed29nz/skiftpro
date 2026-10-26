@@ -1,4 +1,4 @@
-export type SigningProviderName = "simple_otp" | "idura" | "signicat";
+export type SigningProviderName = "simple_otp" | "idura" | "signicat" | "posten";
 
 export interface SigningProvider {
   name: SigningProviderName;

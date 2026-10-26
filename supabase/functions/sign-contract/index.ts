@@ -8,6 +8,7 @@ import { countersignerIdentity } from "../_shared/countersigner.ts";
 import { buildSnapshotPdf, bytesToBase64, sha256Hex } from "../_shared/contractPdf.ts";
 import { otpMessage, signedCopyRecipient, signedEmployeeMessage, signedEmployerMessage } from "../_shared/contractMail.ts";
 import { sendEmail, type EmailResult } from "../_shared/email.ts";
+import { contractUsesPosten } from "../_shared/posten/routing.js";
 import { resolveProvider } from "../_shared/signing/index.ts";
 
 function clientIp(req: Request): string | null {
@@ -40,6 +41,22 @@ function otpDeliveryError(result: EmailResult): string {
 // Without waitUntil the isolate is shut down with the request, so Resend
 // never runs and the function logs no response. The promise is started
 // and pinned before we wait for it.
+const POSTEN_OTP_BLOCK = "Denne avtalen signeres i Posten Signering. Engangskode i SkiftPro brukes ikke.";
+
+async function postenOwnsContract(contractId: string): Promise<boolean> {
+  try {
+    const row = await adminClient()
+      .from("contracts")
+      .select("signing_provider")
+      .eq("id", contractId)
+      .maybeSingle();
+    if (row.error) return false;
+    return contractUsesPosten(row.data?.signing_provider);
+  } catch {
+    return false;
+  }
+}
+
 function pinUntilDone(task: Promise<unknown>) {
   const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void } }).EdgeRuntime;
   if (typeof runtime?.waitUntil === "function") runtime.waitUntil(task);
@@ -212,6 +229,7 @@ async function handleGuest(req: Request, body: Record<string, unknown>) {
   }
 
   if (action === "request_otp") {
+    if (await postenOwnsContract(contractId)) return json({ error: POSTEN_OTP_BLOCK }, 409);
     const issued = await admin.rpc("issue_guest_contract_otp", {
       p_contract_id: contractId,
       p_token: token,
@@ -249,6 +267,7 @@ async function handleGuest(req: Request, body: Record<string, unknown>) {
   }
 
   if (action === "verify") {
+    if (await postenOwnsContract(contractId)) return json({ error: POSTEN_OTP_BLOCK }, 409);
     const { data, error } = await admin.rpc("complete_guest_contract_signature", {
       p_contract_id: contractId,
       p_token: token,
@@ -306,6 +325,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "request_otp") {
+      if (await postenOwnsContract(String(contractId))) return json({ error: POSTEN_OTP_BLOCK }, 409);
       const role = roleOf(body.role);
       const ctx = await auth.client.rpc("contract_sign_context", {
         p_contract_id: contractId,
@@ -320,7 +340,7 @@ Deno.serve(async (req) => {
         .eq("org_id", ctx.data.org_id)
         .maybeSingle();
       const provider = resolveProvider(settings?.signing_provider);
-      if (!provider.active) return json({ error: provider.inactiveMessage }, 501);
+      if (provider.name !== "posten" && !provider.active) return json({ error: provider.inactiveMessage }, 501);
 
       const admin = adminClient();
       const issued = await admin.rpc("issue_contract_otp", {
@@ -361,6 +381,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "verify") {
+      if (await postenOwnsContract(String(contractId))) return json({ error: POSTEN_OTP_BLOCK }, 409);
       const role = roleOf(body.role);
       const { data, error } = await auth.client.rpc("complete_contract_signature", {
         p_contract_id: contractId,

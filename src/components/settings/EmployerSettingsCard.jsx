@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import EkstrahjelpPeriodeField from '@/components/settings/EkstrahjelpPeriodeField';
+import PostenRegistrationNote from '@/components/contracts/PostenRegistrationNote';
+import { postenOptionState } from '@/contracts/postenSigning';
 
 const EMPTY = {
   selskap: '',
@@ -43,7 +45,31 @@ export default function EmployerSettingsCard({ orgId }) {
     queryFn: () => base44.entities.EmployerSetting.filter({ org_id: orgId }),
     enabled: !!orgId,
   });
+  const { data: orgRows = [] } = useQuery({
+    queryKey: ['organization', orgId],
+    queryFn: () => base44.entities.Organization.filter({ id: orgId }),
+    enabled: !!orgId,
+  });
+  const { data: postenConfig } = useQuery({
+    queryKey: ['posten-signering-config'],
+    queryFn: async () => {
+      try {
+        const res = await base44.functions.invoke('posten-signering-config', {});
+        return res?.data || null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!orgId,
+  });
   const existing = rows[0];
+  const postenChoice = postenOptionState({
+    orgNumber: orgRows[0]?.org_number,
+    certConfigured: postenConfig?.cert_configured === true,
+  });
+  const providerValue = form.signing_provider === 'simple_otp' || !form.signing_provider
+    ? 'skiftpro'
+    : form.signing_provider;
 
   useEffect(() => {
     if (existing) {
@@ -81,6 +107,10 @@ export default function EmployerSettingsCard({ orgId }) {
         fra_kl: String(row.fra_kl || '').trim(),
         til_kl: String(row.til_kl || '').trim(),
       }));
+    if (form.signing_provider === 'posten' && postenChoice.disabled) {
+      setSaved(false);
+      return;
+    }
     saveMut.mutate({
       ...form,
       ub_tillegg: ub,
@@ -215,15 +245,18 @@ export default function EmployerSettingsCard({ orgId }) {
         </div>
         <div className="space-y-1.5">
           <Label>Signering</Label>
-          <Select value={form.signing_provider || 'simple_otp'} onValueChange={(value) => setField('signing_provider', value)}>
+          <Select value={providerValue} onValueChange={(value) => setField('signing_provider', value)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="simple_otp">E-postkode</SelectItem>
+              <SelectItem value="skiftpro">SkiftPro (e-postkode)</SelectItem>
+              <SelectItem value="posten" disabled={postenChoice.disabled}>Posten Signering</SelectItem>
               <SelectItem value="idura">BankID via Idura (ikke aktivert)</SelectItem>
               <SelectItem value="signicat">BankID via Signicat (ikke aktivert)</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-slate-400">BankID brukes ikke før avtale med Idura eller Signicat og med Stø. Fødselsnummer hentes ikke.</p>
+          <PostenRegistrationNote />
+          {postenChoice.disabled && <p className="text-xs text-amber-700">{postenChoice.reason}</p>}
+          <p className="text-xs text-slate-400">SkiftPro (e-postkode) er standard. BankID via Idura eller Signicat brukes ikke før avtale.</p>
         </div>
       </div>
 
