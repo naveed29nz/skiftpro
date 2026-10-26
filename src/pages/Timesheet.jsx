@@ -21,6 +21,7 @@ import { flushNotifications } from '@/utils/notify';
 import { toast } from '@/components/ui/use-toast';
 import ShiftTouchSheet from '@/components/timesheet/ShiftTouchSheet';
 import { isShiftDropTarget, sameShiftCell, shiftCopyRecord, shiftMoveFields } from '@/timesheet/placeShift';
+import { groupShiftVisible } from '@/timesheet/groupShifts';
 import { isCoarsePointer, isTouchLikePointer, pressMovedPast, SHIFT_LONG_PRESS_MS, shiftGestureIsTouch } from '@/timesheet/touchShift';
 import { calcHours } from '@/utils/payCalc';
 import { isDateLocked } from '@/utils/payrollLock';
@@ -854,27 +855,23 @@ export default function Timesheet() {
   };
 
   // Group view: for each label group, get all shifts on each day
+  const groupShiftOnTeam = (shift) => groupShiftVisible({
+    shift,
+    worker: workers.find((worker) => worker.id === shift.worker_id),
+    filterTeam,
+    isAdmin,
+    myTeams,
+  });
+
   const getGroupDayShifts = (label, day) => {
     const dayStr = format(day, 'yyyy-MM-dd');
-    return weekShifts.filter(s => {
-      if ((s.shift_label || '') !== label || s.date !== dayStr) return false;
-      const w = workers.find(x => x.id === s.worker_id);
-      if (!w) return false;
-      if (!isAdmin && !myTeams.some(t => (w.teams || ['team1']).includes(t))) return false;
-      if (filterTeam !== 'all' && !(w.teams || (w.team ? [w.team] : ['team1'])).includes(filterTeam)) return false;
-      return true;
-    });
+    return weekShifts.filter(s => (
+      (s.shift_label || '') === label && s.date === dayStr && groupShiftOnTeam(s)
+    ));
   };
 
   const getGroupStats = (label) => {
-    const groupShifts = weekShifts.filter(s => {
-      if ((s.shift_label || '') !== label) return false;
-      const w = workers.find(x => x.id === s.worker_id);
-      if (!w) return false;
-      if (!isAdmin && !myTeams.some(t => (w.teams || ['team1']).includes(t))) return false;
-      if (filterTeam !== 'all' && !(w.teams || (w.team ? [w.team] : ['team1'])).includes(filterTeam)) return false;
-      return true;
-    });
+    const groupShifts = weekShifts.filter(s => (s.shift_label || '') === label && groupShiftOnTeam(s));
     const totalHours = groupShifts.reduce((sum, s) => sum + hoursOf(s), 0);
     const totalCost = groupShifts.reduce((sum, s) => {
       const w = workers.find(x => x.id === s.worker_id);
