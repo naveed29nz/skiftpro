@@ -6,7 +6,6 @@ import {
   effectiveBreakMinutes,
   getShiftBreakdown,
   nightMinutes,
-  workerBreakOverride,
 } from './payCalc.js';
 
 const osloTeam2 = {
@@ -64,11 +63,8 @@ test('a store rule of 30 minutes after 5.5 hours does not apply at exactly 5.5 h
   assert.equal(calcHours(longer, storeFiveAndAHalf, 'team2'), 5.5);
 });
 
-test('an employee break override replaces the store rule', () => {
-  const elif = { break_after_hours: 6, break_length_minutes: 30 };
-  assert.deepEqual(workerBreakOverride(elif), [{ afterMinutes: 360, breakMinutes: 30 }]);
-  assert.equal(workerBreakOverride({}), null);
-  assert.equal(workerBreakOverride({ break_after_hours: 6 }), null);
+test('a stored employee break rule is ignored and the department rule is used', () => {
+  const stored = { break_after_hours: 6, break_length_minutes: 30 };
   const sixHours = {
     date: '2026-10-21',
     start_time: '08:00',
@@ -78,21 +74,20 @@ test('an employee break override replaces the store rule', () => {
     break_minutes: 0,
   };
   const pastSix = { ...sixHours, end_time: '14:30' };
-  assert.equal(effectiveBreakMinutes(sixHours, storeFiveAndAHalf, 'team2'), 30);
-  assert.equal(effectiveBreakMinutes(sixHours, storeFiveAndAHalf, 'team2', elif), 0);
-  assert.equal(calcHours(sixHours, storeFiveAndAHalf, 'team2', elif), 6);
-  assert.equal(effectiveBreakMinutes(pastSix, storeFiveAndAHalf, 'team2', elif), 30);
-  assert.equal(calcHours(pastSix, storeFiveAndAHalf, 'team2', elif), 6);
+  assert.equal(effectiveBreakMinutes(sixHours, storeFiveAndAHalf, 'team2', stored), 30);
+  assert.equal(calcHours(sixHours, storeFiveAndAHalf, 'team2', stored), 5.5);
+  assert.equal(effectiveBreakMinutes(pastSix, storeFiveAndAHalf, 'team2', stored), 30);
+  assert.equal(calcHours(pastSix, storeFiveAndAHalf, 'team2', stored), 6);
+  assert.equal(nightMinutes(pastSix, storeFiveAndAHalf, 'team2', stored), nightMinutes(pastSix, storeFiveAndAHalf, 'team2'));
   const manual = { ...pastSix, break_manual: true, break_minutes: 15 };
-  assert.equal(effectiveBreakMinutes(manual, storeFiveAndAHalf, 'team2', elif), 15);
-  const breakdown = getShiftBreakdown(pastSix, 200, 'team2', [], storeFiveAndAHalf, [], elif);
+  assert.equal(effectiveBreakMinutes(manual, storeFiveAndAHalf, 'team2', stored), 15);
+  const breakdown = getShiftBreakdown(pastSix, 200, 'team2', [], storeFiveAndAHalf, [], stored);
   assert.equal(breakdown.hours, 6);
   assert.equal(breakdown.breakHours, 0.5);
-  const noBreak = { break_after_hours: 6, break_length_minutes: 0 };
-  assert.equal(effectiveBreakMinutes(pastSix, storeFiveAndAHalf, 'team2', noBreak), 0);
+  const turnedOff = { break_after_hours: 6, break_length_minutes: 0 };
+  assert.equal(effectiveBreakMinutes(pastSix, storeFiveAndAHalf, 'team2', turnedOff), 30);
   const storeOff = { ...storeFiveAndAHalf, team2_auto_break: false };
-  assert.equal(effectiveBreakMinutes(pastSix, storeOff, 'team2', elif), 30);
-  assert.deepEqual(workerBreakOverride({ break_after_hours: 5.5, break_length_minutes: 30 }), [{ afterMinutes: 330, breakMinutes: 30 }]);
+  assert.equal(effectiveBreakMinutes(pastSix, storeOff, 'team2', stored), 0);
 });
 
 test('a sick shift longer than 6 hours takes the same 30 minute break and no holiday supplement', () => {

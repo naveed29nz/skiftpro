@@ -42,6 +42,7 @@ const ENTITIES = [
   {
     name: 'Worker',
     table: 'workers',
+    // break_after_hours and break_length_minutes stay in the database and are not imported.
     columns: ['id', 'org_id', 'name', 'email', 'phone', 'hourly_rate', 'position', 'status', 'color', 'teams', 'role', 'team_roles', 'employment_type', 'employment_percentage', 'disabled_extras', 'can_see_resultat', 'created_date', 'updated_date', 'created_by'],
   },
   {

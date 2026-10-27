@@ -108,7 +108,7 @@ test('an ekstrahjelp contract does not require stillingsprosent or average hours
 
 const workplace = { workplace_address: 'Gate 1', apningstid_fra: '07:00', apningstid_til: '23:00' };
 
-test('saving ekstrahjelp allows empty hours with or without a custom break', () => {
+test('saving ekstrahjelp allows empty hours, and a stored break rule does not block the card', () => {
   const ekstra = {
     ...worker(['team1']),
     ansettelsestype: 'tilkalling',
@@ -125,10 +125,10 @@ test('saving ekstrahjelp allows empty hours with or without a custom break', () 
     worker: { ...ekstra, break_after_hours: null, break_length_minutes: null },
     ...shared,
   }), []);
-  assert.equal(workerFormProblems({
+  assert.deepEqual(workerFormProblems({
     worker: { ...ekstra, break_after_hours: 6, break_length_minutes: null },
     ...shared,
-  }).some((item) => item.includes('Pause etter')), true);
+  }), []);
 });
 
 test('saving a fast employee names the missing hours instead of blocking silently', () => {

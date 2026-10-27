@@ -185,6 +185,8 @@ export default function Workers() {
     delete workerFields.preview_first;
     delete workerFields.checklist;
     delete workerFields.fodselsnummer;
+    delete workerFields.break_after_hours;
+    delete workerFields.break_length_minutes;
     try {
       let saved;
       if (editing) {

@@ -1,5 +1,21 @@
 /** Classify PostgREST/Postgres write errors and decide a safe retry. */
 
+const UNUSED_WORKER_BREAK_COLUMNS = ['break_after_hours', 'break_length_minutes'];
+
+/** Drop the unused per-employee break columns before a worker write. */
+export function omitUnusedWorkerBreak(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const next = { ...payload };
+  let changed = false;
+  for (const column of UNUSED_WORKER_BREAK_COLUMNS) {
+    if (Object.prototype.hasOwnProperty.call(next, column)) {
+      delete next[column];
+      changed = true;
+    }
+  }
+  return changed ? next : payload;
+}
+
 export function errorMessage(error) {
   return String(error?.message || error?.details?.message || '');
 }
@@ -33,7 +49,7 @@ export function isNotNullViolation(error) {
 /**
  * Next worker update to try after a failed write.
  * Returns null when there is no safe retry.
- * A filled personal break that cannot be stored sets warning so the screen can say so.
+ * A payload that still names the unused break columns is retried without them.
  */
 export function workerUpdateFallback(payload, error) {
   if (!payload || typeof payload !== 'object') return null;
@@ -43,13 +59,7 @@ export function workerUpdateFallback(payload, error) {
     const next = { ...payload };
     delete next.break_after_hours;
     delete next.break_length_minutes;
-    const wantedBreak = payload.break_after_hours != null || payload.break_length_minutes != null;
-    return {
-      payload: next,
-      warning: wantedBreak
-        ? 'Egen pauseregel ble ikke lagret. Databasen mangler kolonnene for pauseregelen.'
-        : '',
-    };
+    return { payload: next, warning: '' };
   }
   const message = errorMessage(error);
   if (

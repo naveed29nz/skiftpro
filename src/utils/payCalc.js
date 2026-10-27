@@ -141,32 +141,19 @@ function usesClockLength(shift) {
 }
 
 /**
- * Personal break rule. Both fields must be filled. An empty pair means the
- * department rule still applies. A length of 0 turns automatic break off
- * for this employee. Returns null when there is no override.
+ * Unpaid break for one shift.
+ * Department settings decide the automatic break
+ * (workplace_settings teamN_auto_break and teamN_break_rules).
+ * A shift with break_manual uses its own break_minutes.
+ * break_after_hours and break_length_minutes on the worker are ignored.
+ * The worker argument is kept so existing callers stay valid.
  */
-export function workerBreakOverride(worker) {
-  if (!worker || typeof worker !== 'object') return null;
-  const afterRaw = worker.break_after_hours;
-  const lengthRaw = worker.break_length_minutes;
-  if (afterRaw == null || afterRaw === '' || lengthRaw == null || lengthRaw === '') return null;
-  const afterHours = Number(afterRaw);
-  const breakMinutes = Number(lengthRaw);
-  if (!Number.isFinite(afterHours) || afterHours <= 0) return null;
-  if (!Number.isFinite(breakMinutes) || breakMinutes < 0) return null;
-  if (breakMinutes === 0) return [];
-  return [{ afterMinutes: Math.round(afterHours * 60), breakMinutes }];
-}
-
-export function effectiveBreakMinutes(shift, wpSettings, teamKey, worker) {
+export function effectiveBreakMinutes(shift, wpSettings, teamKey, _worker) {
   if (!shift || !usesClockLength(shift)) return 0;
   if (shift.break_manual === true) return Math.max(0, Number(shift.break_minutes) || 0);
-  const override = workerBreakOverride(worker);
-  const rules = override == null
-    ? breakRulesForTeam(wpSettings, shift.team || teamKey || 'team1')
-    : override;
+  const rules = breakRulesForTeam(wpSettings, shift.team || teamKey || 'team1');
   if (rules.length === 0) {
-    if (override != null || shift.break_manual === false) return 0;
+    if (shift.break_manual === false) return 0;
     return Math.max(0, Number(shift.break_minutes) || 0);
   }
   return automaticBreakMinutes(grossMinutes(shift), rules);
