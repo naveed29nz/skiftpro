@@ -31,6 +31,7 @@ export const ENTITY_TABLES = {
   MonthlyResult: 'monthly_results',
   StaffingBudget: 'staffing_budgets',
   PayrollPeriodLock: 'payroll_period_locks',
+  TimesheetWorkerOrder: 'timesheet_worker_orders',
 };
 
 const FUNCTION_NAMES = {
