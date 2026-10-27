@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isMissingColumnError, isNotNullViolation, workerUpdateFallback } from './writeFallback.js';
+import { isMissingColumnError, isNotNullViolation, omitUnusedWorkerBreak, workerUpdateFallback } from './writeFallback.js';
 
 const heider = {
   name: 'Heider Iqbal',
@@ -33,7 +33,7 @@ test('Heider ekstrahjelp save retries without a missing break column and then wi
   assert.equal(Object.hasOwn(first.payload, 'break_after_hours'), false);
   assert.equal(Object.hasOwn(first.payload, 'break_length_minutes'), false);
   assert.equal(first.payload.employment_percentage, null);
-  assert.match(first.warning, /pauseregel/);
+  assert.equal(first.warning, '');
 
   const notNull = {
     code: '23502',
@@ -47,6 +47,17 @@ test('Heider ekstrahjelp save retries without a missing break column and then wi
   assert.equal(second.warning, '');
 
   assert.equal(workerUpdateFallback(second.payload, { message: 'permission denied' }), null);
+});
+
+test('a worker save drops a stored personal break and keeps the rest of the card', () => {
+  const next = omitUnusedWorkerBreak(heider);
+  assert.equal(Object.hasOwn(next, 'break_after_hours'), false);
+  assert.equal(Object.hasOwn(next, 'break_length_minutes'), false);
+  assert.equal(next.name, 'Heider Iqbal');
+  assert.equal(next.hourly_rate, 185);
+  assert.equal(next.employment_percentage, null);
+  const plain = { name: 'Ada' };
+  assert.equal(omitUnusedWorkerBreak(plain), plain);
 });
 
 test('an empty break is dropped quietly when the columns are missing', () => {

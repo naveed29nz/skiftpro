@@ -1,7 +1,7 @@
 import { supabase } from '@/api/supabaseClient';
 import { deleteMatchedNothing } from '@/contracts/contractActions';
 import { applyClauses, compileFilter, parseSort } from '@/api/entityQuery';
-import { isMissingColumnError, workerUpdateFallback } from '@/api/writeFallback';
+import { isMissingColumnError, omitUnusedWorkerBreak, workerUpdateFallback } from '@/api/writeFallback';
 
 /**
  * Drop-in replacement for the Base44 client used across the app.
@@ -228,7 +228,7 @@ const WAGE_FIELDS = {
 };
 
 const SAFE_COLUMNS = {
-  workers: ['id', 'org_id', 'name', 'email', 'phone', 'position', 'status', 'color', 'teams', 'role', 'team_roles', 'employment_type', 'employment_percentage', 'disabled_extras', 'can_see_resultat', 'address', 'ansettelsestype', 'tiltredelsesdato', 'opphorsdato', 'timer_per_uke', 'timer_per_dag', 'arbeidsoppgaver', 'provetid_mnd', 'break_after_hours', 'break_length_minutes', 'created_date', 'updated_date', 'created_by'],
+  workers: ['id', 'org_id', 'name', 'email', 'phone', 'position', 'status', 'color', 'teams', 'role', 'team_roles', 'employment_type', 'employment_percentage', 'disabled_extras', 'can_see_resultat', 'address', 'ansettelsestype', 'tiltredelsesdato', 'opphorsdato', 'timer_per_uke', 'timer_per_dag', 'arbeidsoppgaver', 'provetid_mnd', 'created_date', 'updated_date', 'created_by'],
   contracts: ['id', 'org_id', 'worker_id', 'worker_name', 'contract_type', 'status', 'org_name', 'worker_position', 'employment_percentage', 'weekly_hours', 'overtime_hours', 'full_time_hours_per_week', 'start_date', 'end_date', 'week_number', 'year', 'reason', 'notice_period_months', 'approved_by_worker_id', 'approved_at', 'generated_automatically', 'created_date', 'updated_date', 'created_by', 'template_key', 'template_version', 'contract_kind', 'parent_contract_id', 'employee_signed_at', 'employee_signed_by', 'employer_signed_at', 'employer_signed_by', 'content_sha256', 'pdf_sha256', 'rejection_reason', 'expires_at', 'opened_at', 'sent_at', 'signing_provider', 'posten_job_id', 'posten_status', 'posten_signer_status', 'posten_pades_path'],
   holidays: ['id', 'org_id', 'name', 'date', 'created_date', 'updated_date', 'created_by'],
   workplace_settings: workplaceColumns().filter((col) => !workplaceWageFields.includes(col)),
@@ -416,6 +416,10 @@ async function selectRows(table, { sort, limit, filters } = {}) {
   return rows.slice(0, cap).map(normalizeRow);
 }
 
+function omitWorkerBreakOnWrite(table, payload) {
+  return table === 'workers' ? omitUnusedWorkerBreak(payload) : payload;
+}
+
 function withoutEkstrahjelpPeriode(payload) {
   const next = { ...payload };
   delete next.ekstrahjelp_periode;
@@ -492,14 +496,14 @@ function entityApi(table) {
       return normalizeRow(data);
     },
     async create(data) {
-      const payload = withImpersonatedOrg(table, sanitizeWrite(data, { isUpdate: false }));
+      const payload = omitWorkerBreakOnWrite(table, withImpersonatedOrg(table, sanitizeWrite(data, { isUpdate: false })));
       const row = await writeRow(table, payload, (columns, body) => (
         supabase.from(table).insert(body).select(columns).single()
       ));
       return normalizeRow(row);
     },
     async update(id, data) {
-      const payload = sanitizeWrite(data, { isUpdate: true });
+      const payload = omitWorkerBreakOnWrite(table, sanitizeWrite(data, { isUpdate: true }));
       const row = await writeRow(table, payload, (columns, body) => (
         supabase.from(table).update(body).eq('id', id).select(columns).maybeSingle()
       ));
@@ -517,7 +521,7 @@ function entityApi(table) {
       return { id };
     },
     async bulkCreate(rows) {
-      const payload = (rows || []).map((row) => withImpersonatedOrg(table, sanitizeWrite(row, { isUpdate: false })));
+      const payload = (rows || []).map((row) => omitWorkerBreakOnWrite(table, withImpersonatedOrg(table, sanitizeWrite(row, { isUpdate: false }))));
       if (payload.length === 0) return [];
       const created = [];
       for (let i = 0; i < payload.length; i += 200) {
@@ -542,7 +546,7 @@ function entityApi(table) {
       if (compiled.clauses.length === 0) {
         throw apiError('updateMany requires a filter');
       }
-      const patch = sanitizeWrite(data?.$set ?? data, { isUpdate: true });
+      const patch = omitWorkerBreakOnWrite(table, sanitizeWrite(data?.$set ?? data, { isUpdate: true }));
       const rows = await runRead(table, (columns) => {
         let query = supabase.from(table).update(patch).select(columns);
         query = applyClauses(query, compiled.clauses);

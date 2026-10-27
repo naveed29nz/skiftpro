@@ -293,8 +293,8 @@ export function missingEmploymentFields({
 
 /**
  * Reasons the employee card cannot be saved. Ekstrahjelp does not need
- * stillingsprosent or average hours. A custom break needs both fields or neither.
- * Contract gaps are included only when the card is about to send an agreement.
+ * stillingsprosent or average hours. Contract gaps are included only when
+ * the card is about to send an agreement.
  */
 export function workerFormProblems({
   worker,
@@ -317,11 +317,6 @@ export function workerFormProblems({
     if (String(worker?.fodselsnummer || '').trim() && !fodselsnummerValid(worker.fodselsnummer)) {
       problems.push('Fødselsnummer må være 11 gyldige sifre');
     }
-  }
-  const afterSet = worker?.break_after_hours != null && worker.break_after_hours !== '';
-  const lengthSet = worker?.break_length_minutes != null && worker.break_length_minutes !== '';
-  if (afterSet !== lengthSet) {
-    problems.push('Fyll ut både «Pause etter (timer)» og «Pausens lengde (min)», eller la begge stå tomme.');
   }
   if (sendContract) {
     const gaps = missingEmploymentFields({

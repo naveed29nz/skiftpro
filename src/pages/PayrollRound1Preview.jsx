@@ -245,7 +245,7 @@ export default function PayrollRound1Preview() {
         </section>
         {showMerking && (
           <ShiftCellModal
-            worker={{ id: 'preview-worker', name: 'Hasham Khan', teams: ['team2'], hourly_rate: 200, color: '#0ea5e9' }}
+            worker={{ id: 'preview-worker', name: 'Hasham Khan', teams: ['team2'], hourly_rate: 200, color: '#0ea5e9', break_after_hours: 6, break_length_minutes: 30 }}
             day={new Date(2026, 9, 28)}
             shifts={[{
               id: 'legacy-sick',
@@ -261,7 +261,7 @@ export default function PayrollRound1Preview() {
               team: 'team2',
               status: 'scheduled',
             }]}
-            workers={[{ id: 'preview-worker', name: 'Hasham Khan', teams: ['team2'], hourly_rate: 200, color: '#0ea5e9' }]}
+            workers={[{ id: 'preview-worker', name: 'Hasham Khan', teams: ['team2'], hourly_rate: 200, color: '#0ea5e9', break_after_hours: 6, break_length_minutes: 30 }]}
             onClose={() => setShowMerking(false)}
             onRefresh={() => {}}
             currentTeam="team2"

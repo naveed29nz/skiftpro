@@ -70,8 +70,6 @@ export default function WorkerForm({
     employment_type: worker?.employment_type || 'timelønn',
     ...initialEmploymentHours(worker),
     disabled_extras: worker?.disabled_extras || [],
-    break_after_hours: worker?.break_after_hours ?? '',
-    break_length_minutes: worker?.break_length_minutes ?? '',
     can_see_resultat: worker?.can_see_resultat || false,
     birth_date: worker?.birth_date || '',
     fodselsnummer: worker?.fodselsnummer || '',
@@ -117,13 +115,13 @@ export default function WorkerForm({
         timer_per_dag: numberOrNull(form.timer_per_dag),
       }),
       provetid_mnd: numberOrNull(form.provetid_mnd),
-      break_after_hours: numberOrNull(form.break_after_hours),
-      break_length_minutes: numberOrNull(form.break_length_minutes),
       birth_date: form.birth_date || null,
       tiltredelsesdato: form.tiltredelsesdato || null,
       opphorsdato: form.opphorsdato || null,
       checklist,
     };
+    delete payload.break_after_hours;
+    delete payload.break_length_minutes;
     if (showWages) payload.hourly_rate = parseFloat(form.hourly_rate) || 0;
     else {
       delete payload.hourly_rate;
@@ -450,38 +448,6 @@ export default function WorkerForm({
               <span className="text-sm text-slate-700">{label}</span>
             </label>
           ))}
-        </div>
-      </div>
-      <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-        <div>
-          <p className="text-sm font-medium text-slate-800">Egen pauseregel</p>
-          <p className="text-xs text-slate-500 mt-1">Valgfritt. Når begge feltene er fylt ut, erstatter de avdelingens automatiske pause for denne ansatte. Tomme felt bruker avdelingens regel. En vakt kan fortsatt overstyres manuelt.</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="break-after-hours">Pause etter (timer)</Label>
-            <Input
-              id="break-after-hours"
-              type="number"
-              min="0"
-              step="0.5"
-              value={form.break_after_hours}
-              onChange={(e) => setForm({ ...form, break_after_hours: e.target.value })}
-              placeholder="f.eks. 6"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="break-length-minutes">Pausens lengde (min)</Label>
-            <Input
-              id="break-length-minutes"
-              type="number"
-              min="0"
-              step="1"
-              value={form.break_length_minutes}
-              onChange={(e) => setForm({ ...form, break_length_minutes: e.target.value })}
-              placeholder="f.eks. 30"
-            />
-          </div>
         </div>
       </div>
       <div className="space-y-1.5">
