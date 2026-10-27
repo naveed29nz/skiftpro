@@ -90,6 +90,20 @@ begin
   insert into rls_results values ('admin can store a full-day ferie shift', detail = 'ok', detail);
 
   detail := public._rls_exec(
+    '11111111-1111-1111-1111-111111111111',
+    $q$insert into public.shifts (id, org_id, worker_id, worker_name, date, start_time, end_time, shift_label, team)
+       values ('shift-egenmelding', 'org-a', 'w-ansatt-a', 'Ansatt A', current_date + 41, '08:00', '16:00', 'sick_self', 'team1')$q$
+  );
+  insert into rls_results values ('admin can store egenmelding', detail = 'ok', detail);
+
+  detail := public._rls_exec(
+    '11111111-1111-1111-1111-111111111111',
+    $q$insert into public.shifts (id, org_id, worker_id, worker_name, date, start_time, end_time, shift_label, team)
+       values ('shift-sykmelding', 'org-a', 'w-ansatt-a', 'Ansatt A', current_date + 42, '08:00', '16:00', 'sick_doctor', 'team1')$q$
+  );
+  insert into rls_results values ('admin can store sykmelding', detail = 'ok', detail);
+
+  detail := public._rls_exec(
     '44444444-4444-4444-4444-444444444444',
     $q$update public.shifts set hours_approved = true where id = 'shift-a1'$q$
   );

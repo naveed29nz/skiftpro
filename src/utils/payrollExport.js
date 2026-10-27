@@ -17,6 +17,8 @@ export const PAYROLL_COLUMNS = [
   { key: 'sunday_hours', label: 'Søndagstillegg timer', group: 'timer' },
   { key: 'holiday_hours', label: 'Helligdagstillegg timer', group: 'timer' },
   { key: 'sick_hours', label: 'Syk timer', group: 'fravær' },
+  { key: 'egenmelding_hours', label: 'Egenmelding timer', group: 'fravær' },
+  { key: 'sykmelding_hours', label: 'Sykmelding timer', group: 'fravær' },
   { key: 'ferie_hours', label: 'Ferie timer', group: 'fravær' },
   { key: 'total_hours', label: 'Totale timer', group: 'timer' },
   { key: 'hourly_rate', label: 'Timesats', group: 'lønn' },
@@ -33,7 +35,7 @@ export const DEFAULT_PAYROLL_COLUMN_KEYS = PAYROLL_COLUMNS.map((column) => colum
 
 const HOUR_KEYS = new Set([
   'normal_hours', 'break_hours', 'night_hours', 'sunday_hours', 'holiday_hours',
-  'sick_hours', 'ferie_hours', 'total_hours',
+  'sick_hours', 'egenmelding_hours', 'sykmelding_hours', 'ferie_hours', 'total_hours',
 ]);
 
 const MONEY_KEYS = new Set([
@@ -56,6 +58,8 @@ export function payrollRowFromWorker(entry, meta, taxRate = 0.243) {
   const sundayHours = sum('sundayHours');
   const holidayHours = sum('holidayHours');
   const sickHours = sum('sickHours');
+  const egenmeldingHours = sum('egenmeldingHours');
+  const sykmeldingHours = sum('sykmeldingHours');
   const ferieHours = sum('ferieHours');
   const nightPay = sum('nightBonus');
   const sundayPay = sum('sundayBonus');
@@ -74,6 +78,8 @@ export function payrollRowFromWorker(entry, meta, taxRate = 0.243) {
     sunday_hours: sundayHours,
     holiday_hours: holidayHours,
     sick_hours: sickHours,
+    egenmelding_hours: egenmeldingHours,
+    sykmelding_hours: sykmeldingHours,
     ferie_hours: ferieHours,
     total_hours: normalHours + sundayHours + holidayHours + sickHours + ferieHours,
     hourly_rate: Number(entry.worker?.hourly_rate) || 0,
@@ -99,7 +105,7 @@ export function payrollCsv(rows, columns, meta = {}) {
   const sep = ';';
   const lines = [
     ['SkiftPro lønnseksport', meta.period || '', meta.team || ''].join(sep),
-    ['Forklaring', 'Vanlige timer er hverdager etter ubetalt pause. Natt-, søndag- og helligdagstimer er tillegg og kan overlappe. Syk og ferie telles for seg og er ikke vanlige timer.'].join(sep),
+    ['Forklaring', 'Vanlige timer er hverdager etter ubetalt pause. Natt-, søndag- og helligdagstimer er tillegg og kan overlappe. Syk og ferie telles for seg og er ikke vanlige timer. Egenmelding og sykmelding inngår i Syk timer og vises også for seg.'].join(sep),
     columns.map((column) => column.label).join(sep),
     ...rows.map((row) => columns.map((column) => csvCell(column, row[column.key])).join(sep)),
   ];

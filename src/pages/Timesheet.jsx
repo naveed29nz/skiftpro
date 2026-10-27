@@ -70,27 +70,33 @@ const LABEL_STYLES = {
   morning: { cell: 'bg-green-50',  badge: 'bg-green-100 text-green-700 border border-green-200' },
   middle:  { cell: 'bg-slate-100', badge: 'bg-slate-200 text-slate-700 border border-slate-300' },
   evening: { cell: 'bg-slate-50',  badge: 'bg-slate-150 text-slate-600 border border-slate-250' },
-  sick:    { cell: 'bg-red-50',    badge: 'bg-red-100 text-red-700 border border-red-200' },
-  ferie:   { cell: 'bg-sky-50',    badge: 'bg-sky-100 text-sky-700 border border-sky-200' },
+  sick:        { cell: 'bg-red-50',  badge: 'bg-red-100 text-red-700 border border-red-200' },
+  sick_self:   { cell: 'bg-red-50',  badge: 'bg-red-100 text-red-700 border border-red-200' },
+  sick_doctor: { cell: 'bg-rose-50', badge: 'bg-rose-100 text-rose-700 border border-rose-200' },
+  ferie:       { cell: 'bg-sky-50',  badge: 'bg-sky-100 text-sky-700 border border-sky-200' },
 };
 
 const GROUPS = [
-  { label: 'morning', name: 'Morgen',     icon: '🌅', headerClass: 'bg-green-600 text-white',   rowClass: 'bg-green-50' },
-  { label: 'middle',  name: 'Mellomvakt', icon: '☀️',  headerClass: 'bg-slate-600 text-white',    rowClass: 'bg-slate-100' },
-  { label: 'evening', name: 'Kveld',      icon: '🌙', headerClass: 'bg-slate-500 text-white',  rowClass: 'bg-slate-50' },
-  { label: 'sick',    name: 'Syk',        icon: '🤒', headerClass: 'bg-red-500 text-white',     rowClass: 'bg-red-50' },
-  { label: 'ferie',   name: 'Ferie',      icon: '🏖️', headerClass: 'bg-sky-600 text-white',     rowClass: 'bg-sky-50' },
+  { label: 'morning',     name: 'Morgen',      icon: '🌅', headerClass: 'bg-green-600 text-white', rowClass: 'bg-green-50' },
+  { label: 'middle',      name: 'Mellomvakt',  icon: '☀️', headerClass: 'bg-slate-600 text-white', rowClass: 'bg-slate-100' },
+  { label: 'evening',     name: 'Kveld',       icon: '🌙', headerClass: 'bg-slate-500 text-white', rowClass: 'bg-slate-50' },
+  { label: 'sick',        name: 'Syk',         icon: '🤒', headerClass: 'bg-red-500 text-white',   rowClass: 'bg-red-50' },
+  { label: 'sick_self',   name: 'Egenmelding', icon: '🤒', headerClass: 'bg-red-600 text-white',   rowClass: 'bg-red-50' },
+  { label: 'sick_doctor', name: 'Sykmelding',  icon: '🏥', headerClass: 'bg-rose-600 text-white',  rowClass: 'bg-rose-50' },
+  { label: 'ferie',       name: 'Ferie',       icon: '🏖️', headerClass: 'bg-sky-600 text-white',   rowClass: 'bg-sky-50' },
 ];
 
 const LABEL_LEGEND = [
-  { label: 'morning', color: 'bg-green-100 border-green-300 text-green-700',    icon: '🌅' },
-  { label: 'middle',  color: 'bg-slate-200 border-slate-300 text-slate-700',       icon: '☀️' },
-  { label: 'evening', color: 'bg-slate-150 border-slate-250 text-slate-600', icon: '🌙' },
-  { label: 'sick',    color: 'bg-red-100 border-red-300 text-red-700',          icon: '🤒' },
-  { label: 'ferie',   color: 'bg-sky-100 border-sky-300 text-sky-700',          icon: '🏖️' },
+  { label: 'morning',     color: 'bg-green-100 border-green-300 text-green-700', icon: '🌅' },
+  { label: 'middle',      color: 'bg-slate-200 border-slate-300 text-slate-700',  icon: '☀️' },
+  { label: 'evening',     color: 'bg-slate-150 border-slate-250 text-slate-600',  icon: '🌙' },
+  { label: 'sick',        color: 'bg-red-100 border-red-300 text-red-700',        icon: '🤒' },
+  { label: 'sick_self',   color: 'bg-red-100 border-red-300 text-red-700',        icon: '🤒' },
+  { label: 'sick_doctor', color: 'bg-rose-100 border-rose-300 text-rose-700',     icon: '🏥' },
+  { label: 'ferie',       color: 'bg-sky-100 border-sky-300 text-sky-700',        icon: '🏖️' },
 ];
 
-const LABEL_SORT_ORDER = { morning: 0, middle: 1, evening: 2, sick: 3, ferie: 4 };
+const LABEL_SORT_ORDER = { morning: 0, middle: 1, evening: 2, sick: 3, sick_self: 4, sick_doctor: 5, ferie: 6 };
 const PAYROLL_TAX = 0.243;
 
 // Display-only. Desktop keeps the full "HH:mm–HH:mm" string.
@@ -1055,7 +1061,8 @@ export default function Timesheet() {
           onEdit={(worker, day) => setModalCell({ worker, day })}
           onAdd={(label) => {
             const anyWorker = displayWorkers[0];
-            if (anyWorker) setModalCell({ worker: anyWorker, day: selectedDay, defaultLabel: label });
+            const preset = label && label !== 'sick' ? label : undefined;
+            if (anyWorker) setModalCell({ worker: anyWorker, day: selectedDay, defaultLabel: preset });
           }}
           showWages={showWages}
           wp={wp}
@@ -1102,7 +1109,7 @@ export default function Timesheet() {
                             const dayShifts = getGroupDayShifts(group.label, day);
                             return (
                               <td key={day.toISOString()} className={`px-2 py-2 align-top border-l border-white/60 ${isSameDay(day, new Date()) ? 'bg-blue-50/40' : ''}`}>
-                                <Droppable droppableId={cellDropId} type="GROUPSHIFT">
+                                <Droppable droppableId={cellDropId} type="GROUPSHIFT" isDropDisabled={group.label === 'sick'}>
                                   {(cellProvided, cellSnapshot) => (
                                     <div
                                       ref={cellProvided.innerRef} {...cellProvided.droppableProps}

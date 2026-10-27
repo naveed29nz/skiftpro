@@ -129,6 +129,8 @@ export default function Salary() {
       const nightHours = sumField(breakdowns, 'nightHours');
       const breakHours = sumField(breakdowns, 'breakHours');
       const sickHours = sumField(breakdowns, 'sickHours');
+      const egenmeldingHours = sumField(breakdowns, 'egenmeldingHours');
+      const sykmeldingHours = sumField(breakdowns, 'sykmeldingHours');
       const ferieHours = sumField(breakdowns, 'ferieHours');
       const totalHours = regularHours + extraHours + sickHours + ferieHours;
       const totalPay = breakdowns.reduce((sum, b) => sum + b.pay, 0);
@@ -136,7 +138,7 @@ export default function Salary() {
       const completedShifts = workerShifts.filter(s => s.status === 'completed').length;
       return {
         worker, breakdowns, regularHours, sundayHours, holidayHours, extraHours,
-        nightHours, breakHours, sickHours, ferieHours, totalHours, totalPay, extraBonus,
+        nightHours, breakHours, sickHours, egenmeldingHours, sykmeldingHours, ferieHours, totalHours, totalPay, extraBonus,
         completedShifts, totalShifts: workerShifts.length,
       };
     }).sort((a, b) => b.totalPay - a.totalPay);
@@ -221,6 +223,8 @@ export default function Salary() {
       ['Søndag t.', 'sundayHours'],
       ['Helligdag t.', 'holidayHours'],
       ['Syk t.', 'sickHours'],
+      ['Egenmelding t.', 'egenmeldingHours'],
+      ['Sykmelding t.', 'sykmeldingHours'],
       ['Ferie t.', 'ferieHours'],
     ];
     const html = `
@@ -255,7 +259,7 @@ export default function Salary() {
       <body>
         <h1>Lønnsrapport</h1>
         <p class="subtitle">${escHtml(periodLabel)} &nbsp;•&nbsp; ${escHtml(teamLabel)}</p>
-        <p class="note">Natt-, søndag- og helligdagstimer er tillegg og kan overlappe vanlige timer. Syk og ferie telles for seg.</p>
+        <p class="note">Natt-, søndag- og helligdagstimer er tillegg og kan overlappe vanlige timer. Syk og ferie telles for seg. Egenmelding og sykmelding inngår i Syk og vises også for seg.</p>
         <table>
           <thead>
             <tr>
@@ -326,6 +330,8 @@ export default function Salary() {
     sundayHours: salaryData.reduce((s, d) => s + d.sundayHours, 0),
     holidayHours: salaryData.reduce((s, d) => s + d.holidayHours, 0),
     sickHours: salaryData.reduce((s, d) => s + d.sickHours, 0),
+    egenmeldingHours: salaryData.reduce((s, d) => s + d.egenmeldingHours, 0),
+    sykmeldingHours: salaryData.reduce((s, d) => s + d.sykmeldingHours, 0),
     ferieHours: salaryData.reduce((s, d) => s + d.ferieHours, 0),
   };
 
@@ -396,6 +402,8 @@ export default function Salary() {
                 <th className="px-3 py-3 text-right font-medium">Søndag</th>
                 <th className="px-3 py-3 text-right font-medium">Helligdag</th>
                 <th className="px-3 py-3 text-right font-medium">Syk</th>
+                <th className="px-3 py-3 text-right font-medium">Egenmelding</th>
+                <th className="px-3 py-3 text-right font-medium">Sykmelding</th>
                 <th className="px-3 py-3 text-right font-medium">Ferie</th>
                 <th className="px-3 py-3 text-right font-medium">Total</th>
                 <th className="px-3 py-3 text-right font-medium">Timesats</th>
@@ -424,6 +432,8 @@ export default function Salary() {
                     <td className="px-3 py-4 text-right text-amber-600">{row.sundayHours > 0 ? `${row.sundayHours.toFixed(1)}t` : '—'}</td>
                     <td className="px-3 py-4 text-right text-orange-600">{row.holidayHours > 0 ? `${row.holidayHours.toFixed(1)}t` : '—'}</td>
                     <td className="px-3 py-4 text-right text-red-500">{row.sickHours > 0 ? `${row.sickHours.toFixed(1)}t` : '—'}</td>
+                    <td className="px-3 py-4 text-right text-red-500">{row.egenmeldingHours > 0 ? `${row.egenmeldingHours.toFixed(1)}t` : '—'}</td>
+                    <td className="px-3 py-4 text-right text-rose-600">{row.sykmeldingHours > 0 ? `${row.sykmeldingHours.toFixed(1)}t` : '—'}</td>
                     <td className="px-3 py-4 text-right text-sky-600">{row.ferieHours > 0 ? `${row.ferieHours.toFixed(1)}t` : '—'}</td>
                     <td className="px-3 py-4 text-right font-semibold text-slate-700">{row.totalHours.toFixed(1)}t</td>
                     <td className="px-3 py-4 text-right text-slate-500">{row.worker.hourly_rate?.toFixed(0)} kr/t</td>
@@ -439,7 +449,7 @@ export default function Salary() {
                   </tr>
                   {expandedWorker === row.worker.id && (
                     <tr className="border-t border-slate-100">
-                      <td colSpan={12} className="px-4 pb-4 pt-1">
+                      <td colSpan={14} className="px-4 pb-4 pt-1">
                         <div className="bg-slate-50 rounded-lg p-3 space-y-1.5">
                           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Lønnsdetaljer</p>
                           {row.breakdowns.map((b, i) => (
@@ -475,6 +485,8 @@ export default function Salary() {
                   <td className="px-3 py-3 text-right text-amber-600">{totals.sundayHours.toFixed(1)}t</td>
                   <td className="px-3 py-3 text-right text-orange-600">{totals.holidayHours.toFixed(1)}t</td>
                   <td className="px-3 py-3 text-right text-red-500">{totals.sickHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3 text-right text-red-500">{totals.egenmeldingHours.toFixed(1)}t</td>
+                  <td className="px-3 py-3 text-right text-rose-600">{totals.sykmeldingHours.toFixed(1)}t</td>
                   <td className="px-3 py-3 text-right text-sky-600">{totals.ferieHours.toFixed(1)}t</td>
                   <td className="px-3 py-3 text-right text-slate-700">{grandTotalHours.toFixed(1)}t</td>
                   <td className="px-3 py-3"></td>
@@ -482,12 +494,12 @@ export default function Salary() {
                   <td></td>
                 </tr>
                 <tr className="bg-orange-50 border-t border-orange-100">
-                  <td className="px-4 py-3 text-orange-700 font-medium" colSpan={10}>+ Sosiale kostnader <span className="text-xs font-normal text-orange-500">(24,3%)</span></td>
+                  <td className="px-4 py-3 text-orange-700 font-medium" colSpan={12}>+ Sosiale kostnader <span className="text-xs font-normal text-orange-500">(24,3%)</span></td>
                   <td className="px-4 py-3 text-right text-orange-700 font-semibold">{grandTotalTax.toFixed(0)} kr</td>
                   <td></td>
                 </tr>
                 <tr className="bg-slate-800 text-white font-bold border-t border-slate-700">
-                  <td className="px-4 py-3.5" colSpan={10}>Total kostnad</td>
+                  <td className="px-4 py-3.5" colSpan={12}>Total kostnad</td>
                   <td className="px-4 py-3.5 text-right text-lg">{grandTotalCost.toFixed(0)} kr</td>
                   <td></td>
                 </tr>
@@ -497,7 +509,7 @@ export default function Salary() {
         </div>
         {salaryData.length === 0 && <div className="py-16 text-center text-sm text-slate-400">Ingen data for denne perioden</div>}
         <p className="px-4 py-3 text-xs text-slate-400 border-t border-slate-100">
-          Natt-, søndag- og helligdagstimer er tillegg og kan overlappe vanlige timer. Pause er allerede trukket fra vanlige timer, søndag, helligdag, syk og ferie.
+          Natt-, søndag- og helligdagstimer er tillegg og kan overlappe vanlige timer. Pause er allerede trukket fra vanlige timer, søndag, helligdag, syk og ferie. Egenmelding og sykmelding inngår i Syk og vises også for seg.
         </p>
       </div>
     </div>
