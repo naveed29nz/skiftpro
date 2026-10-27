@@ -61,15 +61,18 @@ export default function EmployerSettingsCard({ orgId }) {
       }
     },
     enabled: !!orgId,
+    retry: false,
   });
   const existing = rows[0];
+  const certConfigured = postenConfig?.cert_configured === true;
   const postenChoice = postenOptionState({
     orgNumber: orgRows[0]?.org_number,
-    certConfigured: postenConfig?.cert_configured === true,
+    certConfigured,
   });
-  const providerValue = form.signing_provider === 'simple_otp' || !form.signing_provider
-    ? 'skiftpro'
-    : form.signing_provider;
+  const storedProvider = form.signing_provider || 'simple_otp';
+  const providerValue = certConfigured
+    ? (storedProvider === 'simple_otp' ? 'skiftpro' : storedProvider)
+    : (storedProvider === 'posten' || storedProvider === 'skiftpro' ? 'simple_otp' : storedProvider);
 
   useEffect(() => {
     if (existing) {
@@ -107,12 +110,16 @@ export default function EmployerSettingsCard({ orgId }) {
         fra_kl: String(row.fra_kl || '').trim(),
         til_kl: String(row.til_kl || '').trim(),
       }));
-    if (form.signing_provider === 'posten' && postenChoice.disabled) {
+    if (postenChoice.visible && form.signing_provider === 'posten' && postenChoice.disabled) {
       setSaved(false);
       return;
     }
+    const signingProvider = !certConfigured && form.signing_provider === 'posten'
+      ? 'simple_otp'
+      : form.signing_provider;
     saveMut.mutate({
       ...form,
+      signing_provider: signingProvider,
       ub_tillegg: ub,
       alminnelig_ukentlig_arbeidstid: Number(form.alminnelig_ukentlig_arbeidstid) || 37.5,
       feriepenger_prosent: Number(form.feriepenger_prosent) || 0,
@@ -248,15 +255,27 @@ export default function EmployerSettingsCard({ orgId }) {
           <Select value={providerValue} onValueChange={(value) => setField('signing_provider', value)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="skiftpro">SkiftPro (e-postkode)</SelectItem>
-              <SelectItem value="posten" disabled={postenChoice.disabled}>Posten Signering</SelectItem>
+              {certConfigured ? (
+                <SelectItem value="skiftpro">SkiftPro (e-postkode)</SelectItem>
+              ) : (
+                <SelectItem value="simple_otp">E-postkode</SelectItem>
+              )}
+              {postenChoice.visible && (
+                <SelectItem value="posten" disabled={postenChoice.disabled}>Posten Signering</SelectItem>
+              )}
               <SelectItem value="idura">BankID via Idura (ikke aktivert)</SelectItem>
               <SelectItem value="signicat">BankID via Signicat (ikke aktivert)</SelectItem>
             </SelectContent>
           </Select>
-          <PostenRegistrationNote />
-          {postenChoice.disabled && <p className="text-xs text-amber-700">{postenChoice.reason}</p>}
-          <p className="text-xs text-slate-400">SkiftPro (e-postkode) er standard. BankID via Idura eller Signicat brukes ikke før avtale.</p>
+          {postenChoice.visible && <PostenRegistrationNote />}
+          {postenChoice.visible && postenChoice.disabled && postenChoice.reason && (
+            <p className="text-xs text-amber-700">{postenChoice.reason}</p>
+          )}
+          <p className="text-xs text-slate-400">
+            {certConfigured
+              ? 'SkiftPro (e-postkode) er standard. BankID via Idura eller Signicat brukes ikke før avtale.'
+              : 'BankID brukes ikke før avtale med Idura eller Signicat og med Stø. Fødselsnummer hentes ikke.'}
+          </p>
         </div>
       </div>
 

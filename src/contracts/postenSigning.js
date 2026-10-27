@@ -19,19 +19,17 @@ const SIGNER_STATUS = {
 };
 
 export function postenOptionState({ orgNumber, certConfigured }) {
+  if (!certConfigured) {
+    return { visible: false, disabled: true, reason: "" };
+  }
   if (!orgNumberValid(orgNumber)) {
     return {
+      visible: true,
       disabled: true,
       reason: "Posten Signering krever gyldig organisasjonsnummer på kundekortet.",
     };
   }
-  if (!certConfigured) {
-    return {
-      disabled: true,
-      reason: "Posten Signering er ikke klart: virksomhetssertifikatet (Buypass eller Commfides) er ikke lagt inn på serveren.",
-    };
-  }
-  return { disabled: false, reason: "" };
+  return { visible: true, disabled: false, reason: "" };
 }
 
 export function postenRegistrationNote() {

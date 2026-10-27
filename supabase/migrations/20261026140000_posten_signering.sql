@@ -1,6 +1,9 @@
 -- Posten Signering portal jobs for employment contracts.
--- This file is not applied by the change that adds it. Apply it before
--- deploying the posten-signering-poll function.
+-- Safe to apply before the virksomhetssertifikat exists. It only adds
+-- nullable columns, an empty poll-state table, and functions nothing calls
+-- until a portal job is created. Existing rows, the e-mail code, and
+-- send_contract stay as they are. Re-running this file is safe.
+-- Schedule posten-signering-poll only after this has been applied.
 
 alter table public.employer_settings drop constraint if exists employer_settings_provider_check;
 alter table public.employer_settings

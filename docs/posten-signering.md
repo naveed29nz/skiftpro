@@ -8,8 +8,8 @@ This change does not call Posten and does not e-mail employees.
 
 ## How a contract is sent
 
-1. An admin sets **Signering** to Posten Signering. The choice is stored as `employer_settings.signing_provider = 'posten'`. `skiftpro` and the existing `simple_otp` both keep the e-mail code.
-2. Posten stays disabled, with a short explanation, when the customer card has no valid organization number or the certificate secrets below are missing.
+1. An admin sets **Signering** to Posten Signering. The choice is stored as `employer_settings.signing_provider = 'posten'`. `skiftpro` and the existing `simple_otp` both keep the e-mail code. Until the three secrets below are set, customers do not see Posten in that list. The list stays **E-postkode**, with BankID marked as not activated. Superadmin sees only “Posten Signering kommer snart.” Sending a contract still uses the e-mail code.
+2. Once the certificate is configured, Posten is offered. It stays disabled, with a short explanation, when the customer card has no valid organization number.
 3. Sending a draft creates one portal job with two signers, in order:
    - the employee, addressed by the fødselsnummer already stored encrypted on the worker card, notified by e-mail and SMS, signing for themselves
    - the employer admin from the customer card (admin e-mail and the phone on the card), notified by e-mail and SMS, signing on behalf of the company
@@ -29,8 +29,8 @@ The API cannot be used until all of the following exist. None of them are in thi
    - `POSTEN_SIGNERING_CERT_P12` — base64 of the `.p12` file
    - `POSTEN_SIGNERING_CERT_PASSWORD`
    - `POSTEN_SIGNERING_ENV` — `test` or `production`
-3. **Apply** `supabase/migrations/20261026140000_posten_signering.sql`. It is not applied by opening the pull request.
-4. **Deploy** `update-contract-status`, `sign-contract`, `posten-signering-config`, and `posten-signering-poll` after the migration.
+3. **Apply** `supabase/migrations/20261026140000_posten_signering.sql` whenever you like. It is idempotent and does not change existing signing. Nothing calls the new functions until a portal job is created, which cannot happen without the secrets.
+4. **Deploy** `update-contract-status`, `sign-contract`, `posten-signering-config`, and `posten-signering-poll`. Without the secrets these do not call Posten and do not change the e-mail code. Schedule the poll only after the migration.
 5. **Each customer** registers at [signering.posten.no/registrering](https://signering.posten.no/registrering) and links Zastek AS as behandler. Until Posten has authorized that link, a job returns `BROKER_NOT_AUTHORIZED`. The customer card also needs a valid organization number, an admin e-mail, and a phone. The employee needs fødselsnummer, e-mail, and an 8-digit mobile number.
 6. **Schedule** `posten-signering-poll` with the service-role key. Once a minute is safe. The function skips a sender until the `X-Next-permitted-poll-time` header, which is about 10 minutes in production when the queue is empty and a few seconds in test. Without the certificate the function returns `skipped` and does not call Posten.
 

@@ -44,6 +44,11 @@ export function sendsSkiftproInvite(choiceName) {
   return choiceName !== "posten";
 }
 
+/** A portal job is created only when the certificate secrets are present. */
+export function shouldSendViaPosten(decision) {
+  return decision?.name === "posten" && decision.active === true;
+}
+
 export function contractUsesPosten(signingProvider) {
   return signingProvider === "posten";
 }

@@ -1,11 +1,7 @@
-import "npm:jspdf@4.0.0";
 import { adminClient, handleOptions, json, requireUser } from "../_shared/auth.ts";
 import { sendSigningInvite } from "../_shared/contractMail.ts";
-import { buildSnapshotPdf } from "../_shared/contractPdf.ts";
-import { cancelPortalJob, createPortalJob } from "../_shared/posten/client.js";
-import { prepareEmploymentJob } from "../_shared/posten/parties.js";
-import { resolveSigningChoice } from "../_shared/posten/routing.js";
-import { loadPostenMaterial, mtlsFetch, signingEnv } from "../_shared/posten/transport.ts";
+import { signingEnv } from "../_shared/posten/env.ts";
+import { resolveSigningChoice, shouldSendViaPosten } from "../_shared/posten/routing.js";
 
 // Sending stays with an admin. The employee's signature can only be given
 // by the employee, with a one-time code, in sign-contract. A manager must
@@ -35,8 +31,7 @@ Deno.serve(async (req) => {
 
     if (action === "send") {
       const posten = await postenSendRoute(auth.client, contractId);
-      if (posten.route === "posten") {
-        if (!posten.active) return json({ error: posten.inactiveMessage }, 501);
+      if (shouldSendViaPosten(posten)) {
         return await sendViaPosten(auth, contractId);
       }
       const { data, error } = await auth.client.rpc("send_contract", { p_contract_id: contractId });
@@ -75,16 +70,23 @@ Deno.serve(async (req) => {
 });
 
 async function postenSendRoute(client: { from: (table: string) => any }, contractId: string) {
-  const contract = await client.from("contracts").select("org_id").eq("id", contractId).maybeSingle();
-  if (contract.error || !contract.data?.org_id) return { route: "skiftpro" as const };
-  const settings = await client.from("employer_settings").select("signing_provider").eq("org_id", contract.data.org_id).maybeSingle();
-  if (settings.error) return { route: "skiftpro" as const };
-  const decision = resolveSigningChoice(settings.data?.signing_provider, signingEnv());
-  if (decision.name !== "posten") return { route: "skiftpro" as const };
-  return { route: "posten" as const, active: decision.active, inactiveMessage: decision.inactiveMessage };
+  try {
+    const contract = await client.from("contracts").select("org_id").eq("id", contractId).maybeSingle();
+    if (contract.error || !contract.data?.org_id) return { name: "simple_otp" as const, active: true };
+    const settings = await client.from("employer_settings").select("signing_provider").eq("org_id", contract.data.org_id).maybeSingle();
+    if (settings.error) return { name: "simple_otp" as const, active: true };
+    return resolveSigningChoice(settings.data?.signing_provider, signingEnv());
+  } catch {
+    return { name: "simple_otp" as const, active: true };
+  }
 }
 
 async function sendViaPosten(auth: { client: { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data?: any; error?: { message: string } }> } }, contractId: string) {
+  const { cancelPortalJob, createPortalJob } = await import("../_shared/posten/client.js");
+  const { prepareEmploymentJob } = await import("../_shared/posten/parties.js");
+  const { buildSnapshotPdf } = await import("../_shared/contractPdf.ts");
+  const { loadPostenMaterial, mtlsFetch } = await import("../_shared/posten/transport.ts");
+  await import("npm:jspdf@4.0.0");
   const gate = await auth.client.rpc("assert_contract_sendable", { p_contract_id: contractId });
   if (gate.error) {
     const status = /bare admin/i.test(gate.error.message) ? 403 : 400;

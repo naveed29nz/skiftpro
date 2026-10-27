@@ -24,6 +24,7 @@ import {
   postenPublicConfig,
   resolveSigningChoice,
   sendsSkiftproInvite,
+  shouldSendViaPosten,
 } from "../../supabase/functions/_shared/posten/routing.js";
 
 const NIN = "15059000060";
@@ -96,6 +97,8 @@ test("skiftpro and simple_otp stay on the e-mail code, and posten does not fall 
   const posten = resolveSigningChoice("posten", {});
   assert.equal(posten.name, "posten");
   assert.equal(posten.active, false);
+  assert.equal(shouldSendViaPosten(posten), false);
+  assert.equal(shouldSendViaPosten(resolveSigningChoice("simple_otp", {})), false);
   assert.equal(sendsSkiftproInvite("simple_otp"), true);
   assert.equal(sendsSkiftproInvite("posten"), false);
   assert.equal(contractUsesPosten("simple_otp"), false);
@@ -106,6 +109,7 @@ test("skiftpro and simple_otp stay on the e-mail code, and posten does not fall 
     POSTEN_SIGNERING_ENV: "test",
   });
   assert.equal(ready.active, true);
+  assert.equal(shouldSendViaPosten(ready), true);
   assert.equal(postenPublicConfig({}).cert_configured, false);
   assert.equal(postenPublicConfig({
     POSTEN_SIGNERING_CERT_P12: "YQ==",
@@ -114,11 +118,18 @@ test("skiftpro and simple_otp stay on the e-mail code, and posten does not fall 
   }).environment, "production");
 });
 
-test("posten is disabled without an org number or a configured certificate", () => {
-  assert.equal(postenOptionState({ orgNumber: "", certConfigured: true }).disabled, true);
-  assert.match(postenOptionState({ orgNumber: "123", certConfigured: true }).reason, /organisasjonsnummer/);
-  assert.match(postenOptionState({ orgNumber: CUSTOMER_ORG, certConfigured: false }).reason, /virksomhetssertifikat/);
-  assert.equal(postenOptionState({ orgNumber: CUSTOMER_ORG, certConfigured: true }).disabled, false);
+test("posten stays hidden until the certificate is configured", () => {
+  const hidden = postenOptionState({ orgNumber: CUSTOMER_ORG, certConfigured: false });
+  assert.equal(hidden.visible, false);
+  assert.equal(hidden.reason, "");
+  assert.equal(postenOptionState({ orgNumber: "", certConfigured: false }).visible, false);
+  const missingOrg = postenOptionState({ orgNumber: "123", certConfigured: true });
+  assert.equal(missingOrg.visible, true);
+  assert.equal(missingOrg.disabled, true);
+  assert.match(missingOrg.reason, /organisasjonsnummer/);
+  const readyChoice = postenOptionState({ orgNumber: CUSTOMER_ORG, certConfigured: true });
+  assert.equal(readyChoice.visible, true);
+  assert.equal(readyChoice.disabled, false);
   assert.match(postenRegistrationNote(), /938291144/);
   assert.match(postenRegistrationNote(), /signering\.posten\.no/);
 });
