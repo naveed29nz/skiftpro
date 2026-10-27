@@ -335,6 +335,7 @@ export function workerFormProblems({
       signerName,
     });
     for (const gap of gaps) {
+      if (gap === 'Fødselsnummer' && problems.some((item) => item.startsWith('Fødselsnummer'))) continue;
       if (!problems.includes(gap)) problems.push(gap);
     }
   }

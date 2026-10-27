@@ -22,6 +22,7 @@ import {
   workerFormProblems,
 } from '@/contracts/employment';
 import { SHOW_RESULTAT } from '@/lib/featureFlags';
+import { toast } from '@/components/ui/use-toast';
 
 const COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'];
 
@@ -48,9 +49,12 @@ export default function WorkerForm({
   organizationName = '',
   organizationOrgNumber = '',
   signerName = null,
+  saveError = '',
 }) {
   const isNew = !worker?.id;
   const [problems, setProblems] = useState([]);
+  const [failure, setFailure] = useState('');
+  const [saving, setSaving] = useState(false);
   const footerRef = useRef(null);
   const [form, setForm] = useState({
     name: worker?.name || '',
@@ -131,35 +135,53 @@ export default function WorkerForm({
     return payload;
   };
 
-  const handleSubmit = (event, previewFirst = false) => {
-    event.preventDefault();
-    const payload = buildPayload();
-    const sendContract = Boolean(showWages && (previewFirst || form.send_arbeidsavtale));
-    const gaps = workerFormProblems({
-      worker: payload,
-      showWages,
-      sendContract,
-      settings: employerSettings,
-      workplace,
-      checklist,
-      organizationName,
-      organizationOrgNumber,
-      signerName,
-    });
-    setProblems(gaps);
-    if (gaps.length) {
-      requestAnimationFrame(() => footerRef.current?.scrollIntoView({ block: 'nearest' }));
-      return;
-    }
-    onSubmit({ ...payload, preview_first: previewFirst });
+  const reportFailure = (message) => {
+    const text = message || 'Lagring feilet';
+    setFailure(text);
+    toast({ title: 'Kunne ikke lagre den ansatte', description: text, variant: 'destructive' });
+    requestAnimationFrame(() => footerRef.current?.scrollIntoView({ block: 'nearest' }));
   };
+
+  const handleSubmit = async (event, previewFirst = false) => {
+    event.preventDefault();
+    setFailure('');
+    try {
+      const payload = buildPayload();
+      const sendContract = Boolean(showWages && (previewFirst || form.send_arbeidsavtale));
+      const gaps = workerFormProblems({
+        worker: payload,
+        showWages,
+        sendContract,
+        settings: employerSettings,
+        workplace,
+        checklist,
+        organizationName,
+        organizationOrgNumber,
+        signerName,
+      });
+      setProblems(gaps);
+      if (gaps.length) {
+        requestAnimationFrame(() => footerRef.current?.scrollIntoView({ block: 'nearest' }));
+        return;
+      }
+      setSaving(true);
+      await onSubmit({ ...payload, preview_first: previewFirst });
+    } catch (error) {
+      reportFailure(error?.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const banner = failure || saveError;
 
   const deadline = contractDeadlineState({ ...form, id: worker?.id }, []);
   const fullTime = Number(employerSettings?.alminnelig_ukentlig_arbeidstid || workplace?.full_time_hours_per_week || 37.5);
   const ekstrahjelp = isEkstrahjelp(form.ansettelsestype);
 
   return (
-    <form noValidate onSubmit={(event) => handleSubmit(event, false)} className="space-y-4">
+    <form noValidate onSubmit={(event) => handleSubmit(event, false)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label>Navn *</Label>
@@ -476,23 +498,29 @@ export default function WorkerForm({
           ))}
         </div>
       </div>
-      <div ref={footerRef} id="worker-form-actions" className="sticky bottom-0 z-10 -mx-1 space-y-3 border-t border-slate-100 bg-white px-1 pt-3">
-        {problems.length > 0 && (
+      </div>
+      <div ref={footerRef} id="worker-form-actions" className="shrink-0 space-y-3 border-t border-slate-100 bg-white pt-3">
+        {(problems.length > 0 || banner) && (
           <div className="rounded-lg bg-red-50 text-red-700 text-sm p-3" role="alert">
-            <p className="font-medium">{form.send_arbeidsavtale ? 'Kan ikke lagre eller sende avtalen ennå.' : 'Kan ikke lagre ennå.'}</p>
-            <ul className="list-disc pl-5 mt-1">
-              {problems.map((item) => <li key={item}>{item}</li>)}
-            </ul>
+            <p className="font-medium">
+              {banner ? 'Kunne ikke lagre.' : (form.send_arbeidsavtale ? 'Kan ikke lagre eller sende avtalen ennå.' : 'Kan ikke lagre ennå.')}
+            </p>
+            {banner && <p className="mt-1">{banner}</p>}
+            {problems.length > 0 && (
+              <ul className="list-disc pl-5 mt-1">
+                {problems.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            )}
           </div>
         )}
         <div className="flex justify-end gap-3 flex-wrap">
-          <Button type="button" variant="outline" onClick={onCancel}>Avbryt</Button>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>Avbryt</Button>
           {showWages && form.send_arbeidsavtale && (
-            <Button type="button" variant="outline" onClick={(event) => handleSubmit(event, true)}>
-              Forhåndsvis avtale
+            <Button type="button" variant="outline" disabled={saving} onClick={(event) => handleSubmit(event, true)}>
+              {saving ? 'Lagrer...' : 'Forhåndsvis avtale'}
             </Button>
           )}
-          <Button type="submit">{worker ? 'Oppdater' : 'Legg til ansatt'}</Button>
+          <Button type="submit" disabled={saving}>{saving ? 'Lagrer...' : (worker ? 'Oppdater' : 'Legg til ansatt')}</Button>
         </div>
       </div>
     </form>

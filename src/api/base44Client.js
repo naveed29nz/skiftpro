@@ -1,6 +1,7 @@
 import { supabase } from '@/api/supabaseClient';
 import { deleteMatchedNothing } from '@/contracts/contractActions';
 import { applyClauses, compileFilter, parseSort } from '@/api/entityQuery';
+import { isMissingColumnError, workerUpdateFallback } from '@/api/writeFallback';
 
 /**
  * Drop-in replacement for the Base44 client used across the app.
@@ -259,8 +260,7 @@ function isColumnPrivilegeError(error) {
 }
 
 function isMissingColumn(error) {
-  const message = error?.message || '';
-  return error?.code === '42703' || /column .* does not exist/i.test(message);
+  return isMissingColumnError(error);
 }
 
 function isMissingRpc(error) {
@@ -446,14 +446,26 @@ async function writeRow(table, payload, run) {
         }
       }
     }
-    if (table === 'workers' && isMissingColumn(error) && (
-      Object.prototype.hasOwnProperty.call(payload, 'break_after_hours')
-      || Object.prototype.hasOwnProperty.call(payload, 'break_length_minutes')
-    )) {
-      const next = { ...payload };
-      delete next.break_after_hours;
-      delete next.break_length_minutes;
-      return runRead(table, (columns) => run(columns, next));
+    if (table === 'workers') {
+      let body = payload;
+      let warning = '';
+      let lastError = error;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const fallback = workerUpdateFallback(body, lastError);
+        if (!fallback) break;
+        body = fallback.payload;
+        if (fallback.warning) warning = fallback.warning;
+        try {
+          const row = await runRead(table, (columns) => run(columns, body));
+          if (warning && row && typeof row === 'object') {
+            Object.defineProperty(row, '_saveWarning', { value: warning, enumerable: false });
+          }
+          return row;
+        } catch (retryError) {
+          lastError = retryError;
+        }
+      }
+      throw lastError;
     }
     if (table === 'organizations' && isMissingColumn(error) && (
       Object.prototype.hasOwnProperty.call(payload, 'employer_signatory_user_id')

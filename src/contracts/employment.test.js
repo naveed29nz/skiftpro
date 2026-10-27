@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { fodselsnummerValid } from './fodselsnummer.js';
 import { ansettelsestypePatch, contractTeamKey, customerAdminOptions, employerCompanyName, employerContractAddress, employerOrgNumber, employerSignerName, employmentHourValues, initialEmploymentHours, missingEmploymentFields, resolveEmployerSignerName, stillingsprosentText, storeFieldsForWorker, workerFormProblems } from './employment.js';
 
 const settings = {
@@ -156,6 +157,41 @@ test('saving a fast employee names the missing hours instead of blocking silentl
     sendContract: false,
     showWages: true,
   }).includes('Navn'), true);
+});
+
+test('Heider Iqbal ekstrahjelp with break 6/30 can be saved, and a bad fødselsnummer is named', () => {
+  const heider = {
+    name: 'Heider Iqbal',
+    position: 'Selger',
+    hourly_rate: 185,
+    email: 'haiqaiqbal07@gmail.com',
+    phone: '96873009',
+    ansettelsestype: 'tilkalling',
+    employment_percentage: null,
+    timer_per_uke: null,
+    timer_per_dag: null,
+    birth_date: '2007-06-13',
+    fodselsnummer: '13060782169',
+    address: 'bjørndalsjordet 33, 1270 oslo',
+    tiltredelsesdato: '2026-11-01',
+    break_after_hours: 6,
+    break_length_minutes: 30,
+    teams: ['team1'],
+  };
+  assert.equal(fodselsnummerValid('13060782169'), true);
+  assert.deepEqual(employmentHourValues('tilkalling', {
+    employment_percentage: null,
+    timer_per_uke: null,
+    timer_per_dag: null,
+  }), { employment_percentage: null, timer_per_uke: null, timer_per_dag: null });
+  const shared = { showWages: true, sendContract: true, settings, workplace, signerName: 'Kari' };
+  assert.deepEqual(workerFormProblems({ worker: heider, ...shared }), []);
+  const badNumber = workerFormProblems({
+    worker: { ...heider, fodselsnummer: '13060782160' },
+    ...shared,
+  });
+  assert.equal(badNumber.includes('Fødselsnummer må være 11 gyldige sifre'), true);
+  assert.equal(badNumber.includes('Fødselsnummer'), false);
 });
 
 test('contract team is the first team1–team10 value', () => {

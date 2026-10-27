@@ -15,6 +15,7 @@ import { releaseUpcomingShifts } from '@/utils/workerLifecycle';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { resolveEmployerSignerName, stillingsprosentText } from '@/contracts/employment';
 import { sameEmail } from '@/lib/emails';
+import { toast } from '@/components/ui/use-toast';
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', color: 'bg-purple-100 text-purple-700' },
@@ -222,6 +223,7 @@ export default function Workers() {
         if (!created?.ok) {
           const missing = Array.isArray(created?.missing) ? created.missing.join(', ') : 'Avtalen kunne ikke opprettes';
           setFormError(missing);
+          toast({ title: 'Kunne ikke lagre den ansatte', description: missing, variant: 'destructive' });
           setEditing(saved);
           setShowForm(true);
           return;
@@ -234,10 +236,15 @@ export default function Workers() {
         }
         await emailSigningLink(created.id, setPageNotice);
       }
+      if (saved?._saveWarning) {
+        toast({ title: 'Ansattkortet er lagret', description: saved._saveWarning });
+      }
       setShowForm(false);
       setEditing(null);
     } catch (err) {
-      setFormError(err.message || 'Lagring feilet');
+      const message = err.message || 'Lagring feilet';
+      setFormError(message);
+      toast({ title: 'Kunne ikke lagre den ansatte', description: message, variant: 'destructive' });
     }
   };
 
@@ -421,15 +428,14 @@ export default function Workers() {
       )}
 
       <Dialog open={showForm || !!editing} onOpenChange={v => { if (!v) { setShowForm(false); setEditing(null); setFormError(''); } }}>
-        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
+        <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
           <DialogHeader className="shrink-0">
             <DialogTitle>{editing ? 'Rediger ansatt' : 'Ny ansatt'}</DialogTitle>
           </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          {formError && <p className="text-sm text-red-600 mb-3">{formError}</p>}
           <WorkerForm
             key={`${editing?.id || 'new'}-${editing?.birth_date || ''}-${editing?.fodselsnummer ? 'fn' : ''}`}
             worker={editing}
+            saveError={formError}
             onSubmit={handleSubmit}
             onCancel={() => { setShowForm(false); setEditing(null); setFormError(''); }}
             teamNames={teamNames}
@@ -445,7 +451,6 @@ export default function Workers() {
               settings: employerRows[0] || null,
             }) : null}
           />
-          </div>
         </DialogContent>
       </Dialog>
 
