@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,10 +18,9 @@ import {
   employmentHourValues,
   initialEmploymentHours,
   isEkstrahjelp,
-  missingEmploymentFields,
   suggestPercentage,
+  workerFormProblems,
 } from '@/contracts/employment';
-import { fodselsnummerValid } from '@/contracts/fodselsnummer';
 import { SHOW_RESULTAT } from '@/lib/featureFlags';
 
 const COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'];
@@ -51,8 +50,8 @@ export default function WorkerForm({
   signerName = null,
 }) {
   const isNew = !worker?.id;
-  const [missing, setMissing] = useState([]);
-  const [breakError, setBreakError] = useState('');
+  const [problems, setProblems] = useState([]);
+  const footerRef = useRef(null);
   const [form, setForm] = useState({
     name: worker?.name || '',
     email: worker?.email || '',
@@ -135,32 +134,22 @@ export default function WorkerForm({
   const handleSubmit = (event, previewFirst = false) => {
     event.preventDefault();
     const payload = buildPayload();
-    const breakAfterSet = payload.break_after_hours != null;
-    const breakLengthSet = payload.break_length_minutes != null;
-    if (breakAfterSet !== breakLengthSet) {
-      setBreakError('Fyll ut både «Pause etter (timer)» og «Pausens lengde (min)», eller la begge stå tomme.');
+    const sendContract = Boolean(showWages && (previewFirst || form.send_arbeidsavtale));
+    const gaps = workerFormProblems({
+      worker: payload,
+      showWages,
+      sendContract,
+      settings: employerSettings,
+      workplace,
+      checklist,
+      organizationName,
+      organizationOrgNumber,
+      signerName,
+    });
+    setProblems(gaps);
+    if (gaps.length) {
+      requestAnimationFrame(() => footerRef.current?.scrollIntoView({ block: 'nearest' }));
       return;
-    }
-    setBreakError('');
-    if (showWages && String(form.fodselsnummer || '').trim() && !fodselsnummerValid(form.fodselsnummer)) {
-      setMissing(['Fødselsnummer må være 11 gyldige sifre']);
-      return;
-    }
-    if (showWages && form.send_arbeidsavtale) {
-      const gaps = missingEmploymentFields({
-        worker: payload,
-        settings: employerSettings,
-        workplace,
-        checklist,
-        showWages,
-        organizationName,
-        organizationOrgNumber,
-        signerName,
-      });
-      setMissing(gaps);
-      if (gaps.length) return;
-    } else {
-      setMissing([]);
     }
     onSubmit({ ...payload, preview_first: previewFirst });
   };
@@ -170,11 +159,11 @@ export default function WorkerForm({
   const ekstrahjelp = isEkstrahjelp(form.ansettelsestype);
 
   return (
-    <form onSubmit={(event) => handleSubmit(event, false)} className="space-y-4">
+    <form noValidate onSubmit={(event) => handleSubmit(event, false)} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label>Navn *</Label>
-          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Fullt navn" required />
+          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Fullt navn" />
         </div>
         <div className="space-y-1.5">
           <Label>Stilling</Label>
@@ -183,16 +172,16 @@ export default function WorkerForm({
         {showWages && (
         <div className="space-y-1.5">
           <Label>Timelønn *</Label>
-          <Input type="number" step="0.01" min="0" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: e.target.value })} placeholder="0.00" required />
+          <Input type="number" step="0.01" min="0" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: e.target.value })} placeholder="0.00" />
         </div>
         )}
         <div className={`space-y-1.5 ${ekstrahjelp ? 'opacity-60' : ''}`}>
           <Label title={ekstrahjelp ? EKSTRAHJELP_HOURS_HINT : STILLINGSPROSENT_HELP}>Stillingsprosent (%)</Label>
           <Input
             type="number"
-            min="1"
-            max="100"
-            step="0.01"
+            min={ekstrahjelp ? undefined : '1'}
+            max={ekstrahjelp ? undefined : '100'}
+            step={ekstrahjelp ? undefined : '0.01'}
             disabled={ekstrahjelp}
             value={form.employment_percentage}
             onChange={(e) => setForm({ ...form, employment_percentage: e.target.value })}
@@ -333,8 +322,8 @@ export default function WorkerForm({
               <div className="flex gap-2">
                 <Input
                   type="number"
-                  min="0"
-                  step="0.25"
+                  min={ekstrahjelp ? undefined : '0'}
+                  step={ekstrahjelp ? undefined : '0.25'}
                   disabled={ekstrahjelp}
                   value={form.timer_per_uke}
                   onChange={(e) => setForm({ ...form, timer_per_uke: e.target.value })}
@@ -357,8 +346,8 @@ export default function WorkerForm({
               <Label>Timer per dag (snitt)</Label>
               <Input
                 type="number"
-                min="0"
-                step="0.25"
+                min={ekstrahjelp ? undefined : '0'}
+                step={ekstrahjelp ? undefined : '0.25'}
                 disabled={ekstrahjelp}
                 value={form.timer_per_dag}
                 onChange={(e) => setForm({ ...form, timer_per_dag: e.target.value })}
@@ -410,14 +399,6 @@ export default function WorkerForm({
             </p>
           )}
 
-          {missing.length > 0 && (
-            <div className="rounded-lg bg-red-50 text-red-700 text-sm p-3">
-              <p className="font-medium">Avtalen kan ikke sendes ennå.</p>
-              <ul className="list-disc pl-5 mt-1">
-                {missing.map((item) => <li key={item}>{item}</li>)}
-              </ul>
-            </div>
-          )}
         </fieldset>
       )}
 
@@ -480,7 +461,6 @@ export default function WorkerForm({
             />
           </div>
         </div>
-        {breakError && <p className="text-xs text-red-600">{breakError}</p>}
       </div>
       <div className="space-y-1.5">
         <Label>Farge</Label>
@@ -496,14 +476,24 @@ export default function WorkerForm({
           ))}
         </div>
       </div>
-      <div className="flex justify-end gap-3 pt-2 flex-wrap">
-        <Button type="button" variant="outline" onClick={onCancel}>Avbryt</Button>
-        {showWages && form.send_arbeidsavtale && (
-          <Button type="button" variant="outline" onClick={(event) => handleSubmit(event, true)}>
-            Forhåndsvis avtale
-          </Button>
+      <div ref={footerRef} id="worker-form-actions" className="sticky bottom-0 z-10 -mx-1 space-y-3 border-t border-slate-100 bg-white px-1 pt-3">
+        {problems.length > 0 && (
+          <div className="rounded-lg bg-red-50 text-red-700 text-sm p-3" role="alert">
+            <p className="font-medium">{form.send_arbeidsavtale ? 'Kan ikke lagre eller sende avtalen ennå.' : 'Kan ikke lagre ennå.'}</p>
+            <ul className="list-disc pl-5 mt-1">
+              {problems.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </div>
         )}
-        <Button type="submit">{worker ? 'Oppdater' : 'Legg til ansatt'}</Button>
+        <div className="flex justify-end gap-3 flex-wrap">
+          <Button type="button" variant="outline" onClick={onCancel}>Avbryt</Button>
+          {showWages && form.send_arbeidsavtale && (
+            <Button type="button" variant="outline" onClick={(event) => handleSubmit(event, true)}>
+              Forhåndsvis avtale
+            </Button>
+          )}
+          <Button type="submit">{worker ? 'Oppdater' : 'Legg til ansatt'}</Button>
+        </div>
       </div>
     </form>
   );

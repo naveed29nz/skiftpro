@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ansettelsestypePatch, contractTeamKey, customerAdminOptions, employerCompanyName, employerContractAddress, employerOrgNumber, employerSignerName, employmentHourValues, initialEmploymentHours, missingEmploymentFields, resolveEmployerSignerName, stillingsprosentText, storeFieldsForWorker } from './employment.js';
+import { ansettelsestypePatch, contractTeamKey, customerAdminOptions, employerCompanyName, employerContractAddress, employerOrgNumber, employerSignerName, employmentHourValues, initialEmploymentHours, missingEmploymentFields, resolveEmployerSignerName, stillingsprosentText, storeFieldsForWorker, workerFormProblems } from './employment.js';
 
 const settings = {
   selskap: 'Kiosk AS',
@@ -103,6 +103,59 @@ test('an ekstrahjelp contract does not require stillingsprosent or average hours
   assert.equal(fastMissing.includes('Stillingsprosent'), true);
   assert.equal(fastMissing.includes('Timer per uke (snitt)'), true);
   assert.equal(fastMissing.includes('Timer per dag (snitt)'), true);
+});
+
+const workplace = { workplace_address: 'Gate 1', apningstid_fra: '07:00', apningstid_til: '23:00' };
+
+test('saving ekstrahjelp allows empty hours with or without a custom break', () => {
+  const ekstra = {
+    ...worker(['team1']),
+    ansettelsestype: 'tilkalling',
+    employment_percentage: null,
+    timer_per_uke: null,
+    timer_per_dag: null,
+    provetid_mnd: null,
+    break_after_hours: 6,
+    break_length_minutes: 30,
+  };
+  const shared = { showWages: true, sendContract: true, settings, workplace, signerName: 'Kari' };
+  assert.deepEqual(workerFormProblems({ worker: ekstra, ...shared }), []);
+  assert.deepEqual(workerFormProblems({
+    worker: { ...ekstra, break_after_hours: null, break_length_minutes: null },
+    ...shared,
+  }), []);
+  assert.equal(workerFormProblems({
+    worker: { ...ekstra, break_after_hours: 6, break_length_minutes: null },
+    ...shared,
+  }).some((item) => item.includes('Pause etter')), true);
+});
+
+test('saving a fast employee names the missing hours instead of blocking silently', () => {
+  const fast = {
+    ...worker(['team1']),
+    employment_percentage: null,
+    timer_per_uke: null,
+    timer_per_dag: null,
+    break_after_hours: null,
+    break_length_minutes: null,
+  };
+  const shared = { showWages: true, settings, workplace, signerName: 'Kari' };
+  const sending = workerFormProblems({ worker: fast, sendContract: true, ...shared });
+  assert.equal(sending.includes('Stillingsprosent'), true);
+  assert.equal(sending.includes('Timer per uke (snitt)'), true);
+  assert.equal(sending.includes('Timer per dag (snitt)'), true);
+  assert.deepEqual(workerFormProblems({ worker: fast, sendContract: false, ...shared }), []);
+  const withBreak = workerFormProblems({
+    worker: { ...worker(['team1']), break_after_hours: 6, break_length_minutes: 30 },
+    sendContract: true,
+    ...shared,
+  });
+  assert.deepEqual(withBreak, []);
+  assert.equal(workerFormProblems({
+    worker: { ...fast, name: '', hourly_rate: '' },
+    sendContract: false,
+    showWages: true,
+  }).includes('Navn'), true);
 });
 
 test('contract team is the first team1–team10 value', () => {
