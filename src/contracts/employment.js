@@ -291,6 +291,56 @@ export function missingEmploymentFields({
   return missing;
 }
 
+/**
+ * Reasons the employee card cannot be saved. Ekstrahjelp does not need
+ * stillingsprosent or average hours. A custom break needs both fields or neither.
+ * Contract gaps are included only when the card is about to send an agreement.
+ */
+export function workerFormProblems({
+  worker,
+  showWages = false,
+  sendContract = false,
+  settings = null,
+  workplace = null,
+  checklist = null,
+  organizationName = '',
+  organizationOrgNumber = '',
+  signerName = null,
+}) {
+  const problems = [];
+  if (!String(worker?.name || '').trim()) problems.push('Navn');
+  if (showWages) {
+    const rate = worker?.hourly_rate;
+    if (rate === '' || rate == null || !(Number(rate) > 0)) problems.push('Timelønn');
+    const email = String(worker?.email || '').trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) problems.push('E-post må være en gyldig adresse');
+    if (String(worker?.fodselsnummer || '').trim() && !fodselsnummerValid(worker.fodselsnummer)) {
+      problems.push('Fødselsnummer må være 11 gyldige sifre');
+    }
+  }
+  const afterSet = worker?.break_after_hours != null && worker.break_after_hours !== '';
+  const lengthSet = worker?.break_length_minutes != null && worker.break_length_minutes !== '';
+  if (afterSet !== lengthSet) {
+    problems.push('Fyll ut både «Pause etter (timer)» og «Pausens lengde (min)», eller la begge stå tomme.');
+  }
+  if (sendContract) {
+    const gaps = missingEmploymentFields({
+      worker,
+      settings,
+      workplace,
+      checklist,
+      showWages,
+      organizationName,
+      organizationOrgNumber,
+      signerName,
+    });
+    for (const gap of gaps) {
+      if (!problems.includes(gap)) problems.push(gap);
+    }
+  }
+  return problems;
+}
+
 export function isUnder18(birthDate, onDate) {
   if (!birthDate) return false;
   const birth = new Date(`${birthDate}T00:00:00`);

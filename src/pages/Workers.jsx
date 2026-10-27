@@ -421,11 +421,11 @@ export default function Workers() {
       )}
 
       <Dialog open={showForm || !!editing} onOpenChange={v => { if (!v) { setShowForm(false); setEditing(null); setFormError(''); } }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{editing ? 'Rediger ansatt' : 'Ny ansatt'}</DialogTitle>
           </DialogHeader>
-          <div className="overflow-y-auto flex-1 pr-1">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           {formError && <p className="text-sm text-red-600 mb-3">{formError}</p>}
           <WorkerForm
             key={`${editing?.id || 'new'}-${editing?.birth_date || ''}-${editing?.fodselsnummer ? 'fn' : ''}`}
