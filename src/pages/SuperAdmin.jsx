@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { customerAdminOptions, resolveEmployerSignerName, selectedCustomerAdminName } from '@/contracts/employment';
 import { signedCopyRecipient } from '../../supabase/functions/_shared/contractEmails.js';
+import { PostenAdminHint } from '@/components/contracts/PostenRegistrationNote';
 
 const STATUS_COLORS = {
   active: 'bg-emerald-100 text-emerald-700',
@@ -78,6 +79,7 @@ export function OrgForm({ org, profiles = [], workers = [], onSubmit, onCancel }
         <div className="space-y-1.5">
           <Label>Org.nummer</Label>
           <Input value={form.org_number} onChange={e => setForm({ ...form, org_number: e.target.value })} placeholder="123 456 789" />
+          <PostenAdminHint />
         </div>
         <div className="space-y-1.5">
           <Label>Admin e-post (for invitasjon)</Label>

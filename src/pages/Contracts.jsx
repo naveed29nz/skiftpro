@@ -10,6 +10,7 @@ import { FileText, Download, Send, Trash2, Eye, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from '@/components/ui/use-toast';
 import { contractStatus, contractType } from '@/contracts/labels';
+import { postenStatusText } from '@/contracts/postenSigning';
 import {
   contractPdfName,
   downloadBlob,
@@ -208,6 +209,9 @@ export default function Contracts({ fixture = null, wagesVisible = null, loadPdf
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           <Badge className={typeCfg.color}>{typeCfg.label}</Badge>
                           <Badge className={statusCfg.color}>{statusCfg.label}</Badge>
+                          {postenStatusText(contract) && (
+                            <span className="text-xs text-slate-500">{postenStatusText(contract)}</span>
+                          )}
                           {contract.overtime_hours > 0 && (
                             <span className="text-xs text-red-500 font-medium">+{contract.overtime_hours}t ekstratimer</span>
                           )}
@@ -295,6 +299,12 @@ export default function Contracts({ fixture = null, wagesVisible = null, loadPdf
                     <Badge className={contractStatus(viewingContract.status).color}>
                       {contractStatus(viewingContract.status).label}
                     </Badge>
+                    {postenStatusText(viewingContract) && (
+                      <p className="text-sm text-slate-600 mt-1">{postenStatusText(viewingContract)}</p>
+                    )}
+                    {viewingContract.posten_job_id && (
+                      <p className="text-xs text-slate-400 mt-1">Posten-oppdrag {viewingContract.posten_job_id}</p>
+                    )}
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Periode</p>

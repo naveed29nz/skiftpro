@@ -27,6 +27,13 @@ const PREVIEW_CONTRACTS = [
     reason: 'sesong',
     generated_automatically: false,
     approved_at: 'ikke-en-dato',
+    signing_provider: 'posten',
+    posten_job_id: 'job-preview',
+    posten_status: 'IN_PROGRESS',
+    posten_signer_status: [
+      { role: 'ansatt', order: 1, status: 'SIGNED' },
+      { role: 'arbeidsgiver', order: 2, status: 'WAITING' },
+    ],
   },
   {
     id: 'c-preview-ansatt',
