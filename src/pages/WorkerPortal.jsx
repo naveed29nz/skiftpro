@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { withShiftQuery } from '@/api/shiftQuery';
+import { useAuth } from '@/lib/AuthContext';
 import { Link } from 'react-router-dom';
 import { Clock, CalendarDays, Coins, Users, ArrowLeftRight, LayoutDashboard, LogOut, CheckSquare, FileText, ArrowLeft } from 'lucide-react';
 import AvailabilityCalendar from '@/components/worker/AvailabilityCalendar';
@@ -32,23 +34,29 @@ const TABS = [
 // Shifts-tab removed
 
 export default function WorkerPortal() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const { user: currentUser, isAuthenticated } = useAuth();
   const [todayStamp, setTodayStamp] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  useEffect(() => {
-    base44.auth.me().then(setCurrentUser).catch(() => {});
-  }, []);
-
-  const { data: workers = [] } = useQuery({ queryKey: ['workers'], queryFn: () => base44.entities.Worker.list() });
-  const { data: shifts = [] } = useQuery({ queryKey: ['shifts'], queryFn: () => base44.entities.Shift.list('-date', 5000) });
+  const { data: workers = [], isPending: workersPending } = useQuery({
+    queryKey: ['workers'],
+    queryFn: () => base44.entities.Worker.list(),
+    enabled: isAuthenticated,
+  });
+  const worker = workers.find((w) => sameEmail(w.email, currentUser?.email));
+  const orgId = worker?.org_id || null;
+  const shiftQuery = useQuery(withShiftQuery({
+    queryKey: ['shifts', orgId, 'portal'],
+    enabled: isAuthenticated && !!orgId,
+    queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 5000),
+  }));
+  const shifts = Array.isArray(shiftQuery.data) ? shiftQuery.data : [];
   const { data: holidays = [] } = useQuery({ queryKey: ['holidays'], queryFn: () => base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings'], queryFn: () => base44.entities.WorkplaceSetting.list() });
   const { data: stamps = [] } = useQuery({ queryKey: ['stamps'], queryFn: () => base44.entities.Stamp.list('-date', 100) });
 
   const workplaceSetting = wpSettings[0];
   const teamNames = useTeamNames();
-  const worker = workers.find((w) => sameEmail(w.email, currentUser?.email));
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
@@ -63,7 +71,7 @@ export default function WorkerPortal() {
     }
   }, [worker, stamps, today]);
 
-  if (!currentUser) return (
+  if (!currentUser || workersPending) return (
     <div className="flex justify-center py-20">
       <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
     </div>
@@ -78,6 +86,31 @@ export default function WorkerPortal() {
       </div>
     );
   }
+
+  if (!orgId) {
+    return (
+      <div className="text-center py-20">
+        <Clock className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+        <h2 className="text-lg font-semibold text-slate-700">Fant ikke butikken din</h2>
+        <p className="text-sm text-slate-400 mt-2">Be admin knytte deg til en butikk før vaktene kan vises.</p>
+      </div>
+    );
+  }
+
+  if (shiftQuery.isPending && !shiftQuery.data) return (
+    <div className="flex justify-center py-20">
+      <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+    </div>
+  );
+
+  if (shiftQuery.isError && !shiftQuery.data) return (
+    <div className="text-center py-20">
+      <Clock className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+      <h2 className="text-lg font-semibold text-slate-700">Kunne ikke hente vakter</h2>
+      <p className="text-sm text-slate-400 mt-2">Økten var ikke klar. Prøv igjen.</p>
+      <Button className="mt-4" onClick={() => shiftQuery.refetch()}>Prøv igjen</Button>
+    </div>
+  );
 
   const isAdmin = currentUser?.role === 'admin';
 

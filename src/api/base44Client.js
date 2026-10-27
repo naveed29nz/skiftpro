@@ -94,8 +94,11 @@ async function readInvokeError(error) {
 function toError(error, status = 400) {
   if (!error) return apiError('Forespørselen feilet', status);
   if (error instanceof Error && error.status) return error;
-  const err = apiError(error.message || 'Forespørselen feilet', error.code === 'PGRST116' ? 404 : status);
+  const message = error.message || 'Forespørselen feilet';
+  const authNotReady = typeof message === 'string' && message.includes('Authentication required');
+  const err = apiError(message, authNotReady ? 401 : (error.code === 'PGRST116' ? 404 : status));
   err.details = error;
+  if (authNotReady) err.authNotReady = true;
   return err;
 }
 
@@ -386,11 +389,11 @@ async function runRead(table, build) {
     if (result.error && isMissingColumn(result.error) && LEGACY_SAFE_COLUMNS[table]) {
       result = await build(LEGACY_SAFE_COLUMNS[table].join(','));
     }
-    if (result.error) throw toError(result.error);
+    if (result.error) throw toError(result.error, result.status);
     const overlay = await loadWageOverlay(table);
     return withWageColumns(table, result.data, overlay || []);
   }
-  if (result.error) throw toError(result.error);
+  if (result.error) throw toError(result.error, result.status);
   const overlay = await loadWageOverlay(table);
   return withWageColumns(table, result.data, overlay);
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { withShiftQuery } from '@/api/shiftQuery';
 import ManagerCharts from '@/components/dashboard/ManagerCharts';
 import { calcHours, getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { shiftLabelName } from '@/utils/shiftLabels';
@@ -23,7 +24,6 @@ const PAYROLL_TAX = 0.141;
 export default function Dashboard() {
   const [currentUser, setCurrentUser] = useState(null);
   const [myWorker, setMyWorker] = useState(null);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [mobileView, setMobileView] = useState(() => localStorage.getItem('dashMobileView') === 'true');
 
@@ -53,13 +53,11 @@ export default function Dashboard() {
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
   const weekEndStr = format(endOfWeek(weekStart, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-  const { data: shifts = [], refetch } = useQuery({
-    queryKey: ['shifts-dashboard', myWorker?.id, weekStartStr, refreshKey],
-    queryFn: () => myWorker
-      ? base44.entities.Shift.filter({ worker_id: myWorker.id, date: { $gte: weekStartStr, $lte: weekEndStr } }, 'date', 50)
-      : [],
-    enabled: !!myWorker,
-  });
+  const { data: shifts = [], refetch } = useQuery(withShiftQuery({
+    queryKey: ['shifts-dashboard', myWorker?.org_id, myWorker?.id, weekStartStr],
+    queryFn: () => base44.entities.Shift.filter({ worker_id: myWorker.id, date: { $gte: weekStartStr, $lte: weekEndStr } }, 'date', 50),
+    enabled: !!myWorker?.id,
+  }));
 
   const { data: wpSettings = [] } = useQuery({
     queryKey: ['workplace-settings', orgId],
@@ -69,7 +67,11 @@ export default function Dashboard() {
   });
 
   const { data: allWorkers = [] } = useQuery({ queryKey: ['workers', orgId], queryFn: () => orgId ? base44.entities.Worker.filter({ org_id: orgId }) : base44.entities.Worker.list(), enabled: isManagerOrAdmin });
-  const { data: allShifts = [] } = useQuery({ queryKey: ['shifts', orgId], queryFn: () => orgId ? base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000) : base44.entities.Shift.list('-date', 1000), enabled: isManagerOrAdmin });
+  const { data: allShifts = [] } = useQuery(withShiftQuery({
+    queryKey: ['shifts', orgId],
+    queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000),
+    enabled: isManagerOrAdmin && !!orgId,
+  }));
   const { data: holidays = [] } = useQuery({ queryKey: ['holidays', orgId], queryFn: () => orgId ? base44.entities.Holiday.filter({ org_id: orgId }) : base44.entities.Holiday.list(), enabled: isManagerOrAdmin });
   const { data: monthlyResults = [] } = useQuery({ queryKey: ['monthly-results', orgId], queryFn: () => orgId ? base44.entities.MonthlyResult.filter({ org_id: orgId }) : base44.entities.MonthlyResult.list(), enabled: isManagerOrAdmin });
 
@@ -178,7 +180,7 @@ export default function Dashboard() {
               <p className="text-sm text-slate-400">Du har ingen kommende vakter i dag.</p>
             </div>
             <button
-              onClick={() => { setRefreshKey(k => k + 1); refetch(); }}
+              onClick={() => refetch()}
               className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
             >
               <RefreshCw className="w-4 h-4" />

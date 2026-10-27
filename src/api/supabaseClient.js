@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { guardedSupabaseFetch } from '@/api/shiftQuery';
 
 const PASSWORD_SETUP_TYPES = new Set(['recovery', 'invite', 'signup']);
 const PASSWORD_SETUP_KEY = 'skiftpro.needsNewPassword';
@@ -97,6 +98,11 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+    },
+    global: {
+      // cache: 'no-store' is applied inside guardedSupabaseFetch. Safari can
+      // replay a cached GET 200 [] after the Authorization header changes.
+      fetch: (input, init) => guardedSupabaseFetch(input, init, { anonKey }),
     },
   }
 );
