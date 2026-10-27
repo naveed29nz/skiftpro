@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { withShiftQuery } from '@/api/shiftQuery';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, Download, ChevronDown, ChevronUp, FileText, FileSpreadsheet } from 'lucide-react';
@@ -62,7 +63,11 @@ export default function Salary() {
 
   const { orgId } = useOrg();
   const { data: workers = [], isPending: workersPending } = useQuery({ queryKey: ['workers', orgId], queryFn: () => orgId ? base44.entities.Worker.filter({ org_id: orgId }) : base44.entities.Worker.list(), enabled: !!orgId });
-  const { data: shifts = [] } = useQuery({ queryKey: ['shifts', orgId], queryFn: () => orgId ? base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000) : base44.entities.Shift.list('-date', 1000), enabled: !!orgId });
+  const { data: shifts = [] } = useQuery(withShiftQuery({
+    queryKey: ['shifts', orgId],
+    enabled: !!orgId,
+    queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000),
+  }));
   const { data: holidays = [] } = useQuery({ queryKey: ['holidays', orgId], queryFn: () => orgId ? base44.entities.Holiday.filter({ org_id: orgId }) : base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings', orgId], queryFn: () => orgId ? base44.entities.WorkplaceSetting.filter({ org_id: orgId }) : base44.entities.WorkplaceSetting.list(), staleTime: 0 });
   const { data: payrollLocks = [] } = useQuery({

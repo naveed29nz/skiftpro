@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { withShiftQuery } from '@/api/shiftQuery';
 import { ScrollText, UserPlus, CalendarPlus, FileText, Building2 } from 'lucide-react';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { format } from 'date-fns';
@@ -16,7 +17,11 @@ export default function SuperAdminAuditLog() {
 
   const { data: orgs = [] } = useQuery({ queryKey: ['organizations'], queryFn: () => base44.entities.Organization.list() });
   const { data: workers = [] } = useQuery({ queryKey: ['sa-workers'], queryFn: () => base44.entities.Worker.list('-created_date', 100) });
-  const { data: shifts = [] } = useQuery({ queryKey: ['sa-shifts'], queryFn: () => base44.entities.Shift.list('-created_date', 100) });
+  const { data: shifts = [] } = useQuery(withShiftQuery({
+    queryKey: ['sa-shifts'],
+    enabled: !!user,
+    queryFn: () => base44.entities.Shift.list('-created_date', 100),
+  }));
   const { data: contracts = [] } = useQuery({ queryKey: ['sa-contracts'], queryFn: () => base44.entities.Contract.list('-created_date', 50) });
 
   if (!user) return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" /></div>;

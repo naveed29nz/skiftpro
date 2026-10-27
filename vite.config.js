@@ -10,7 +10,9 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
 const NAVY = '#172554'
 
 // Supabase REST, auth, storage, and functions stay on the network.
-// NetworkOnly does not write a Cache Storage entry.
+// NetworkOnly does not write a Cache Storage entry. The service worker is
+// not what made employee shifts stick on []. Safari's HTTP cache can still
+// replay a GET, so the Supabase client also sends cache: 'no-store'.
 const supabaseNetworkOnly = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].map((method) => ({
   urlPattern: /^https:\/\/(?:[a-z0-9-]+\.)?supabase\.co\//i,
   handler: 'NetworkOnly',

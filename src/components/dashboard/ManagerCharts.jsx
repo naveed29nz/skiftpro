@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { withShiftQuery } from '@/api/shiftQuery';
 import { format, startOfMonth, endOfMonth, endOfWeek, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
 import { nb } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
@@ -38,7 +39,11 @@ export default function ManagerCharts() {
   const monthEnd = format(endOfMonth(month), 'yyyy-MM-dd');
 
   const { data: workers = [] } = useQuery({ queryKey: ['workers', orgId], queryFn: () => orgId ? base44.entities.Worker.filter({ org_id: orgId }) : base44.entities.Worker.list() });
-  const { data: allShifts = [] } = useQuery({ queryKey: ['shifts', orgId], queryFn: () => orgId ? base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000) : base44.entities.Shift.list('-date', 1000) });
+  const { data: allShifts = [] } = useQuery(withShiftQuery({
+    queryKey: ['shifts', orgId],
+    enabled: !!orgId,
+    queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000),
+  }));
   const { data: holidays = [] } = useQuery({ queryKey: ['holidays', orgId], queryFn: () => orgId ? base44.entities.Holiday.filter({ org_id: orgId }) : base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings', orgId], queryFn: () => orgId ? base44.entities.WorkplaceSetting.filter({ org_id: orgId }) : base44.entities.WorkplaceSetting.list(), staleTime: 0 });
 

@@ -4,6 +4,7 @@ import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { DragDropContext, Droppable, Draggable, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { withShiftQuery } from '@/api/shiftQuery';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, Plus, Copy, GripVertical, ArrowUpDown, Trash2, CheckSquare, Send, Eye, EyeOff, Clock } from 'lucide-react';
@@ -255,12 +256,11 @@ export default function Timesheet() {
       ? base44.entities.Worker.filter({ org_id: orgId })
       : base44.entities.Worker.list(),
   });
-  const { data: shifts = [] } = useQuery({
-    queryKey: ['shifts', weekStartStr, orgId],
-    queryFn: () => orgId
-      ? base44.entities.Shift.filter({ org_id: orgId, date: { $gte: weekStartStr, $lte: weekEndStr } }, 'date', 200)
-      : base44.entities.Shift.filter({ date: { $gte: weekStartStr, $lte: weekEndStr } }, 'date', 200),
-  });
+  const { data: shifts = [] } = useQuery(withShiftQuery({
+    queryKey: ['shifts', orgId, weekStartStr],
+    enabled: !!orgId,
+    queryFn: () => base44.entities.Shift.filter({ org_id: orgId, date: { $gte: weekStartStr, $lte: weekEndStr } }, 'date', 200),
+  }));
   const { data: wpSettings = [], refetch: refetchSettings } = useQuery({ queryKey: ['workplace-settings'], queryFn: () => base44.entities.WorkplaceSetting.list() });
   const wp = orgId ? wpSettings.find(s => s.org_id === orgId) : wpSettings[0];
   const hoursOf = (shift) => calcHours(shift, wp, shift?.team, workers.find((worker) => worker.id === shift.worker_id));

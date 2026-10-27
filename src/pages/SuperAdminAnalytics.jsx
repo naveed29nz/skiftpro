@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { withShiftQuery } from '@/api/shiftQuery';
 import { BarChart, Users, CalendarDays, FileText, CheckSquare, Ticket, Banknote, Activity } from 'lucide-react';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 
@@ -24,7 +25,11 @@ export default function SuperAdminAnalytics() {
 
   const { data: orgs = [] } = useQuery({ queryKey: ['organizations'], queryFn: () => base44.entities.Organization.list() });
   const { data: workers = [] } = useQuery({ queryKey: ['sa-workers'], queryFn: () => base44.entities.Worker.list() });
-  const { data: shifts = [] } = useQuery({ queryKey: ['sa-shifts'], queryFn: () => base44.entities.Shift.list('-date', 1000) });
+  const { data: shifts = [] } = useQuery(withShiftQuery({
+    queryKey: ['sa-shifts'],
+    enabled: !!user,
+    queryFn: () => base44.entities.Shift.list('-date', 1000),
+  }));
   const { data: contracts = [] } = useQuery({ queryKey: ['sa-contracts'], queryFn: () => base44.entities.Contract.list('-created_date', 500) });
   const { data: tasks = [] } = useQuery({ queryKey: ['sa-tasks'], queryFn: () => base44.entities.Task.list('-created_date', 500) });
   const { data: lodds = [] } = useQuery({ queryKey: ['sa-loddtelling'], queryFn: () => base44.entities.Loddtelling.list('-uke_nummer', 500) });

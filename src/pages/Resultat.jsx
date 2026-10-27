@@ -8,6 +8,8 @@ import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { findWorkerByEmail } from '@/lib/workerLookup';
+import { useOrg } from '@/hooks/useOrg';
+import { withShiftQuery } from '@/api/shiftQuery';
 
 const PAYROLL_TAX = 0.141;
 const MONTHS = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
@@ -194,9 +196,14 @@ export default function Resultat() {
     }).catch(() => {});
   }, []);
 
+  const { orgId } = useOrg();
   const { data: results = [] } = useQuery({ queryKey: ['monthly-results'], queryFn: () => base44.entities.MonthlyResult.list(), placeholderData: (prev) => prev });
   const { data: workers = [] } = useQuery({ queryKey: ['workers'], queryFn: () => base44.entities.Worker.list() });
-  const { data: shifts = [] } = useQuery({ queryKey: ['shifts'], queryFn: () => base44.entities.Shift.list('-date', 1000) });
+  const { data: shifts = [] } = useQuery(withShiftQuery({
+    queryKey: ['shifts', orgId],
+    enabled: !!orgId,
+    queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000),
+  }));
   const { data: holidays = [] } = useQuery({ queryKey: ['holidays'], queryFn: () => base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings'], queryFn: () => base44.entities.WorkplaceSetting.list() });
 

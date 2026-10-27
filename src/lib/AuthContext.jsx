@@ -1,6 +1,19 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { supabase, consumeAuthCallback, subscribePasswordSetup, isPasswordSetupRequired, clearPasswordSetup } from '@/api/supabaseClient';
+import { queryClientInstance } from '@/lib/query-client';
+
+function refreshShiftQueries() {
+  queryClientInstance.invalidateQueries({ queryKey: ['shifts'] });
+  queryClientInstance.invalidateQueries({ queryKey: ['shifts-dashboard'] });
+  queryClientInstance.invalidateQueries({ queryKey: ['sa-shifts'] });
+}
+
+function dropShiftQueries() {
+  queryClientInstance.removeQueries({ queryKey: ['shifts'] });
+  queryClientInstance.removeQueries({ queryKey: ['shifts-dashboard'] });
+  queryClientInstance.removeQueries({ queryKey: ['sa-shifts'] });
+}
 
 const AuthContext = createContext();
 
@@ -80,12 +93,17 @@ export const AuthProvider = ({ children }) => {
       if (event === 'PASSWORD_RECOVERY') {
         setNeedsNewPassword(true);
       }
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        // Defer so the auth callback returns before the refetch calls getSession.
+        queueMicrotask(refreshShiftQueries);
+      }
       if (event === 'SIGNED_OUT') {
         clearPasswordSetup();
         setUser(null);
         setIsAuthenticated(false);
         setNeedsNewPassword(false);
         setAuthError({ type: 'auth_required', message: 'Authentication required' });
+        dropShiftQueries();
       }
     });
 

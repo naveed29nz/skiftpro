@@ -9,6 +9,8 @@ import ShiftForm from '@/components/shifts/ShiftForm';
 import { format } from 'date-fns';
 import { nb } from 'date-fns/locale';
 import { flushNotifications } from '@/utils/notify';
+import { useOrg } from '@/hooks/useOrg';
+import { withShiftQuery } from '@/api/shiftQuery';
 import { calcHours } from '@/utils/payCalc';
 import { shiftLabelName } from '@/utils/shiftLabels';
 
@@ -17,16 +19,18 @@ export default function Shifts() {
   const [editing, setEditing] = useState(null);
   const [filterWorker, setFilterWorker] = useState('all');
   const queryClient = useQueryClient();
+  const { orgId } = useOrg();
 
   const { data: workers = [] } = useQuery({
     queryKey: ['workers'],
     queryFn: () => base44.entities.Worker.list(),
   });
 
-  const { data: shifts = [], isLoading } = useQuery({
-    queryKey: ['shifts'],
-    queryFn: () => base44.entities.Shift.list('-date', 200),
-  });
+  const { data: shifts = [], isPending, isError, refetch } = useQuery(withShiftQuery({
+    queryKey: ['shifts', orgId, 'oversikt'],
+    enabled: !!orgId,
+    queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 200),
+  }));
   const { data: wpSettings = [] } = useQuery({
     queryKey: ['workplace-settings'],
     queryFn: () => base44.entities.WorkplaceSetting.list(),
@@ -54,7 +58,13 @@ export default function Shifts() {
 
   const filtered = filterWorker === 'all' ? shifts : shifts.filter(s => s.worker_id === filterWorker);
 
-  if (isLoading) return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" /></div>;
+  if (isPending) return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" /></div>;
+  if (isError && shifts.length === 0) return (
+    <div className="text-center py-20">
+      <p className="text-sm text-slate-600">Kunne ikke hente vakter.</p>
+      <Button className="mt-4" onClick={() => refetch()}>Prøv igjen</Button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
