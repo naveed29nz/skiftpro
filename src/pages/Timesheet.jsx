@@ -21,6 +21,19 @@ import { flushNotifications } from '@/utils/notify';
 import { toast } from '@/components/ui/use-toast';
 import ShiftTouchSheet from '@/components/timesheet/ShiftTouchSheet';
 import { isShiftDropTarget, sameShiftCell, shiftCopyRecord, shiftMoveFields } from '@/timesheet/placeShift';
+import {
+  applyWorkerOrder,
+  isMissingOrderTable,
+  isUniqueViolation,
+  mergeWorkerOrder,
+  moveRowIds,
+  normalizeIdList,
+  persistedWorkerIds,
+  readLocalWorkerOrder,
+  seedOrderFromLocal,
+  teamOrderKey,
+  writeLocalWorkerOrder,
+} from '@/timesheet/workerOrder';
 import { groupShiftVisible } from '@/timesheet/groupShifts';
 import { isCoarsePointer, isTouchLikePointer, pressMovedPast, SHIFT_LONG_PRESS_MS, shiftGestureIsTouch } from '@/timesheet/touchShift';
 import { calcHours } from '@/utils/payCalc';
@@ -181,9 +194,9 @@ export default function Timesheet() {
   const [showCopy, setShowCopy] = useState(false);
   const [viewMode, setViewMode] = useState('uke'); // 'uke' | 'dag'
   const [selectedDay, setSelectedDay] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [workerOrder, setWorkerOrder] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('timesheet_worker_order') || '[]'); } catch { return []; }
-  });
+  const [localOrder, setLocalOrder] = useState(() => readLocalWorkerOrder(typeof localStorage === 'undefined' ? null : localStorage));
+  const [draftOrders, setDraftOrders] = useState({});
+  const seedAttempted = useRef(new Set());
   const [sortByLabel, setSortByLabel] = useState(false);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [selectedCols, setSelectedCols] = useState(new Set());
@@ -223,6 +236,19 @@ export default function Timesheet() {
   }, [myTeams, teamDefaultSet, user]);
 
   const { orgId } = useOrg();
+  const { data: workerOrders } = useQuery({
+    queryKey: ['timesheet-worker-order', orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      try {
+        const rows = await base44.entities.TimesheetWorkerOrder.filter({ org_id: orgId });
+        return { available: true, rows: rows || [] };
+      } catch (error) {
+        if (isMissingOrderTable(error)) return { available: false, rows: [] };
+        throw error;
+      }
+    },
+  });
   const { data: workers = [] } = useQuery({
     queryKey: ['workers', orgId],
     queryFn: () => orgId
@@ -315,17 +341,57 @@ export default function Timesheet() {
   const weekShifts = shifts.filter(s => s.date >= weekStartStr && s.date <= weekEndStr && s.status !== 'cancelled');
 
   useEffect(() => {
-    if (workers.length > 0) {
-      setWorkerOrder(prev => {
-        const existing = prev.filter(id => workers.find(w => w.id === id));
-        const newIds = workers.filter(w => !prev.includes(w.id)).map(w => w.id);
-        if (newIds.length === 0) return prev; // no change, don't overwrite
-        const next = [...existing, ...newIds];
-        localStorage.setItem('timesheet_worker_order', JSON.stringify(next));
-        return next;
-      });
+    if (!workerOrders || workerOrders.available) return;
+    if (workers.length === 0) return;
+    setLocalOrder((prev) => {
+      if (prev.length === 0) return prev;
+      const next = mergeWorkerOrder(workers.map((worker) => worker.id), prev);
+      if (next.length === prev.length && next.every((id, index) => id === prev[index])) return prev;
+      writeLocalWorkerOrder(typeof localStorage === 'undefined' ? null : localStorage, next);
+      return next;
+    });
+  }, [workers, workerOrders]);
+
+  const orderKey = teamOrderKey(filterTeam);
+  const manualOrderIds = useMemo(() => {
+    const ids = activeWorkers.map((worker) => worker.id);
+    if (draftOrders[orderKey]) return mergeWorkerOrder(ids, draftOrders[orderKey]);
+    if (workerOrders?.available) {
+      const row = (workerOrders.rows || []).find((item) => item.team_key === orderKey);
+      if (row) return mergeWorkerOrder(ids, normalizeIdList(row.worker_ids));
+      return seedOrderFromLocal(ids, localOrder) || ids;
     }
-  }, [workers]);
+    return localOrder.length > 0 ? mergeWorkerOrder(ids, localOrder) : ids;
+  }, [activeWorkers, draftOrders, orderKey, workerOrders, localOrder]);
+
+  const orderedActiveWorkers = useMemo(
+    () => applyWorkerOrder(activeWorkers, manualOrderIds),
+    [activeWorkers, manualOrderIds],
+  );
+
+  const activeWorkerKey = activeWorkers.map((worker) => worker.id).join('\0');
+  useEffect(() => {
+    if (!orgId || !canManageShifts || !workerOrders?.available) return;
+    if ((workerOrders.rows || []).some((row) => row.team_key === orderKey)) return;
+    const ids = activeWorkerKey ? activeWorkerKey.split('\0') : [];
+    if (ids.length === 0 || !ids[0]) return;
+    const seeded = seedOrderFromLocal(ids, localOrder);
+    if (!seeded) return;
+    const attempt = `${orgId}:${orderKey}`;
+    if (seedAttempted.current.has(attempt)) return;
+    seedAttempted.current.add(attempt);
+    base44.entities.TimesheetWorkerOrder.create({
+      org_id: orgId,
+      team_key: orderKey,
+      worker_ids: seeded,
+    }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['timesheet-worker-order', orgId] });
+    }).catch((error) => {
+      if (isUniqueViolation(error)) {
+        queryClient.invalidateQueries({ queryKey: ['timesheet-worker-order', orgId] });
+      }
+    });
+  }, [orgId, canManageShifts, workerOrders, orderKey, activeWorkerKey, localOrder, queryClient]);
 
   const displayWorkers = useMemo(() => {
     const base = filterWorker === 'all' ? activeWorkers : activeWorkers.filter(w => w.id === filterWorker);
@@ -340,14 +406,8 @@ export default function Timesheet() {
         const bLabel = bLabels[0] || '';
         return (LABEL_SORT_ORDER[aLabel] ?? 99) - (LABEL_SORT_ORDER[bLabel] ?? 99);
       });
-    } else if (workerOrder.length > 0) {
-      sortedBase = [...base].sort((a, b) => {
-        const ai = workerOrder.indexOf(a.id);
-        const bi = workerOrder.indexOf(b.id);
-        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-      });
     } else {
-      sortedBase = base;
+      sortedBase = applyWorkerOrder(base, manualOrderIds);
     }
 
     // Bare vis virtuelle rader (tidligere ansatte / ledige) når ingen spesifikk ansatt er filtrert
@@ -407,7 +467,7 @@ export default function Timesheet() {
       });
     }
     return [...sortedBase, ...inactiveWithShifts, ...virtuals];
-  }, [filterWorker, activeWorkers, workerOrder, sortByLabel, weekShifts, workers, teamFilteredWorkers, filterTeam]);
+  }, [filterWorker, activeWorkers, manualOrderIds, sortByLabel, weekShifts, workers, teamFilteredWorkers, filterTeam]);
 
   const getShiftsForCell = (workerId, day) => {
     const dayStr = format(day, 'yyyy-MM-dd');
@@ -765,13 +825,58 @@ export default function Timesheet() {
     if (!destination) return;
 
     if (type === 'ROW') {
-      if (sortByLabel) return;
+      if (!canManageShifts || sortByLabel) return;
       if (source.index === destination.index) return;
-      const ids = displayWorkers.map(w => w.id);
-      const [moved] = ids.splice(source.index, 1);
-      ids.splice(destination.index, 0, moved);
-      setWorkerOrder(ids);
-      localStorage.setItem('timesheet_worker_order', JSON.stringify(ids));
+      const visibleIds = moveRowIds(displayWorkers.map(w => w.id), source.index, destination.index);
+      const ids = persistedWorkerIds(visibleIds, displayWorkers.filter(w => w.isVirtual).map(w => w.id));
+      if (!workerOrders?.available || !orgId) {
+        const stored = moveRowIds(displayWorkers.map(w => w.id), source.index, destination.index);
+        setLocalOrder(stored);
+        writeLocalWorkerOrder(typeof localStorage === 'undefined' ? null : localStorage, stored);
+        return;
+      }
+      setDraftOrders((prev) => ({ ...prev, [orderKey]: ids }));
+      const existing = (workerOrders.rows || []).find((row) => row.team_key === orderKey);
+      const write = existing?.id
+        ? base44.entities.TimesheetWorkerOrder.update(existing.id, { worker_ids: ids })
+        : base44.entities.TimesheetWorkerOrder.create({ org_id: orgId, team_key: orderKey, worker_ids: ids });
+      write.then((saved) => {
+        queryClient.setQueryData(['timesheet-worker-order', orgId], (current) => {
+          if (!current?.available) return current;
+          const rows = (current.rows || []).filter((row) => row.team_key !== orderKey);
+          rows.push({ ...(existing || {}), ...(saved || {}), org_id: orgId, team_key: orderKey, worker_ids: ids });
+          return { available: true, rows };
+        });
+        setDraftOrders((prev) => {
+          const next = { ...prev };
+          delete next[orderKey];
+          return next;
+        });
+      }).catch(async (error) => {
+        const clearDraft = () => setDraftOrders((prev) => {
+          const next = { ...prev };
+          delete next[orderKey];
+          return next;
+        });
+        try {
+          if (isUniqueViolation(error)) {
+            const fresh = await base44.entities.TimesheetWorkerOrder.filter({ org_id: orgId, team_key: orderKey });
+            const row = fresh?.[0];
+            if (row?.id) {
+              await base44.entities.TimesheetWorkerOrder.update(row.id, { worker_ids: ids });
+              queryClient.invalidateQueries({ queryKey: ['timesheet-worker-order', orgId] });
+              clearDraft();
+              return;
+            }
+          }
+        } catch (retryError) {
+          clearDraft();
+          toast({ title: 'Kunne ikke lagre rekkefølgen', description: retryError.message || 'Prøv igjen.', variant: 'destructive' });
+          return;
+        }
+        clearDraft();
+        toast({ title: 'Kunne ikke lagre rekkefølgen', description: error.message || 'Prøv igjen.', variant: 'destructive' });
+      });
       return;
     }
     if (type === 'SHIFT') {
@@ -1028,7 +1133,7 @@ export default function Timesheet() {
           <SelectTrigger className="w-48"><SelectValue placeholder="Alle ansatte" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Alle ansatte</SelectItem>
-            {activeWorkers.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+            {orderedActiveWorkers.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
           </SelectContent>
         </Select>
         </div>
@@ -1256,7 +1361,7 @@ export default function Timesheet() {
                        const isReadOnly = worker.isInactive || worker.isFormer;
                        const isLedigRow = worker.isLedig;
                        return (
-                         <Draggable key={worker.id} draggableId={worker.id} index={index} isDragDisabled={!!worker.isVirtual || (isMobile && !mobileSelectMode)}>
+                         <Draggable key={worker.id} draggableId={worker.id} index={index} isDragDisabled={!canManageShifts || !!worker.isVirtual || (isMobile && !mobileSelectMode)}>
                            {(rowDrag, rowSnapshot) => (
                              <tr ref={rowDrag.innerRef} {...rowDrag.draggableProps}
                                style={{ ...rowDrag.draggableProps.style, display: 'table-row' }}
@@ -1270,7 +1375,7 @@ export default function Timesheet() {
                                       onChange={() => toggleRow(worker.id)}
                                     />
                                   )}
-                                  {!worker.isVirtual && (
+                                  {!worker.isVirtual && canManageShifts && (
                                     <span
                                       {...(attachDragHandle ? rowDrag.dragHandleProps : {})}
                                       className={`text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing shrink-0 ${mobileControlsClass}`}
@@ -1559,7 +1664,7 @@ export default function Timesheet() {
           worker={modalCell.worker}
           day={modalCell.day}
           shifts={getShiftsForCell(modalCell.worker.id, modalCell.day)}
-          workers={activeWorkers}
+          workers={orderedActiveWorkers}
           onClose={() => setModalCell(null)}
           onRefresh={handleRefresh}
           currentTeam={filterTeam}
