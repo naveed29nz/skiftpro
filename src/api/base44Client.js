@@ -408,7 +408,7 @@ async function selectRows(table, { sort, limit, filters } = {}) {
   for (let from = 0; rows.length < cap; from += PAGE_SIZE) {
     const end = Math.min(from + PAGE_SIZE, cap) - 1;
     const batch = await runRead(table, (columns) => {
-      let query = supabase.from(table).select(columns);
+      let query = supabase.from(readRelation(table)).select(columns);
       query = applyClauses(query, compiled.clauses);
       query = query.order(ordering.column, { ascending: ordering.ascending });
       return query.range(from, end);
@@ -486,6 +486,12 @@ async function writeRow(table, payload, run) {
   }
 }
 
+// GDPR: employees read colleague-safe views; writes still go to the base table.
+const READ_RELATION = { shifts: 'shifts_visible', workers: 'workers_visible' };
+export function readRelation(table) {
+  return READ_RELATION[table] || table;
+}
+
 function entityApi(table) {
   return {
     list(sort, limit) {
@@ -495,7 +501,7 @@ function entityApi(table) {
       return selectRows(table, { sort, limit, filters });
     },
     async get(id) {
-      const data = await runRead(table, (columns) => supabase.from(table).select(columns).eq('id', id).maybeSingle());
+      const data = await runRead(table, (columns) => supabase.from(readRelation(table)).select(columns).eq('id', id).maybeSingle());
       if (!data) throw apiError(`${table} ${id} not found`, 404);
       return normalizeRow(data);
     },

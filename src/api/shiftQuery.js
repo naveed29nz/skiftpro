@@ -33,7 +33,7 @@ export function isAuthenticatedAccessToken(token, anonKey) {
 export function isShiftRestUrl(url) {
   try {
     const parsed = new URL(String(url), 'https://placeholder.local');
-    return /\/rest\/v1\/shifts\/?$/.test(parsed.pathname);
+    return /\/rest\/v1\/shifts(?:_visible)?\/?$/.test(parsed.pathname);
   } catch {
     return false;
   }
@@ -59,7 +59,8 @@ export function requestUrl(input) {
 /**
  * Shift reads and writes must carry a live user JWT. Without one, PostgREST
  * answers 200 [] because the anon role fails `in_org`, and that empty list
- * is indistinguishable from "this person has no shifts".
+ * is indistinguishable from "this person has no shifts". Colleague reads use
+ * `shifts_visible` and need the same gate.
  * Returns a 401 response instead of calling the network.
  */
 export async function guardedSupabaseFetch(input, init, { anonKey, fetchImpl = fetch } = {}) {

@@ -37,11 +37,14 @@ test('an expired user token is not sent to PostgREST', () => {
   assert.equal(isAuthenticatedAccessToken(expired, 'anon-key'), false);
 });
 
-test('only the shifts table is gated', () => {
+test('only shift reads and writes are gated', () => {
   assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/shifts?select=*'), true);
   assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/shifts'), true);
+  assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/shifts_visible?select=*'), true);
+  assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/shifts_visible'), true);
   assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/shift_swaps?select=*'), false);
   assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/workers?select=*'), false);
+  assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/workers_visible?select=*'), false);
   assert.equal(isShiftRestUrl('https://example.supabase.co/auth/v1/token'), false);
 });
 
