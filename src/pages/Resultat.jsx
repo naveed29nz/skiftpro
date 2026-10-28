@@ -4,12 +4,12 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Save, TrendingUp, TrendingDown } from 'lucide-react';
-import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { findWorkerByEmail } from '@/lib/workerLookup';
 import { useOrg } from '@/hooks/useOrg';
 import { withShiftQuery } from '@/api/shiftQuery';
+import { breakdownMap, usePayrollBreakdowns } from '@/payroll/usePayrollBreakdowns';
 
 const PAYROLL_TAX = 0.141;
 const MONTHS = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
@@ -23,9 +23,12 @@ const EMPTY_FORM = {
   franchiseavgift: '', franchiseavgift_pct: '', driftskostnader: '', driftskostnader_pct: ''
 };
 
-function ResultatSheet({ teamKey, teamName, year, month, results, workers, shifts, holidays, wpSettings, showWages = false }) {
+function ResultatSheet({ teamKey, teamName, year, month, results, workers, shifts, showWages = false, orgId }) {
   const queryClient = useQueryClient();
-  const wp = wpSettings[0];
+  const mStart = format(startOfMonth(new Date(year, month - 1)), 'yyyy-MM-dd');
+  const mEnd = format(endOfMonth(new Date(year, month - 1)), 'yyyy-MM-dd');
+  const payrollQuery = usePayrollBreakdowns(orgId, mStart, mEnd);
+  const byShift = useMemo(() => breakdownMap(payrollQuery.data), [payrollQuery.data]);
 
   const existing = results.find(r => r.year === year && r.month === month && r.team === teamKey);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -49,20 +52,17 @@ function ResultatSheet({ teamKey, teamName, year, month, results, workers, shift
   }, [existing?.id, year, month, teamKey]);
 
   const lonnskostnader = useMemo(() => {
-    const mStart = format(startOfMonth(new Date(year, month - 1)), 'yyyy-MM-dd');
-    const mEnd = format(endOfMonth(new Date(year, month - 1)), 'yyyy-MM-dd');
+    if (!payrollQuery.data) return null;
     const relevantWorkers = teamKey === 'all' ? workers : workers.filter(w => (w.teams || ['team1']).includes(teamKey));
     const workerIds = new Set(relevantWorkers.map(w => w.id));
     const mShifts = shifts.filter(s => s.date >= mStart && s.date <= mEnd && s.status !== 'cancelled' && workerIds.has(s.worker_id));
     let total = 0;
     mShifts.forEach(s => {
-      const w = workers.find(w => w.id === s.worker_id);
-      if (!w) return;
-      const tk = getWorkerTeamKey(w);
-      total += getShiftBreakdown(s, w.hourly_rate || 0, tk, holidays, wp, w.disabled_extras || [], w).pay;
+      const row = byShift.get(s.id);
+      if (row) total += row.pay;
     });
     return total * (1 + PAYROLL_TAX);
-  }, [shifts, workers, holidays, wp, year, month, teamKey]);
+  }, [shifts, workers, payrollQuery.data, byShift, year, month, teamKey, mStart, mEnd]);
 
   const db1 = parseFloat(form.db1) || 0;
   const getSvinn = () => form.svinn_pct ? db1 * (parseFloat(form.svinn_pct) / 100) : parseFloat(form.svinn) || 0;
@@ -70,7 +70,7 @@ function ResultatSheet({ teamKey, teamName, year, month, results, workers, shift
   const getFranchise = () => form.franchiseavgift_pct ? db1 * (parseFloat(form.franchiseavgift_pct) / 100) : parseFloat(form.franchiseavgift) || 0;
   const getDrift = () => form.driftskostnader_pct ? db1 * (parseFloat(form.driftskostnader_pct) / 100) : parseFloat(form.driftskostnader) || 0;
 
-  const totalKostnader = getSvinn() + getVareavskrivning() + getFranchise() + getDrift() + (showWages ? lonnskostnader : 0);
+  const totalKostnader = getSvinn() + getVareavskrivning() + getFranchise() + getDrift() + (showWages ? (lonnskostnader || 0) : 0);
   const resultat = db1 - totalKostnader;
 
   const saveMut = useMutation({
@@ -142,7 +142,7 @@ function ResultatSheet({ teamKey, teamName, year, month, results, workers, shift
           </div>
           <span className="text-xs text-slate-400">Fra vaktplan + {(PAYROLL_TAX * 100).toFixed(1)}% AGA</span>
           <span className="text-slate-400 text-xs">–</span>
-          <span className="text-right text-sm text-red-600 font-medium">-{fmt(lonnskostnader)} kr</span>
+          <span className="text-right text-sm text-red-600 font-medium">{lonnskostnader == null ? '…' : `-${fmt(lonnskostnader)} kr`}</span>
         </div>
       </div>
       )}
@@ -204,7 +204,6 @@ export default function Resultat() {
     enabled: !!orgId,
     queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000),
   }));
-  const { data: holidays = [] } = useQuery({ queryKey: ['holidays'], queryFn: () => base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings'], queryFn: () => base44.entities.WorkplaceSetting.list() });
 
   const wp = wpSettings[0];
@@ -263,9 +262,8 @@ export default function Resultat() {
         results={results}
         workers={workers}
         shifts={shifts}
-        holidays={holidays}
-        wpSettings={wpSettings}
         showWages={canSeeWageCosts(currentUser, myWorker)}
+        orgId={orgId}
       />
     </div>
   );

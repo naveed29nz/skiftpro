@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, Download, ChevronDown, ChevronUp, FileText, FileSpreadsheet } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
-import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
 import { getActiveTeams } from '@/utils/teams';
 import { canSeeWageCosts, effectiveAppRole } from '@/utils/wageAccess';
 import { useOrg } from '@/hooks/useOrg';
@@ -14,6 +13,7 @@ import { sameEmail } from '@/lib/emails';
 import { toast } from '@/components/ui/use-toast';
 import PayrollExportColumns from '@/components/payroll/PayrollExportColumns';
 import PayrollLockCard from '@/components/payroll/PayrollLockCard';
+import { breakdownMap, usePayrollBreakdowns } from '@/payroll/usePayrollBreakdowns';
 import {
   DEFAULT_PAYROLL_COLUMN_KEYS,
   payrollCsv,
@@ -96,6 +96,8 @@ export default function Salary() {
 
   const monthStart = format(month, 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(month), 'yyyy-MM-dd');
+  const payrollQuery = usePayrollBreakdowns(orgId, monthStart, monthEnd);
+  const byShift = useMemo(() => breakdownMap(payrollQuery.data), [payrollQuery.data]);
   const monthShifts = shifts.filter(s => s.date >= monthStart && s.date <= monthEnd && s.status !== 'cancelled');
 
   const isAdmin = currentUser?.role === 'admin';
@@ -118,15 +120,15 @@ export default function Salary() {
   const displayWorkers = filterWorker === 'all' ? teamFilteredWorkers : teamFilteredWorkers.filter(w => w.id === filterWorker);
 
   const salaryData = useMemo(() => {
+    if (!payrollQuery.data) return [];
     return displayWorkers.map(worker => {
-      const teamKey = filterTeam !== 'all' ? filterTeam : getWorkerTeamKey(worker);
       const workerShifts = monthShifts.filter(s => {
         if (s.worker_id !== worker.id) return false;
         if (filterTeam === 'all') return true;
         if (s.team) return s.team === filterTeam;
         return (worker.teams?.[0] || 'team1') === filterTeam;
       });
-      const breakdowns = workerShifts.map(s => getShiftBreakdown(s, worker.hourly_rate || 0, s.team || teamKey, holidays, wp, worker.disabled_extras || [], worker));
+      const breakdowns = workerShifts.map(s => byShift.get(s.id)).filter(Boolean);
       const regularHours = sumField(breakdowns, 'regularHours');
       const sundayHours = sumField(breakdowns, 'sundayHours');
       const holidayHours = sumField(breakdowns, 'holidayHours');
@@ -147,7 +149,7 @@ export default function Salary() {
         completedShifts, totalShifts: workerShifts.length,
       };
     }).sort((a, b) => b.totalPay - a.totalPay);
-  }, [displayWorkers, monthShifts, holidays, wp]);
+  }, [displayWorkers, monthShifts, payrollQuery.data, byShift, filterTeam]);
 
   const grandTotalHours = salaryData.reduce((sum, d) => sum + d.totalHours, 0);
   const grandTotalPay = salaryData.reduce((sum, d) => sum + d.totalPay, 0);
@@ -343,6 +345,8 @@ export default function Salary() {
   return (
     <div className="space-y-6">
       <PayrollLockCard locks={payrollLocks} canLock={canLock} busy={lockBusy} onLock={lockPeriod} onUnlock={unlockPeriod} />
+      {payrollQuery.isLoading && <p className="text-sm text-slate-500">Henter lønn fra serveren…</p>}
+      {payrollQuery.isError && <p className="text-sm text-red-600">Kunne ikke hente lønnsberegningen. Deploy edge-funksjonen payroll-calc og prøv igjen.</p>}
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-2">

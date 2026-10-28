@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { withShiftQuery } from '@/api/shiftQuery';
 import ManagerCharts from '@/components/dashboard/ManagerCharts';
-import { calcHours, getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
+import { calcHours } from '@/utils/payCalc';
 import { shiftLabelName } from '@/utils/shiftLabels';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import { TrendingUp, TrendingDown } from 'lucide-react';
@@ -17,6 +17,7 @@ import SuperAdminSwitch from '@/components/dashboard/SuperAdminSwitch';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import { useOrg } from '@/hooks/useOrg';
 import { findWorkerByEmail } from '@/lib/workerLookup';
+import { breakdownMap, usePayrollBreakdowns } from '@/payroll/usePayrollBreakdowns';
 import { ClipboardList } from 'lucide-react';
 
 const PAYROLL_TAX = 0.141;
@@ -66,13 +67,11 @@ export default function Dashboard() {
       : base44.entities.WorkplaceSetting.list(),
   });
 
-  const { data: allWorkers = [] } = useQuery({ queryKey: ['workers', orgId], queryFn: () => orgId ? base44.entities.Worker.filter({ org_id: orgId }) : base44.entities.Worker.list(), enabled: isManagerOrAdmin });
   const { data: allShifts = [] } = useQuery(withShiftQuery({
     queryKey: ['shifts', orgId],
     queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000),
     enabled: isManagerOrAdmin && !!orgId,
   }));
-  const { data: holidays = [] } = useQuery({ queryKey: ['holidays', orgId], queryFn: () => orgId ? base44.entities.Holiday.filter({ org_id: orgId }) : base44.entities.Holiday.list(), enabled: isManagerOrAdmin });
   const { data: monthlyResults = [] } = useQuery({ queryKey: ['monthly-results', orgId], queryFn: () => orgId ? base44.entities.MonthlyResult.filter({ org_id: orgId }) : base44.entities.MonthlyResult.list(), enabled: isManagerOrAdmin });
 
   const { data: myTasks = [] } = useQuery({
@@ -112,27 +111,29 @@ export default function Dashboard() {
   const thisMonthNum = new Date().getMonth() + 1;
   const monthResult = monthlyResults.find(r => r.year === thisYear && r.month === thisMonthNum && r.team === 'all');
 
+  const mStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+  const mEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+  const payrollQuery = usePayrollBreakdowns(isManagerOrAdmin ? orgId : null, mStart, mEnd);
+  const byShift = useMemo(() => breakdownMap(payrollQuery.data), [payrollQuery.data]);
+
   const lonnskostnader = useMemo(() => {
-    if (!isManagerOrAdmin) return 0;
-    const mStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
-    const mEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    if (!isManagerOrAdmin || !payrollQuery.data) return null;
     const mShifts = allShifts.filter(s => s.date >= mStart && s.date <= mEnd && s.status !== 'cancelled');
     let total = 0;
     mShifts.forEach(s => {
-      const w = allWorkers.find(w => w.id === s.worker_id);
-      if (!w) return;
-      const teamKey = getWorkerTeamKey(w);
-      total += getShiftBreakdown(s, w.hourly_rate || 0, teamKey, holidays, wp, w.disabled_extras || [], w).pay;
+      const row = byShift.get(s.id);
+      if (!row) return;
+      total += row.pay;
     });
     return total * (1 + PAYROLL_TAX);
-  }, [allShifts, allWorkers, holidays, wp, isManagerOrAdmin]);
+  }, [allShifts, payrollQuery.data, byShift, isManagerOrAdmin, mStart, mEnd]);
 
   const db1 = monthResult?.db1 || 0;
   const svinn = monthResult?.svinn_pct ? db1 * (monthResult.svinn_pct / 100) : (monthResult?.svinn || 0);
   const vareavskrivning = monthResult?.vareavskrivning_pct ? db1 * (monthResult.vareavskrivning_pct / 100) : (monthResult?.vareavskrivning || 0);
   const franchise = monthResult?.franchiseavgift_pct ? db1 * (monthResult.franchiseavgift_pct / 100) : (monthResult?.franchiseavgift || 0);
   const drift = monthResult?.driftskostnader_pct ? db1 * (monthResult.driftskostnader_pct / 100) : (monthResult?.driftskostnader || 0);
-  const driftsresultat = db1 - svinn - vareavskrivning - franchise - drift - (showWages ? lonnskostnader : 0);
+  const driftsresultat = db1 - svinn - vareavskrivning - franchise - drift - (showWages ? (lonnskostnader || 0) : 0);
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
@@ -346,7 +347,7 @@ export default function Dashboard() {
           </div>
           <div className="text-right text-xs text-slate-500 space-y-0.5">
             <p>DB1: {Math.round(db1).toLocaleString('no-NO')} kr</p>
-            {showWages && <p>Lønn: -{Math.round(lonnskostnader).toLocaleString('no-NO')} kr</p>}
+            {showWages && <p>Lønn: {lonnskostnader == null ? '…' : `-${Math.round(lonnskostnader).toLocaleString('no-NO')} kr`}</p>}
             <p>Øvrige: -{Math.round(svinn + vareavskrivning + franchise + drift).toLocaleString('no-NO')} kr</p>
           </div>
         </div>

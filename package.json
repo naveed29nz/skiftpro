@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
-    "test:unit": "node --test src/contracts/*.test.js src/timesheet/*.test.js src/components/ui/toast-store.test.js src/innskudd/*.test.js src/lib/*.test.js src/api/*.test.js src/utils/*.test.js",
+    "test:unit": "node --test src/contracts/*.test.js src/timesheet/*.test.js src/components/ui/toast-store.test.js src/innskudd/*.test.js src/lib/*.test.js src/api/*.test.js src/utils/*.test.js src/payroll/*.test.js",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview"
   },
