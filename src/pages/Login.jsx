@@ -10,6 +10,7 @@ import { Clock } from 'lucide-react';
 import LegalFooter from '@/components/LegalFooter';
 import CompanyDetailsFields from '@/components/CompanyDetailsFields';
 import { businessSignupMetadata, companyDetailsError } from '@/lib/orgNumber';
+import { DPA_VERSION } from '@/lib/dpa';
 
 function safeNextPath(raw) {
   if (!raw) return '/Dashboard';
@@ -40,6 +41,7 @@ export default function Login() {
   });
   const [accountKind, setAccountKind] = useState('employee');
   const [consent, setConsent] = useState(false);
+  const [dpaAccepted, setDpaAccepted] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
@@ -71,11 +73,15 @@ export default function Login() {
       setError('Du må godta vilkårene og personvernerklæringen.');
       return;
     }
+    if (accountKind === 'business' && !dpaAccepted) {
+      setError('Du må akseptere databehandleravtalen.');
+      return;
+    }
     setPending(true);
     setError('');
     setMessage('');
     const metadata = accountKind === 'business'
-      ? businessSignupMetadata(company)
+      ? { ...businessSignupMetadata(company), dpa_version: DPA_VERSION }
       : {
         signup: 'self_serve',
         signup_kind: accountKind,
@@ -221,7 +227,15 @@ export default function Login() {
             <label className="flex items-start gap-2 text-xs text-slate-600">
               <input type="checkbox" className="mt-0.5" checked={consent} onChange={(event) => setConsent(event.target.checked)} required />
               <span>
-                Jeg godtar <Link to="/vilkar" className="underline">vilkårene</Link>, <Link to="/personvern" className="underline">personvernerklæringen</Link> og <Link to="/databehandleravtale" className="underline">databehandleravtalen</Link>. Tekstene er utkast og skal gjennomgås juridisk.
+                Jeg godtar <Link to="/vilkar" className="underline">vilkårene</Link> og <Link to="/personvern" className="underline">personvernerklæringen</Link>.
+              </span>
+            </label>
+          )}
+          {mode === 'signup' && accountKind === 'business' && (
+            <label className="flex items-start gap-2 text-xs text-slate-600">
+              <input type="checkbox" className="mt-0.5" checked={dpaAccepted} onChange={(event) => setDpaAccepted(event.target.checked)} required />
+              <span>
+                Jeg aksepterer <Link to="/personvern/databehandleravtale" className="underline">databehandleravtalen</Link> (versjon {DPA_VERSION})
               </span>
             </label>
           )}

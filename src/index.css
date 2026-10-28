@@ -137,6 +137,21 @@ html.pwa-standalone .fixed.bottom-0 {
   bottom: env(safe-area-inset-bottom);
 }
 
+@media print {
+  .legal-no-print {
+    display: none !important;
+  }
+
+  .legal-shell {
+    background: white !important;
+  }
+
+  .legal-article {
+    border: none !important;
+    box-shadow: none !important;
+  }
+}
+
 [data-testid="shift-card"] {
   -webkit-touch-callout: none;
   -webkit-user-select: none;

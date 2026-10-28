@@ -8,8 +8,12 @@ import Login from '@/pages/Login';
 import ResetPassword from '@/pages/ResetPassword';
 import InstallPrompt from '@/components/InstallPrompt';
 import Personvern from '@/pages/Personvern';
-import Vilkar from '@/pages/Vilkar';
+import PersonvernKunder from '@/pages/PersonvernKunder';
+import PersonvernAnsatte from '@/pages/PersonvernAnsatte';
+import Underleverandorer from '@/pages/Underleverandorer';
 import Databehandleravtale from '@/pages/Databehandleravtale';
+import Sikkerhet from '@/pages/Sikkerhet';
+import Vilkar from '@/pages/Vilkar';
 import Landing from '@/pages/Landing';
 
 const AuthenticatedApp = lazy(() => import('./AuthenticatedApp'));
@@ -82,8 +86,13 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/personvern" element={<Personvern />} />
+            <Route path="/personvern/kunder" element={<PersonvernKunder />} />
+            <Route path="/personvern/ansatte" element={<PersonvernAnsatte />} />
+            <Route path="/personvern/underleverandorer" element={<Underleverandorer />} />
+            <Route path="/personvern/databehandleravtale" element={<Databehandleravtale />} />
+            <Route path="/personvern/sikkerhet" element={<Sikkerhet />} />
             <Route path="/vilkar" element={<Vilkar />} />
-            <Route path="/databehandleravtale" element={<Databehandleravtale />} />
+            <Route path="/databehandleravtale" element={<Navigate to="/personvern/databehandleravtale" replace />} />
             <Route path="/signer/:contractId/takk" element={(
               <Suspense fallback={<OpeningSplash />}>
                 <EmployeeSignedThanks />

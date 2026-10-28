@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import BillingCard from '@/components/BillingCard';
 import CompanyDetailsFields from '@/components/CompanyDetailsFields';
 import { companyDetailsError, startOrganizationArgs } from '@/lib/orgNumber';
+import { DPA_VERSION, recordDpaAcceptance } from '@/lib/dpa';
 
 export default function OrgOnboarding({ userId, userEmail }) {
   const [step, setStep] = useState(1);
@@ -22,6 +23,7 @@ export default function OrgOnboarding({ userId, userEmail }) {
   const [orgId, setOrgId] = useState(null);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
+  const [dpaAccepted, setDpaAccepted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,16 +50,28 @@ export default function OrgOnboarding({ userId, userEmail }) {
       setError(problem);
       return;
     }
+    if (!dpaAccepted) {
+      setError('Du må akseptere databehandleravtalen.');
+      return;
+    }
     setPending(true);
     setError('');
     const { data, error: rpcError } = await supabase.rpc('start_organization', startOrganizationArgs(form));
-    setPending(false);
     if (rpcError) {
+      setPending(false);
       setError(rpcError.message);
       return;
     }
     const row = Array.isArray(data) ? data[0] : data;
-    setOrgId(row?.id || null);
+    const createdId = row?.id || null;
+    setOrgId(createdId);
+    if (createdId) {
+      await recordDpaAcceptance(supabase, {
+        orgId: createdId,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      });
+    }
+    setPending(false);
     setStep(2);
   };
 
@@ -95,6 +109,12 @@ export default function OrgOnboarding({ userId, userEmail }) {
               Er du ansatt? Ikke opprett bedrift – be lederen din om invitasjon.
             </p>
             <CompanyDetailsFields value={form} onChange={setForm} email={userEmail} />
+            <label className="flex items-start gap-2 text-xs text-slate-600">
+              <input type="checkbox" className="mt-0.5" checked={dpaAccepted} onChange={(event) => setDpaAccepted(event.target.checked)} required />
+              <span>
+                Jeg aksepterer <Link to="/personvern/databehandleravtale" className="underline">databehandleravtalen</Link> (versjon {DPA_VERSION})
+              </span>
+            </label>
             <Button type="submit" className="w-full" disabled={pending}>{pending ? 'Oppretter…' : 'Opprett organisasjon'}</Button>
           </form>
         )}
@@ -126,7 +146,7 @@ export default function OrgOnboarding({ userId, userEmail }) {
         {error && <p className="text-sm text-red-600">{error}</p>}
         <p className="text-[11px] text-slate-400">Kontoen {userEmail || userId} er knyttet til denne organisasjonen.</p>
         <p className="text-[11px] text-slate-500">
-          <Link to="/personvern" className="underline">Personvern</Link>
+          <Link to="/personvern" className="underline">Personvern og sikkerhet</Link>
           {' · '}
           <Link to="/vilkar" className="underline">Vilkår</Link>
         </p>
