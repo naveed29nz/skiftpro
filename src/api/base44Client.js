@@ -684,8 +684,9 @@ export const base44 = {
           contentType: file.type || undefined,
         });
         if (error) throw toError(error);
-        const { data } = supabase.storage.from('uploads').getPublicUrl(path);
-        return { file_url: data.publicUrl };
+        // Store the object path. The bucket is private; the screen signs a URL when it shows the image.
+        // Older rows may still hold a /object/public/uploads/ URL. uploadObjectPath accepts both.
+        return { file_url: path };
       },
     },
   },
