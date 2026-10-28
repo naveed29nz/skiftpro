@@ -21,6 +21,9 @@ const supabaseNetworkOnly = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].ma
 
 export default defineConfig({
   logLevel: 'error',
+  define: {
+    'import.meta.env.VITE_VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV || process.env.VITE_VERCEL_ENV || ''),
+  },
   plugins: [
     react(),
     VitePWA({
