@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { guardedSupabaseFetch } from '@/api/shiftQuery';
+import { previewUsesProduction } from '@/lib/previewEnv';
 
 const PASSWORD_SETUP_TYPES = new Set(['recovery', 'invite', 'signup']);
 const PASSWORD_SETUP_KEY = 'skiftpro.needsNewPassword';
@@ -87,6 +88,12 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 if (!url || !anonKey) {
   console.warn(
     'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Copy .env.example to .env.local.'
+  );
+}
+
+if (previewUsesProduction(import.meta.env.VITE_VERCEL_ENV, url)) {
+  console.warn(
+    'Vercel Preview bruker produksjonsdatabasen. Sett egne VITE_SUPABASE_URL og VITE_SUPABASE_ANON_KEY for Preview. Se docs/PREVIEW_ENV.md.'
   );
 }
 
