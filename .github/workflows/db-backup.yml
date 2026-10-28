@@ -1,0 +1,36 @@
+name: Database backup
+
+# 01:00 UTC is 02:00 in Europe/Oslo during winter (CET) and 03:00 during summer (CEST).
+# GitHub schedules are UTC only, so the clock cannot follow daylight saving.
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client and GnuPG
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client gnupg
+
+      - name: Dump, encrypt, and keep the plaintext off the artifact
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_OUTPUT: ${{ github.workspace }}/backup.tar.gpg
+        run: bash scripts/db-backup.sh
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backup.tar.gpg
+          retention-days: 30
+          if-no-files-found: error
