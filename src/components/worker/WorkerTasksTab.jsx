@@ -7,6 +7,7 @@ import { useOrg } from '@/hooks/useOrg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { SignedUploadImage } from '@/components/uploads/SignedUploadImage';
 
 const PRIORITY_STYLES = {
   high:   'bg-red-100 text-red-700',
@@ -160,7 +161,7 @@ export default function WorkerTasksTab({ worker, workers: allWorkers = [], teamN
 
       {showImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowImage(null)}>
-          <img src={showImage} alt="" className="max-w-[90vw] max-h-[90vh] rounded-xl" />
+          <SignedUploadImage stored={showImage} alt="" className="max-w-[90vw] max-h-[90vh] rounded-xl" />
         </div>
       )}
 
@@ -324,7 +325,7 @@ function TaskRow({ task, today, onToggle, onViewImage }) {
             </label>
             {pendingImage && (
               <div className="flex items-center gap-1.5">
-                <img src={pendingImage} alt="" className="h-8 w-8 rounded object-cover border border-slate-200 cursor-pointer" onClick={() => onViewImage(pendingImage)} />
+                <SignedUploadImage stored={pendingImage} alt="" className="h-8 w-8 rounded object-cover border border-slate-200 cursor-pointer" onClick={() => onViewImage(pendingImage)} />
                 <button type="button" onClick={() => setPendingImage(null)} className="text-slate-400 hover:text-slate-600">
                   <X className="w-3.5 h-3.5" />
                 </button>

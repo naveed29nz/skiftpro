@@ -12,6 +12,7 @@ import { useOrg } from '@/hooks/useOrg';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import RecurringTasksModal from '@/components/tasks/RecurringTasksModal';
+import { SignedUploadImage } from '@/components/uploads/SignedUploadImage';
 
 const PRIORITY_STYLES = {
   high:   'bg-red-100 text-red-700 border border-red-200',
@@ -159,7 +160,7 @@ function TaskForm({ workers, teamNames, onSubmit, onCancel }) {
           </label>
           {form.image_url && (
             <div className="relative">
-              <img src={form.image_url} alt="" className="h-10 w-10 rounded object-cover border border-slate-200" />
+              <SignedUploadImage stored={form.image_url} alt="" className="h-10 w-10 rounded object-cover border border-slate-200" />
               <button type="button" onClick={() => setForm(f => ({ ...f, image_url: '' }))} className="absolute -top-1 -right-1 bg-white rounded-full border border-slate-200 p-0.5">
                 <X className="w-3 h-3 text-slate-500" />
               </button>
@@ -238,8 +239,8 @@ function TaskCard({ task, workers, isAdmin, currentWorkerId, onToggle, onDelete 
 
       {task.image_url && (
         <div className="pl-7">
-          <img
-            src={task.image_url}
+          <SignedUploadImage
+            stored={task.image_url}
             alt="Vedlegg"
             className="max-h-32 rounded-lg border border-slate-200 object-cover cursor-pointer hover:opacity-90 transition-opacity"
             onClick={() => setShowImage(true)}
@@ -249,7 +250,7 @@ function TaskCard({ task, workers, isAdmin, currentWorkerId, onToggle, onDelete 
 
       {showImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowImage(false)}>
-          <img src={task.image_url} alt="" className="max-w-[90vw] max-h-[90vh] rounded-xl" />
+          <SignedUploadImage stored={task.image_url} alt="" className="max-w-[90vw] max-h-[90vh] rounded-xl" />
         </div>
       )}
     </div>
