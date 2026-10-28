@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Coins, Clock, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
+import { breakdownMap, usePayrollBreakdowns } from '@/payroll/usePayrollBreakdowns';
 
 const LABEL_STYLES = {
   sunday: 'bg-amber-100 text-amber-700',
@@ -16,7 +16,7 @@ const LABEL_STYLES = {
 
 function labelKind(b) {
   if (b.isFerie) return 'ferie';
-  if (b.shift?.shift_label === 'sick_doctor') return 'sick_doctor';
+  if (b.shiftLabel === 'sick_doctor' || b.shift?.shift_label === 'sick_doctor') return 'sick_doctor';
   if (b.isSick) return 'sick';
   if (b.label?.startsWith('Helligdag')) return 'holiday';
   if (b.label === 'Søndag') return 'sunday';
@@ -24,15 +24,15 @@ function labelKind(b) {
   return 'regular';
 }
 
-export default function WorkerSalaryTab({ worker, shifts, holidays, wpSettings, teamNames }) {
+export default function WorkerSalaryTab({ worker, shifts, teamNames }) {
   const [month, setMonth] = useState(startOfMonth(new Date()));
-  const wp = wpSettings?.[0];
-  const fallbackTeamKey = getWorkerTeamKey(worker);
-
   const monthStart = format(month, 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(month), 'yyyy-MM-dd');
+  const payrollQuery = usePayrollBreakdowns(worker?.org_id, monthStart, monthEnd);
+  const byShift = useMemo(() => breakdownMap(payrollQuery.data), [payrollQuery.data]);
 
   const rows = useMemo(() => {
+    if (!payrollQuery.data) return [];
     const monthShifts = shifts
       .filter(s => s.worker_id === worker.id
         && s.status !== 'cancelled'
@@ -40,11 +40,10 @@ export default function WorkerSalaryTab({ worker, shifts, holidays, wpSettings, 
         && s.date >= monthStart && s.date <= monthEnd)
       .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
     return monthShifts.map(s => {
-      const shiftTeamKey = s.team || fallbackTeamKey;
-      const b = getShiftBreakdown(s, worker.hourly_rate || 0, shiftTeamKey, holidays, wp, worker.disabled_extras || [], worker);
-      return { shift: s, breakdown: b };
-    });
-  }, [shifts, worker, holidays, wp, monthStart, monthEnd, fallbackTeamKey]);
+      const breakdown = byShift.get(s.id);
+      return breakdown ? { shift: s, breakdown } : null;
+    }).filter(Boolean);
+  }, [shifts, worker, monthStart, monthEnd, payrollQuery.data, byShift]);
 
   const totalPay = rows.reduce((sum, r) => sum + r.breakdown.pay, 0);
   const totalBonus = rows.reduce((sum, r) => sum + r.breakdown.extraBonus, 0);
@@ -70,7 +69,8 @@ export default function WorkerSalaryTab({ worker, shifts, holidays, wpSettings, 
         <Button variant="outline" size="sm" onClick={() => setMonth(startOfMonth(new Date()))}>I dag</Button>
       </div>
 
-      {/* Summary cards */}
+      {payrollQuery.isLoading && <p className="text-sm text-slate-500">Henter lønn fra serveren…</p>}
+      {payrollQuery.isError && <p className="text-sm text-red-600">Kunne ikke hente lønnsberegningen.</p>}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center justify-between">

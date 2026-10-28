@@ -5,8 +5,9 @@ import { withShiftQuery } from '@/api/shiftQuery';
 import { format, startOfMonth, endOfMonth, endOfWeek, eachWeekOfInterval, addMonths, subMonths } from 'date-fns';
 import { nb } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
-import { getShiftBreakdown, getWorkerTeamKey } from '@/utils/payCalc';
+import { getWorkerTeamKey } from '@/utils/payCalc';
 import { getActiveTeams } from '@/utils/teams';
+import { breakdownMap, usePayrollBreakdowns } from '@/payroll/usePayrollBreakdowns';
 import { TrendingUp, Clock, Wallet, Target, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useOrg } from '@/hooks/useOrg';
 
@@ -37,6 +38,8 @@ export default function ManagerCharts() {
 
   const monthStart = format(month, 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(month), 'yyyy-MM-dd');
+  const payrollQuery = usePayrollBreakdowns(orgId, monthStart, monthEnd);
+  const byShift = useMemo(() => breakdownMap(payrollQuery.data), [payrollQuery.data]);
 
   const { data: workers = [] } = useQuery({ queryKey: ['workers', orgId], queryFn: () => orgId ? base44.entities.Worker.filter({ org_id: orgId }) : base44.entities.Worker.list() });
   const { data: allShifts = [] } = useQuery(withShiftQuery({
@@ -44,7 +47,6 @@ export default function ManagerCharts() {
     enabled: !!orgId,
     queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 1000),
   }));
-  const { data: holidays = [] } = useQuery({ queryKey: ['holidays', orgId], queryFn: () => orgId ? base44.entities.Holiday.filter({ org_id: orgId }) : base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings', orgId], queryFn: () => orgId ? base44.entities.WorkplaceSetting.filter({ org_id: orgId }) : base44.entities.WorkplaceSetting.list(), staleTime: 0 });
 
   const wp = wpSettings[0];
@@ -63,7 +65,8 @@ export default function ManagerCharts() {
       if (!worker) return;
       const teamKey = shift.team || getWorkerTeamKey(worker);
       if (!data[teamKey]) data[teamKey] = { hours: 0, cost: 0 };
-      const breakdown = getShiftBreakdown(shift, worker.hourly_rate || 0, teamKey, holidays, wp, worker.disabled_extras || [], worker);
+      const breakdown = byShift.get(shift.id);
+      if (!breakdown) return;
       data[teamKey].hours += breakdown.hours;
       data[teamKey].cost += breakdown.pay * SOCIAL_FACTOR;
     });
@@ -71,7 +74,7 @@ export default function ManagerCharts() {
       .map((t, i) => ({ key: t.key, name: t.label, hours: Math.round(data[t.key].hours * 10) / 10, cost: Math.round(data[t.key].cost), color: COLOR_FOR(t.key, i) }))
       .filter(d => d.hours > 0 || d.cost > 0);
   // Note: cost already includes social costs (AGA + feriepenger)
-  }, [monthShifts, workers, holidays, wp, activeTeams]);
+  }, [monthShifts, workers, byShift, activeTeams]);
 
   // Weekly salary cost this month
   const weeklyData = useMemo(() => {
@@ -84,10 +87,9 @@ export default function ManagerCharts() {
       monthShifts
         .filter(s => s.date >= weekStartStr && s.date <= weekEndStr)
         .forEach(shift => {
-          const worker = workers.find(w => w.id === shift.worker_id);
-          if (!worker) return;
-          const teamKey = getWorkerTeamKey(worker);
-          cost += getShiftBreakdown(shift, worker.hourly_rate || 0, teamKey, holidays, wp, worker.disabled_extras || [], worker).pay * SOCIAL_FACTOR;
+          const row = byShift.get(shift.id);
+          if (!row) return;
+          cost += row.pay * SOCIAL_FACTOR;
         });
       return {
         name: `Uke ${format(weekStart, 'w')}`,
@@ -95,7 +97,7 @@ export default function ManagerCharts() {
         budgetLine: budget ? Math.round(Number(budget) / weeks.length) : null,
       };
     });
-  }, [monthShifts, workers, holidays, wp, budget]);
+  }, [month, monthShifts, byShift, budget]);
 
   const totalCost = teamData.reduce((s, d) => s + d.cost, 0);
   const totalHours = teamData.reduce((s, d) => s + d.hours, 0);

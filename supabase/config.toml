@@ -35,6 +35,10 @@ verify_jwt = true
 [functions.check-overtime-and-generate-contract]
 verify_jwt = true
 
+[functions.payroll-calc]
+verify_jwt = true
+
+
 [functions.invite-user]
 verify_jwt = true
 
