@@ -1,3 +1,4 @@
+import { isEkstrahjelp } from '@/contracts/employment';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, Clock, CalendarDays, DollarSign, Menu, X, Settings, UserCircle, Smartphone, Monitor, Banknote, Ticket, ClipboardList, Building2, CheckSquare, FileText, LogOut, BarChart, CreditCard, ScrollText, Package } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -145,6 +146,7 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [canSeeResultat, setCanSeeResultat] = useState(false);
+  const [ekstrahjelpOnly, setEkstrahjelpOnly] = useState(false);
 
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
@@ -213,6 +215,9 @@ export default function Layout() {
       }
 
       setUserRole(role);
+      // Ekstrahjelp (tilkalling) ser kun Min side: egne vakter og egen lønn.
+      const isEkstraOnly = role === 'user' && isEkstrahjelp(myWorker?.ansettelsestype);
+      setEkstrahjelpOnly(isEkstraOnly);
       const canSeeResultatFlag = myWorker?.can_see_resultat || role === 'admin' || role === 'sub_admin' || role === 'butikksjef';
       setCanSeeResultat(canSeeResultatFlag);
 
@@ -262,7 +267,7 @@ export default function Layout() {
       if (showOnboarding || showEmployee) return;
 
       const allowed = role === 'user'
-        ? [...workerAllowed, ...(myWorker?.can_see_resultat ? ['/Resultat'] : [])]
+        ? isEkstraOnly ? ['/WorkerPortal'] : [...workerAllowed, ...(myWorker?.can_see_resultat ? ['/Resultat'] : [])]
         : null;
       const isImpersonatingNow = !!localStorage.getItem('impersonate_org_id');
       const isSuperAdminPage = location.pathname === '/SuperAdmin' || location.pathname.startsWith('/SuperAdmin/');
@@ -293,7 +298,7 @@ export default function Layout() {
     : userRole === 'admin' ? adminNav
     : userRole === 'sub_admin' ? subAdminNav
     : userRole === 'butikksjef' ? butikksjeflNav
-    : userRole === 'user' ? workerNavDynamic
+    : userRole === 'user' ? (ekstrahjelpOnly ? workerNav.filter(item => item.path === '/WorkerPortal') : workerNavDynamic)
     : [];
   const navItems = visibleNavItems(roleNav);
 

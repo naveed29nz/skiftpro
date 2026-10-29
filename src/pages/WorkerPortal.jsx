@@ -1,3 +1,4 @@
+import { isEkstrahjelp } from '@/contracts/employment';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -135,7 +136,9 @@ export default function WorkerPortal() {
     const shiftTeamKey = s.team || teamKey;
     return sum + getShiftBreakdown(s, worker.hourly_rate || 0, shiftTeamKey, holidays, workplaceSetting, worker.disabled_extras || [], worker).pay;
   }, 0);
-  const tabs = TABS;
+  // Ekstrahjelp ser kun egne vakter (Min side) og egen lønn.
+  const ekstrahjelpOnly = !isAdmin && isEkstrahjelp(worker?.ansettelsestype);
+  const tabs = ekstrahjelpOnly ? TABS.filter(t => t.id === 'dashboard' || t.id === 'salary') : TABS;
 
   return (
     <div className="space-y-6">
@@ -198,15 +201,15 @@ export default function WorkerPortal() {
       </div>
 
       {/* Availability tab */}
-      {activeTab === 'availability' && <AvailabilityCalendar worker={worker} />}
+      {!ekstrahjelpOnly && activeTab === 'availability' && <AvailabilityCalendar worker={worker} />}
 
       {/* Team tab */}
-      {activeTab === 'team' && (
+      {!ekstrahjelpOnly && activeTab === 'team' && (
         <TeamSchedule shifts={isAdmin ? shifts : shifts.filter(s => s.published !== false)} workers={workers} currentWorker={worker} wpSettings={wpSettings} />
       )}
 
       {/* Tasks tab */}
-      {activeTab === 'tasks' && <WorkerTasksTab worker={worker} workers={workers} teamNames={teamNames} />}
+      {!ekstrahjelpOnly && activeTab === 'tasks' && <WorkerTasksTab worker={worker} workers={workers} teamNames={teamNames} />}
 
       {/* Salary tab — viser tillegg per vakt slik at ansatte ser søndags/helligdagsberegning */}
       {activeTab === 'salary' && (
@@ -220,10 +223,10 @@ export default function WorkerPortal() {
       )}
 
       {/* Contracts tab */}
-      {activeTab === 'contracts' && <WorkerContractsTab worker={worker} />}
+      {!ekstrahjelpOnly && activeTab === 'contracts' && <WorkerContractsTab worker={worker} />}
 
       {/* Swaps tab */}
-      {activeTab === 'swaps' && (
+      {!ekstrahjelpOnly && activeTab === 'swaps' && (
         <ShiftSwapPanel
           worker={worker}
           myShifts={myShifts}
@@ -320,7 +323,7 @@ export default function WorkerPortal() {
                 </div>
               )}
             </div>
-            <ColleaguesToday shifts={shifts} workers={workers} currentWorkerId={worker.id} today={today} currentWorkerTeam={(worker.teams || [worker.team || 'team1'])[0]} />
+            {!ekstrahjelpOnly && <ColleaguesToday shifts={shifts} workers={workers} currentWorkerId={worker.id} today={today} currentWorkerTeam={(worker.teams || [worker.team || 'team1'])[0]} />}
           </div>
         </>
       )}
