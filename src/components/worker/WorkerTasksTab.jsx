@@ -102,8 +102,10 @@ export default function WorkerTasksTab({ worker, workers: allWorkers = [], teamN
 
   const myTasks = tasks.filter(t => {
     const taskTeam = t.team || 'team1';
-    if (!myTeams.includes(taskTeam)) return false;
     const ids = t.assigned_worker_ids?.length ? t.assigned_worker_ids : (t.assigned_worker_id ? [t.assigned_worker_id] : []);
+    // Tasks assigned to me personally are always shown, also in another store.
+    if (ids.includes(worker.id)) return true;
+    if (!myTeams.includes(taskTeam)) return false;
     if (ids.length > 0 && !ids.includes('all') && !ids.includes(worker.id)) return false;
     return true;
   });
