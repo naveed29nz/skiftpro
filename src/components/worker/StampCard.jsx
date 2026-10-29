@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -107,7 +108,8 @@ export default function StampCard({ worker, workplaceSetting, todayStamp, onStam
           <p className="font-semibold">Posisjon ved stempling</p>
           <p>
             SkiftPro sjekker at du er på arbeidsstedet. Vi lagrer avstand, om du er innenfor området,
-            og grove koordinater. Nøyaktig posisjon slettes etter 90 dager. Les mer i personvernerklæringen.
+            og grove koordinater. Nøyaktig posisjon lagres ikke. Koordinatene slettes automatisk etter 90 dager.{' '}
+            <Link to="/personvern/ansatte" className="underline">Les mer i personvernerklæringen.</Link>
           </p>
           <button
             type="button"

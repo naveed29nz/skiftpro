@@ -322,6 +322,15 @@ export default function WorkerPortal() {
             </div>
             <ColleaguesToday shifts={shifts} workers={workers} currentWorkerId={worker.id} today={today} currentWorkerTeam={(worker.teams || [worker.team || 'team1'])[0]} />
           </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5 text-sm text-slate-600">
+            <p className="font-semibold text-slate-800">Personvern</p>
+            <p className="mt-1">Arbeidsgiveren er behandlingsansvarlig for opplysningene om deg. Zastek AS er databehandler.</p>
+            <p className="mt-2">
+              <Link to="/personvern/ansatte" className="text-blue-800 underline">Personvernerklæring for ansatte</Link>
+              {' · '}
+              <Link to="/personvern" className="text-blue-800 underline">Personvern og sikkerhet</Link>
+            </p>
+          </div>
         </>
       )}
     </div>

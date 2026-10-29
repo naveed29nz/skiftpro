@@ -13,6 +13,7 @@ import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import BillingCard from '@/components/BillingCard';
 import EmployerSettingsCard from '@/components/settings/EmployerSettingsCard';
+import PrivacyCenterCard from '@/components/settings/PrivacyCenterCard';
 import PayrollRulesCard from '@/components/settings/PayrollRulesCard';
 
 const PLAN_DEPT_LIMITS = { basic: 1, pro: 3, enterprise: 6, ultimate: 10 };
@@ -323,7 +324,7 @@ const DEFAULTS = generateDefaults();
 
 export default function Settings() {
   const queryClient = useQueryClient();
-  const { myOrg, orgId, orgs } = useOrg();
+  const { myOrg, orgId, orgs, adminOrg, isOrgAdmin, isImpersonating } = useOrg();
   const { user, worker } = useCurrentWorker();
   const showWages = canSeeWageCosts(user, worker);
   const [globalAddressInput, setGlobalAddressInput] = useState('');
@@ -501,6 +502,7 @@ export default function Settings() {
 
   return (
     <div className="max-w-xl space-y-6">
+      <PrivacyCenterCard orgId={adminOrg?.id || orgId} canAccept={isOrgAdmin && !isImpersonating} />
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Workplace GPS */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">

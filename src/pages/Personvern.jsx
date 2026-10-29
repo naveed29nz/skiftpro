@@ -1,22 +1,40 @@
-import LegalPage from '@/components/legal/LegalPage';
+import { Link } from 'react-router-dom';
+import TrustLayout from '@/components/legal/TrustLayout';
+import { TRUST_CARDS } from '@/legal/routes';
+import { DPA_UPDATED_LABEL } from '@/lib/dpa';
 
 export default function Personvern() {
   return (
-    <LegalPage title="Personvernerklæring">
-      <p>Behandlingsansvarlig er Zastek AS, org.nr. 938 291 144, e-post post@zastek.no. SkiftPro brukes til vaktplan, timelister, stempling og oppgjør for virksomhetens ansatte.</p>
-      <p>Vi behandler navn, e-post, telefon, rolle, vakter, fravær, stemplingstidspunkt og lønnsgrunnlag som arbeidsgiveren legger inn. Formålet er å administrere arbeidstid og lønn. Grunnlaget er avtale med kunden og berettiget interesse i å føre timelister, samt rettslig plikt der bokføringsregler krever oppbevaring.</p>
-      <h2 className="font-semibold text-base">Posisjon ved stempling</h2>
-      <p>Ved første stempling blir du bedt om å godta at posisjon brukes for å kontrollere at du er på arbeidsstedet. Vi lagrer ikke den nøyaktige GPS-posisjonen. Vi lagrer avstand i meter, om du var innenfor geofence, og grove koordinater avrundet til tre desimaler (omtrent 100 meter). Rå og grove koordinater slettes automatisk etter 90 dager. Avstand og innenfor/utenfor beholdes som del av timelisten.</p>
-      <p>Du kan be arbeidsgiveren eller Zastek AS om innsyn, retting eller sletting der reglene tillater det. Klage kan sendes til Datatilsynet.</p>
-      <h2 className="font-semibold text-base">Elektronisk signering</h2>
-      <p>Når en arbeidsavtale signeres i SkiftPro, lagrer vi avtaleteksten, tidspunkt, hvilken metode som ble brukt, IP-adresse og nettleserinformasjon. Det er dokumentasjon på at avtalen ble signert. Vi ber ikke om fødselsnummer. Opplysningene slettes ikke automatisk. Arbeidsgiver må bekrefte sletting etter at oppbevaringstiden er ute.</p>
-      <h2 className="font-semibold text-base">Databehandlere</h2>
-      <ul className="list-disc pl-5 space-y-1">
-        <li>Supabase, database og innlogging, EU-region Frankfurt</li>
-        <li>Vercel, drifting av nettappen</li>
-        <li>Stripe, betaling, tas i bruk senere</li>
-        <li>Resend, e-postutsending, tas i bruk senere</li>
-      </ul>
-    </LegalPage>
+    <TrustLayout
+      bare
+      kicker="Zastek AS"
+      title="Personvern og sikkerhet"
+      updated={DPA_UPDATED_LABEL}
+      lede="SkiftPro er en nettbasert løsning for vaktplan, stempling, timelister, fravær, lønnsgrunnlag, digitale arbeidsavtaler, oppgaver og butikkoppgjør. Her finner du hvem som er ansvarlig for personopplysningene, hvilke underleverandører vi bruker, og hvordan opplysningene sikres."
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        {TRUST_CARDS.map((card) => (
+          <Link
+            key={card.to}
+            to={card.to}
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-800"
+          >
+            <h2 className="text-lg font-semibold text-slate-900">{card.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
+          </Link>
+        ))}
+      </div>
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-700">
+        <h2 className="text-base font-semibold text-slate-900">Roller</h2>
+        <p className="mt-2">
+          Kunden, altså arbeidsgiveren, er behandlingsansvarlig for opplysninger om egne ansatte.
+          Zastek AS er databehandler og behandler disse opplysningene bare etter kundens instruks.
+        </p>
+        <p className="mt-2">
+          Zastek AS er selv behandlingsansvarlig for kunde- og fakturaopplysninger, og i begrenset grad for drifts- og sikkerhetslogger.
+          Ansatte som vil bruke rettighetene sine, kontakter arbeidsgiveren. Henvendelser til post@zastek.no sendes videre.
+        </p>
+      </div>
+    </TrustLayout>
   );
 }

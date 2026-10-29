@@ -9,6 +9,7 @@ import CompanyDetailsPrompt from '@/components/CompanyDetailsPrompt';
 import EmployeeNoInvite from '@/components/EmployeeNoInvite';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
 import LegalFooter from '@/components/LegalFooter';
+import DpaAcceptanceBanner from '@/components/DpaAcceptanceBanner';
 import { useOrg } from '@/hooks/useOrg';
 import { queryClientInstance } from '@/lib/query-client';
 import { claimOrgId, resolveSignupGate, resolveSignupKind } from '@/lib/signupGate';
@@ -456,6 +457,7 @@ export default function Layout() {
 
       {/* Main content */}
       <main className="flex-1 p-4 lg:p-6">
+        <DpaAcceptanceBanner orgId={adminOrg?.id} enabled={Boolean(adminOrg) && !isImpersonating} />
         <Outlet />
       </main>
       <div className="px-4 py-3 border-t border-slate-200 bg-white">

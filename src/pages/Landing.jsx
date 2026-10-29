@@ -119,7 +119,7 @@ const faqs = [
   },
   {
     q: 'Hvor ligger dataene?',
-    a: 'Innlogging og database ligger hos Supabase i EU (Frankfurt). Nettappen kjører på Vercel. Stripe og e-post tas i bruk senere.',
+    a: 'Database, innlogging og filer ligger i EU (Frankfurt). Nettappen driftes av Vercel, og e-post sendes med Resend. Mer står under Personvern og sikkerhet.',
   },
 ];
 
@@ -467,9 +467,9 @@ export default function Landing() {
             </p>
           </div>
           <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm" aria-label="Juridisk">
-            <Link className="underline" to="/personvern">Personvernerklæring</Link>
+            <Link className="underline" to="/personvern">Personvern og sikkerhet</Link>
             <Link className="underline" to="/vilkar">Vilkår</Link>
-            <Link className="underline" to="/databehandleravtale">Databehandleravtale</Link>
+            <Link className="underline" to="/personvern/databehandleravtale">Databehandleravtale</Link>
           </nav>
         </div>
       </footer>
