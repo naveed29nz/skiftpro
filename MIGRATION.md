@@ -78,7 +78,10 @@ supabase functions deploy update-contract-status
 supabase functions deploy generate-recurring-tasks
 supabase functions deploy check-overtime-and-generate-contract
 supabase functions deploy invite-user
+supabase functions deploy demo-switch --project-ref iobsolszrmigdmdydfbe
 ```
+
+`demo-switch` is not deployed by a pull request. Run the command above only after the change is approved. It signs a Narvesen Demo AS role in without sending email. Hosted functions already have `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`; this function needs no extra secret.
 
 Hosted functions already receive `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. Set the public site URL so invite emails return to the app:
 
@@ -93,6 +96,7 @@ supabase secrets set SITE_URL=https://your-production-domain
 | `generateRecurringTasks` | `generate-recurring-tasks` | `profiles.role = admin`. Cron does not use HTTP; it calls the SQL function. |
 | `checkOvertimeAndGenerateContract` | `check-overtime-and-generate-contract` | Any signed-in user. The shift trigger is what runs it in normal use. |
 | `users.inviteUser` | `invite-user` | Managers and super-admins. |
+| Demo-modus | `demo-switch` | A signed-in user in Narvesen Demo AS, or a platform super-admin. Target must be one of the five `@demo.skiftpro.invalid` accounts in that org. Returns a session. Sends no email. |
 
 The browser client maps the old function names, so `Contracts.jsx` and `WorkerContractsTab.jsx` are unchanged.
 

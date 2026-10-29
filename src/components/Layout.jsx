@@ -8,6 +8,7 @@ import OrgOnboarding from '@/components/OrgOnboarding';
 import CompanyDetailsPrompt from '@/components/CompanyDetailsPrompt';
 import EmployeeNoInvite from '@/components/EmployeeNoInvite';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
+import DemoModeBar from '@/components/DemoModeBar';
 import LegalFooter from '@/components/LegalFooter';
 import { useOrg } from '@/hooks/useOrg';
 import { queryClientInstance } from '@/lib/query-client';
@@ -327,11 +328,12 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col demo-shell">
+      <DemoModeBar />
       <ImpersonationBanner />
 
       {/* Top navbar - two rows */}
-      <header className="sticky top-0" style={{zIndex: 100}}>
+      <header className="sticky top-0 demo-sticky-header" style={{zIndex: 100}}>
         {/* Row 1: deeper blue — logo + top-level links */}
         <div className="bg-blue-950 flex items-center gap-4 px-4 h-10">
           <div className="flex items-center gap-2 shrink-0">
