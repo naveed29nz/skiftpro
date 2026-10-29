@@ -9,10 +9,6 @@ export const DEMO_TARGETS = {
     userId: "02582093-44f8-4db6-91d1-295c6b062d80",
     email: "demo.admin@demo.skiftpro.invalid",
   },
-  sub_admin: {
-    userId: "09e0fbd5-df2b-420c-a8a1-e7462278bd16",
-    email: "demo.subadmin@demo.skiftpro.invalid",
-  },
   butikksjef: {
     userId: "8baa0464-d9fe-40e3-bf9f-95c7e7cb204c",
     email: "demo.butikksjef@demo.skiftpro.invalid",

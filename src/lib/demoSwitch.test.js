@@ -72,7 +72,6 @@ function demoState(overrides = {}) {
       { id: OTHER_ORG, admin_user_id: 'customer-admin', admin_email: 'admin@kunde.no' },
     ],
     workers: [
-      { org_id: DEMO_ORG_ID, email: DEMO_TARGETS.sub_admin.email },
       { org_id: DEMO_ORG_ID, email: DEMO_TARGETS.butikksjef.email },
       { org_id: DEMO_ORG_ID, email: DEMO_TARGETS.ansatt.email },
       { org_id: DEMO_ORG_ID, email: DEMO_TARGETS.ekstrahjelp.email },

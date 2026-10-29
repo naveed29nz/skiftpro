@@ -14,11 +14,6 @@ export const DEMO_ROLE_UI = [
     access: "Hele kunden: ansatte, vaktplan, lønn, kontrakter og innstillinger.",
   },
   {
-    key: "sub_admin",
-    label: "Regionsleder",
-    access: "Regionen: ansatte, vaktplan, lønn og kontrakter. Ikke kundeoversikten.",
-  },
-  {
     key: "butikksjef",
     label: "Butikksjef",
     access: "Egen butikk: vaktplan, kontrakter og innstillinger. Ikke ansatte eller lønn.",

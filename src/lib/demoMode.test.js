@@ -33,8 +33,8 @@ test('the demo bar is only for the Narvesen demo org or the reserved demo domain
 
 test('each demo role has a short Norwegian access label and the pinned account', () => {
   const roles = demoRoles();
-  assert.deepEqual(roles.map((role) => role.key), ['admin', 'sub_admin', 'butikksjef', 'ansatt', 'ekstrahjelp']);
-  assert.deepEqual(roles.map((role) => role.label), ['Admin', 'Regionsleder', 'Butikksjef', 'Ansatt', 'Ekstrahjelp']);
+  assert.deepEqual(roles.map((role) => role.key), ['admin', 'butikksjef', 'ansatt', 'ekstrahjelp']);
+  assert.deepEqual(roles.map((role) => role.label), ['Admin', 'Butikksjef', 'Ansatt', 'Ekstrahjelp']);
   for (const role of roles) {
     assert.equal(role.email, DEMO_TARGETS[role.key].email);
     assert.equal(role.userId, DEMO_TARGETS[role.key].userId);
