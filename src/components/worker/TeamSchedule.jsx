@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import { format, startOfWeek, addDays, addWeeks, subWeeks } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +21,19 @@ export default function TeamSchedule({ shifts, workers, currentWorker, wpSetting
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
   const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
   const weekShifts = shifts.filter(s => s.date >= weekStartStr && s.date <= weekEndStr && s.status !== 'cancelled');
+
+  // Egen tilgjengelighet: kun den innloggede ansatte sine egne markeringer
+  // (RLS gir uansett bare egne rader til ansatte; kollegaer vises aldri her).
+  const { data: myAvailability = [] } = useQuery({
+    queryKey: ['availability', currentWorker?.id, 'team', weekStartStr],
+    enabled: !!currentWorker?.id,
+    queryFn: () => base44.entities.Availability.filter({ worker_id: currentWorker.id, date: { $gte: weekStartStr, $lte: weekEndStr } }),
+  });
+  const myAvailByDate = useMemo(() => {
+    const m = {};
+    myAvailability.forEach(a => { if (a.worker_id === currentWorker?.id) m[a.date] = a.status; });
+    return m;
+  }, [myAvailability, currentWorker?.id]);
 
   const getShiftsForWorkerDay = (workerId, day) => {
     const dayStr = format(day, 'yyyy-MM-dd');
@@ -104,6 +119,12 @@ export default function TeamSchedule({ shifts, workers, currentWorker, wpSetting
                   {days.map(day => {
                     const dayShifts = getShiftsForWorkerDay(worker.id, day);
                     const otherTeam = hasOtherTeamShift(worker.id, day);
+                    const myStatus = worker.id === currentWorker?.id ? myAvailByDate[format(day, 'yyyy-MM-dd')] : undefined;
+                    const myMark = myStatus === 'unavailable'
+                      ? <div className="mt-0.5 text-[10px] leading-tight rounded px-1 py-0.5 bg-red-50 text-red-600 border border-red-200 font-semibold text-center" title="Du har meldt deg utilgjengelig">👎 Utilgjengelig</div>
+                      : myStatus === 'available'
+                        ? <div className="mt-0.5 text-[10px] leading-tight rounded px-1 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold text-center" title="Du har meldt deg tilgjengelig">✓ Tilgjengelig</div>
+                        : null;
                     return (
                       <td key={day.toISOString()} className={`px-1 py-1.5 align-top ${format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') ? 'bg-blue-50/20' : ''}`}>
                         {dayShifts.length > 0 ? (
@@ -121,6 +142,7 @@ export default function TeamSchedule({ shifts, workers, currentWorker, wpSetting
                         ) : (
                           <div className="h-8 flex items-center justify-center text-slate-200">–</div>
                         )}
+                        {myMark}
                       </td>
                     );
                   })}
