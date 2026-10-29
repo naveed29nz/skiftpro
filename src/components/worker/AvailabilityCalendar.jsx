@@ -60,6 +60,7 @@ export default function AvailabilityCalendar({ worker }) {
         await base44.entities.Availability.create({
           worker_id: worker.id,
           worker_name: worker.name,
+          ...(worker.org_id ? { org_id: worker.org_id } : {}),
           date,
           status,
         });
@@ -67,14 +68,14 @@ export default function AvailabilityCalendar({ worker }) {
     }
     setSelected(new Set());
     setSaving(false);
-    queryClient.invalidateQueries({ queryKey: ['availability', worker.id, monthStartStr] });
+    queryClient.invalidateQueries({ queryKey: ['availability'] });
   };
 
   const clearDay = async (dateStr) => {
     const existing = availMap[dateStr];
     if (!existing) return;
     await base44.entities.Availability.delete(existing.id);
-    queryClient.invalidateQueries({ queryKey: ['availability', worker.id, monthStartStr] });
+    queryClient.invalidateQueries({ queryKey: ['availability'] });
   };
 
   const today = format(new Date(), 'yyyy-MM-dd');

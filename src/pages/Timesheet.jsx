@@ -1435,6 +1435,7 @@ export default function Timesheet() {
                                                            className={`flex flex-col items-center gap-0.5 max-md:gap-0 rounded px-1 py-1 max-md:px-0.5 max-md:py-0.5 text-center transition-shadow ${SHIFT_NO_CALLOUT} ${isReadOnly ? 'cursor-default' : 'cursor-pointer'}
                                                              ${labelStyle?.cell || 'bg-slate-50'}
                                                              ${s.hours_approved ? 'ring-1 ring-emerald-500' : ''}
+                                                             ${isUnavailableOn(worker.id, day) ? 'border-2 border-red-500' : ''}
                                                              ${pressingId === s.id ? 'ring-2 ring-blue-300' : ''}
                                                              ${touchPlace?.shiftId === s.id ? 'ring-2 ring-blue-600' : ''}
                                                              ${shiftSnapshot.isDragging ? 'shadow-2xl ring-2 ring-blue-400' : 'hover:shadow-sm'}`}
@@ -1477,6 +1478,11 @@ export default function Timesheet() {
                                                                  </span>
                                                                );
                                                              })()}
+                                                             {isUnavailableOn(worker.id, day) && (
+                                                               <span data-testid="shift-unavailable-warning" title="Ansatt har meldt seg utilgjengelig denne dagen" className="flex items-center gap-0.5 text-[10px] max-md:text-[8px] px-1 max-md:px-0.5 py-0.5 max-md:py-0 rounded bg-red-100 text-red-700 border border-red-300 font-semibold max-md:whitespace-nowrap">
+                                                                 <span aria-hidden="true">👎</span><span className="max-md:hidden">Utilgjengelig</span>
+                                                               </span>
+                                                             )}
                                                              {!s.published && (
                                                                <span className="flex items-center gap-0.5 text-xs max-md:text-[8px] px-1.5 py-0.5 max-md:px-0.5 max-md:py-0 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium max-md:whitespace-nowrap">
                                                                  <EyeOff className="w-2.5 h-2.5 max-md:hidden" /> Utkast
