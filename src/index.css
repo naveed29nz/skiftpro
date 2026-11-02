@@ -137,6 +137,39 @@ html.pwa-standalone .fixed.bottom-0 {
   bottom: env(safe-area-inset-bottom);
 }
 
+/* Demo-modus sits above the navy header. The bar measures its own height. */
+html.demo-mode .demo-shell {
+  padding-top: var(--demo-bar-h, 4.75rem);
+}
+
+html.demo-mode .demo-sticky-header,
+html.demo-mode .demo-shell .sticky.top-0 {
+  top: var(--demo-bar-h, 4.75rem);
+}
+
+html.pwa-standalone.demo-mode .demo-sticky-header,
+html.pwa-standalone.demo-mode .demo-shell .sticky.top-0 {
+  top: calc(env(safe-area-inset-top) + var(--demo-bar-h, 4.75rem));
+}
+
+html.demo-mode .pwa-safe-menu,
+html.demo-mode .pwa-safe-logout {
+  top: calc(var(--demo-bar-h, 4.75rem) + 0.5rem);
+}
+
+html.pwa-standalone.demo-mode .pwa-safe-menu,
+html.pwa-standalone.demo-mode .pwa-safe-logout {
+  top: calc(env(safe-area-inset-top) + var(--demo-bar-h, 4.75rem) + 0.5rem);
+}
+
+html.demo-mode .pwa-safe-menu-panel {
+  padding-top: var(--demo-bar-h, 4.75rem);
+}
+
+html.pwa-standalone.demo-mode .pwa-safe-menu-panel {
+  padding-top: calc(env(safe-area-inset-top) + var(--demo-bar-h, 4.75rem));
+}
+
 [data-testid="shift-card"] {
   -webkit-touch-callout: none;
   -webkit-user-select: none;

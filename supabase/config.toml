@@ -38,6 +38,9 @@ verify_jwt = true
 [functions.invite-user]
 verify_jwt = true
 
+[functions.demo-switch]
+verify_jwt = true
+
 [functions.stripe-checkout]
 verify_jwt = true
 
