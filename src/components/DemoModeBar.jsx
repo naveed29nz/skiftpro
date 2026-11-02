@@ -6,14 +6,19 @@ import { queryClientInstance } from '@/lib/query-client';
 import { cn } from '@/lib/utils';
 import {
   activeDemoRole,
+  DEMO_ORG_ID,
+  SUPERADMIN_RETURN_KEY,
   demoRoles,
+  readSuperadminReturn,
+  returnToSuperadmin,
+  saveSuperadminReturn,
   shouldShowDemoBar,
   switchDemoRole,
 } from '@/lib/demoMode';
 
 const ROLES = demoRoles();
 
-function DemoModeBarView({ email }) {
+function DemoModeBarView({ email, impersonating }) {
   const barRef = useRef(null);
   const active = activeDemoRole(email);
   const [previewKey, setPreviewKey] = useState(null);
@@ -39,11 +44,21 @@ function DemoModeBarView({ email }) {
     };
   }, []);
 
+  const canReturn = !impersonating && Boolean(readSuperadminReturn(window.localStorage));
+
   const switchTo = async (key) => {
-    if (busyKey || key === active?.key) return;
+    if (busyKey || (!impersonating && key === active?.key)) return;
     setBusyKey(key);
     setError('');
     try {
+      if (impersonating) {
+        // Park the superadmin session before it is replaced by the demo user.
+        const { data } = await supabase.auth.getSession();
+        if (!saveSuperadminReturn(window.localStorage, data?.session)) {
+          throw new Error('Fant ikke superadmin-økten');
+        }
+        window.localStorage.removeItem('impersonate_org_id');
+      }
       await switchDemoRole(key, {
         invoke: (name, body) => base44.functions.invoke(name, body),
         setSession: (tokens) => supabase.auth.setSession(tokens),
@@ -54,7 +69,32 @@ function DemoModeBarView({ email }) {
         },
       });
     } catch (err) {
+      if (impersonating) {
+        // Switch failed: stay in support mode with the superadmin session.
+        window.localStorage.setItem('impersonate_org_id', DEMO_ORG_ID);
+        window.localStorage.removeItem(SUPERADMIN_RETURN_KEY);
+      }
       setError(err?.message || 'Kunne ikke bytte rolle');
+      setBusyKey('');
+    }
+  };
+
+  const goBack = async () => {
+    if (busyKey) return;
+    setBusyKey('__return');
+    setError('');
+    try {
+      await returnToSuperadmin({
+        storage: window.localStorage,
+        setSession: (tokens) => supabase.auth.setSession(tokens),
+        signOut: () => supabase.auth.signOut({ scope: 'local' }),
+        reload: (path) => {
+          queryClientInstance.clear();
+          window.location.replace(path);
+        },
+      });
+    } catch (err) {
+      setError(err?.message || 'Kunne ikke gå tilbake');
       setBusyKey('');
     }
   };
@@ -79,7 +119,7 @@ function DemoModeBarView({ email }) {
           onMouseLeave={() => setPreviewKey(null)}
         >
           {ROLES.map((role) => {
-            const selected = role.key === active?.key;
+            const selected = !impersonating && role.key === active?.key;
             return (
               <button
                 key={role.key}
@@ -102,6 +142,16 @@ function DemoModeBarView({ email }) {
             );
           })}
         </div>
+        {canReturn ? (
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={Boolean(busyKey)}
+            className="shrink-0 rounded border border-white/40 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/15 sm:ml-auto"
+          >
+            {busyKey === '__return' ? 'Går tilbake…' : 'Avslutt demo / tilbake til superadmin'}
+          </button>
+        ) : null}
       </div>
       <p className="mx-auto max-w-6xl px-3 pb-1.5 text-xs text-emerald-50">
         {shown ? shown.access : 'Velg en rolle for å se SkiftPro slik den rollen gjør.'}
@@ -116,5 +166,5 @@ function DemoModeBarView({ email }) {
 export default function DemoModeBar() {
   const { orgId, userEmail, isImpersonating } = useOrg();
   if (!shouldShowDemoBar({ email: userEmail, orgId, impersonating: isImpersonating })) return null;
-  return <DemoModeBarView email={userEmail} />;
+  return <DemoModeBarView email={userEmail} impersonating={Boolean(isImpersonating)} />;
 }

@@ -41,10 +41,58 @@ export function demoRoles() {
   });
 }
 
+// When a superadmin in support mode switches into a demo role, their own
+// session is parked here so they can come back without logging in again.
+export const SUPERADMIN_RETURN_KEY = "skiftpro_demo_superadmin_return";
+
+export function saveSuperadminReturn(storage, session) {
+  if (!storage || typeof session?.refresh_token !== "string") return false;
+  if (isDemoEmail(session?.user?.email)) return false;
+  storage.setItem(SUPERADMIN_RETURN_KEY, JSON.stringify({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    email: normalizeEmail(session?.user?.email),
+  }));
+  return true;
+}
+
+export function readSuperadminReturn(storage) {
+  try {
+    const raw = storage?.getItem(SUPERADMIN_RETURN_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw);
+    if (typeof value?.refresh_token !== "string" || isDemoEmail(value?.email)) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+// Restores the parked superadmin session and puts them back in support
+// mode for the demo org. The parked token is removed whatever happens.
+export async function returnToSuperadmin({ storage, setSession, signOut, reload }) {
+  const saved = readSuperadminReturn(storage);
+  storage?.removeItem(SUPERADMIN_RETURN_KEY);
+  if (!saved) throw new Error("Fant ingen superadmin-økt å gå tilbake til");
+  const { data, error } = await setSession({
+    access_token: saved.access_token,
+    refresh_token: saved.refresh_token,
+  });
+  if (error || normalizeEmail(data?.user?.email || data?.session?.user?.email) !== saved.email) {
+    if (signOut) await signOut();
+    if (reload) reload("/login");
+    throw new Error("Superadmin-økten var utløpt. Logg inn på nytt.");
+  }
+  storage?.setItem("impersonate_org_id", DEMO_ORG_ID);
+  if (reload) reload("/Dashboard");
+  return true;
+}
+
 export function shouldShowDemoBar({ email, orgId, impersonating = false } = {}) {
   // Impersonation is a superadmin looking into a customer. It is not membership,
   // and switching would replace the superadmin session.
-  if (impersonating) return false;
+  // Exception: a superadmin in support mode for the demo org itself.
+  if (impersonating) return String(orgId || "").trim() === DEMO_ORG_ID;
   return isDemoEmail(email) || String(orgId || "").trim() === DEMO_ORG_ID;
 }
 

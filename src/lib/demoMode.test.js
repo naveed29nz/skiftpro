@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEMO_TARGETS } from '../../supabase/functions/_shared/demoPolicy.js';
 import {
+  SUPERADMIN_RETURN_KEY,
+  readSuperadminReturn,
+  returnToSuperadmin,
+  saveSuperadminReturn,
   activeDemoRole,
   demoHomePath,
   demoRoles,
@@ -23,10 +27,17 @@ test('the demo bar is only for the Narvesen demo org or the reserved demo domain
   assert.equal(shouldShowDemoBar({ email: 'demo.admin@evil.demo.skiftpro.invalid', orgId: '' }), false);
   assert.equal(shouldShowDemoBar({ email: '', orgId: '' }), false);
   assert.equal(shouldShowDemoBar(), false);
-  assert.equal(shouldShowDemoBar({ email: 'dev@skiftpro.com', orgId: ORG, impersonating: true }), false);
+  assert.equal(shouldShowDemoBar({ email: 'dev@skiftpro.com', orgId: ORG, impersonating: true }), true);
+  assert.equal(shouldShowDemoBar({ email: 'dev@skiftpro.com', orgId: 'other-org', impersonating: true }), false);
+  assert.equal(shouldShowDemoBar({ email: 'dev@skiftpro.com', orgId: '6a2b315a825e7ecca4d5f246', impersonating: true }), false);
   assert.equal(shouldShowDemoBar({
     email: 'demo.admin@demo.skiftpro.invalid',
     orgId: ORG,
+    impersonating: true,
+  }), true);
+  assert.equal(shouldShowDemoBar({
+    email: 'demo.admin@demo.skiftpro.invalid',
+    orgId: 'other-org',
     impersonating: true,
   }), false);
 });
@@ -108,4 +119,43 @@ test('switchDemoRole refuses a session for anyone except the requested demo user
     () => switchDemoRole('no-such-role', { invoke: async () => ({}), setSession }),
     /Ukjent demorolle/,
   );
+});
+
+function memStorage() {
+  const m = new Map();
+  return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), m };
+}
+
+test('superadmin session is parked and restored into demo support mode', async () => {
+  const st = memStorage();
+  const sa = { access_token: 'a', refresh_token: 'r', user: { email: 'Dev@SkiftPro.com' } };
+  assert.equal(saveSuperadminReturn(st, sa), true);
+  assert.equal(readSuperadminReturn(st).email, 'dev@skiftpro.com');
+  const calls = [];
+  await returnToSuperadmin({
+    storage: st,
+    setSession: async (t) => { calls.push(t); return { data: { user: { email: 'dev@skiftpro.com' } }, error: null }; },
+    reload: (p) => calls.push(p),
+  });
+  assert.deepEqual(calls, [{ access_token: 'a', refresh_token: 'r' }, '/Dashboard']);
+  assert.equal(st.getItem(SUPERADMIN_RETURN_KEY), null);
+  assert.equal(st.getItem('impersonate_org_id'), ORG);
+});
+
+test('demo accounts are never parked, and an expired return goes to login', async () => {
+  const st = memStorage();
+  assert.equal(saveSuperadminReturn(st, { access_token: 'a', refresh_token: 'r', user: { email: 'demo.admin@demo.skiftpro.invalid' } }), false);
+  assert.equal(readSuperadminReturn(st), null);
+  saveSuperadminReturn(st, { access_token: 'a', refresh_token: 'r', user: { email: 'dev@skiftpro.com' } });
+  let out = null; let signedOut = false;
+  await assert.rejects(returnToSuperadmin({
+    storage: st,
+    setSession: async () => ({ data: null, error: new Error('expired') }),
+    signOut: async () => { signedOut = true; },
+    reload: (p) => { out = p; },
+  }));
+  assert.equal(signedOut, true);
+  assert.equal(out, '/login');
+  assert.equal(st.getItem('impersonate_org_id'), null);
+  assert.equal(st.getItem(SUPERADMIN_RETURN_KEY), null);
 });
