@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight, Save, CheckCircle2, Download, AlertTriangle 
 import { getActiveTeams } from '@/utils/teams';
 import { useOrg } from '@/hooks/useOrg';
 import { findWorkerByEmail } from '@/lib/workerLookup';
+import { resolveMyTeams } from '@/lib/myTeams';
 
 const FIXED_LODDTYPER = ['Flax Million', 'Pengedryss', 'Flax for livet', 'Kryssord', 'Grise Flax', 'Mega'];
 const CUSTOM_KEYS = ['custom_1', 'custom_2', 'custom_3'];
@@ -158,8 +159,9 @@ export default function Loddtelling() {
   // Team options: include all teams with custom names / assigned workers / declared active
   const teamOptions = useMemo(() => {
     const allTeams = getActiveTeams(wpSettings, allWorkers);
+    const workerKnown = myWorker != null || canSeeAllButikker;
+    const myTeams = resolveMyTeams(myWorker, { ready: workerKnown, seesAllTeams: canSeeAllButikker });
     if (canSeeAllButikker) return allTeams;
-    const myTeams = myWorker?.teams || ['team1'];
     return allTeams.filter(t => myTeams.includes(t.key));
   }, [wpSettings, canSeeAllButikker, myWorker, allWorkers]);
 
@@ -182,11 +184,24 @@ export default function Loddtelling() {
         setMyWorker(w);
         setWpSettings(wpRecord);
         setAllWorkers(workers);
-        setButikk(w?.teams?.[0] || 'team1');
+        const seesAll = u?.role === 'admin' || w?.role === 'admin' || w?.role === 'sub_admin';
+        const teams = resolveMyTeams(w, { ready: true, seesAllTeams: seesAll });
+        setButikk((current) => (current && (seesAll || teams.includes(current)) ? current : (teams[0] || '')));
       } catch {}
     })();
     return () => { cancelled = true; };
   }, [orgId]);
+
+  useEffect(() => {
+    if (!myWorker && !canSeeAllButikker) return;
+    const teams = resolveMyTeams(myWorker, { ready: true, seesAllTeams: canSeeAllButikker });
+    if (canSeeAllButikker) {
+      if (!butikk) setButikk(teams[0] || 'team1');
+      return;
+    }
+    if (!teams.length || teams.includes(butikk)) return;
+    setButikk(teams[0]);
+  }, [myWorker, canSeeAllButikker, butikk]);
 
   const { data: allRecords = [] } = useQuery({
     queryKey: ['loddtelling', orgId],

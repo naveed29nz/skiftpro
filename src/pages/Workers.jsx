@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
+import { nextTeamFilter } from '@/lib/myTeams';
 import { base44 } from '@/api/base44Client';
 import { supabase } from '@/api/supabaseClient';
 import { Button } from '@/components/ui/button';
@@ -62,7 +63,7 @@ function InviteButton({ worker }) {
 }
 
 export default function Workers() {
-  const { user, worker: me, myTeams } = useCurrentWorker();
+  const { user, worker: me, myTeams, ready: workerReady, seesAllTeams } = useCurrentWorker();
   const showWages = canSeeWageCosts(user, me);
   const { orgId, myOrg, isSuperAdmin: superAdmin } = useOrg();
   const isAdmin = user?.role === 'admin';
@@ -93,11 +94,19 @@ export default function Workers() {
   const teamNames = useTeamNames();
 
   useEffect(() => {
-    if (!teamDefaultSet && myTeams?.[0]) {
-      setFilterTeam(myTeams[0]);
-      setTeamDefaultSet(true);
-    }
-  }, [myTeams, teamDefaultSet]);
+    const next = nextTeamFilter({
+      ready: workerReady,
+      seesAllTeams,
+      myTeams,
+      filterTeam,
+      teamDefaultSet,
+      adminDefault: myTeams[0] || 'all',
+      allowAll: true,
+    });
+    if (next == null) return;
+    if (next !== filterTeam) setFilterTeam(next);
+    if (!teamDefaultSet) setTeamDefaultSet(true);
+  }, [workerReady, seesAllTeams, myTeams, filterTeam, teamDefaultSet]);
 
   // butikksjef only sees/manages workers in their own team(s)
   const workers = isAdmin

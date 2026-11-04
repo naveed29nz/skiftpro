@@ -115,11 +115,11 @@ const faqs = [
   },
   {
     q: 'Hvem er SkiftPro laget for?',
-    a: 'SkiftPro er laget av en kjøpmann, for kjøpmenn i kiosk og convenience. Zastek AS står bak produktet.',
+    a: 'SkiftPro er laget av kjøpmenn, for kjøpmenn i kiosk-, convenience- og butikkbransjen.',
   },
   {
     q: 'Hvor ligger dataene?',
-    a: 'Innlogging og database ligger hos Supabase i EU (Frankfurt). Nettappen kjører på Vercel. Stripe og e-post tas i bruk senere.',
+    a: 'Alle data lagres sikkert i EU',
   },
 ];
 

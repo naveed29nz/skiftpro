@@ -35,7 +35,8 @@ import {
   teamOrderKey,
   writeLocalWorkerOrder,
 } from '@/timesheet/workerOrder';
-import { groupShiftVisible } from '@/timesheet/groupShifts';
+import { groupShiftDropFields, groupShiftDroppableId, groupShiftVisible } from '@/timesheet/groupShifts';
+import { nextTeamFilter } from '@/lib/myTeams';
 import { isCoarsePointer, isTouchLikePointer, pressMovedPast, SHIFT_LONG_PRESS_MS, shiftGestureIsTouch } from '@/timesheet/touchShift';
 import { calcHours } from '@/utils/payCalc';
 import { isDateLocked } from '@/utils/payrollLock';
@@ -83,7 +84,7 @@ const SHIFT_DRAG_SENSORS = [useMouseSensor, useKeyboardSensor];
 const LABEL_STYLES = {
   morning: { cell: 'bg-green-50',  badge: 'bg-green-100 text-green-700 border border-green-200' },
   middle:  { cell: 'bg-slate-100', badge: 'bg-slate-200 text-slate-700 border border-slate-300' },
-  evening: { cell: 'bg-slate-50',  badge: 'bg-slate-150 text-slate-600 border border-slate-250' },
+  evening: { cell: 'bg-blue-100', badge: 'bg-blue-100 text-blue-800 border border-blue-200' },
   sick:        { cell: 'bg-red-50',  badge: 'bg-red-100 text-red-700 border border-red-200' },
   sick_self:   { cell: 'bg-red-50',  badge: 'bg-red-100 text-red-700 border border-red-200' },
   sick_doctor: { cell: 'bg-rose-50', badge: 'bg-rose-100 text-rose-700 border border-rose-200' },
@@ -93,17 +94,22 @@ const LABEL_STYLES = {
 const GROUPS = [
   { label: 'morning',     name: 'Morgen',      icon: '🌅', headerClass: 'bg-green-600 text-white', rowClass: 'bg-green-50' },
   { label: 'middle',      name: 'Mellomvakt',  icon: '☀️', headerClass: 'bg-slate-600 text-white', rowClass: 'bg-slate-100' },
-  { label: 'evening',     name: 'Kveld',       icon: '🌙', headerClass: 'bg-slate-500 text-white', rowClass: 'bg-slate-50' },
+  { label: 'evening',     name: 'Kveld',       icon: '🌙', headerClass: 'bg-blue-500 text-white',  rowClass: 'bg-blue-50' },
   { label: 'sick',        name: 'Syk',         icon: '🤒', headerClass: 'bg-red-500 text-white',   rowClass: 'bg-red-50' },
   { label: 'sick_self',   name: 'Egenmelding', icon: '🤒', headerClass: 'bg-red-600 text-white',   rowClass: 'bg-red-50' },
   { label: 'sick_doctor', name: 'Sykmelding',  icon: '🏥', headerClass: 'bg-rose-600 text-white',  rowClass: 'bg-rose-50' },
   { label: 'ferie',       name: 'Ferie',       icon: '🏖️', headerClass: 'bg-sky-600 text-white',   rowClass: 'bg-sky-50' },
+  { label: '',            name: 'Uten vakttype', icon: '–', headerClass: 'bg-slate-500 text-white', rowClass: 'bg-slate-50' },
 ];
+
+const GROUP_CARD_CLASS = {
+  evening: 'bg-blue-100 border-blue-200',
+};
 
 const LABEL_LEGEND = [
   { label: 'morning',     color: 'bg-green-100 border-green-300 text-green-700', icon: '🌅' },
   { label: 'middle',      color: 'bg-slate-200 border-slate-300 text-slate-700',  icon: '☀️' },
-  { label: 'evening',     color: 'bg-slate-150 border-slate-250 text-slate-600',  icon: '🌙' },
+  { label: 'evening',     color: 'bg-blue-100 border-blue-200 text-blue-800',  icon: '🌙' },
   { label: 'sick',        color: 'bg-red-100 border-red-300 text-red-700',        icon: '🤒' },
   { label: 'sick_self',   color: 'bg-red-100 border-red-300 text-red-700',        icon: '🤒' },
   { label: 'sick_doctor', color: 'bg-rose-100 border-rose-300 text-rose-700',     icon: '🏥' },
@@ -177,7 +183,7 @@ function getNorwegianHolidays(year) {
 }
 
 export default function Timesheet() {
-  const { user, worker: currentWorker, myTeams } = useCurrentWorker();
+  const { user, worker: currentWorker, myTeams, ready: workerReady, seesAllTeams } = useCurrentWorker();
   const showWages = canSeeWageCosts(user, currentWorker);
   const isAdmin = user?.role === 'admin';
   // Rollene som får redigere vaktplan (legge til / slette / endre / kopiere / publisere)
@@ -228,13 +234,19 @@ export default function Timesheet() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!teamDefaultSet && myTeams?.[0]) {
-      // Admins default to "Alle team"; non-admins default to their first team
-      const defaultTeam = user?.role === 'admin' ? 'all' : myTeams[0];
-      setFilterTeam(defaultTeam);
-      setTeamDefaultSet(true);
-    }
-  }, [myTeams, teamDefaultSet, user]);
+    const next = nextTeamFilter({
+      ready: workerReady,
+      seesAllTeams,
+      myTeams,
+      filterTeam,
+      teamDefaultSet,
+      adminDefault: 'all',
+      allowAll: false,
+    });
+    if (next == null) return;
+    if (next !== filterTeam) setFilterTeam(next);
+    if (!teamDefaultSet) setTeamDefaultSet(true);
+  }, [workerReady, seesAllTeams, myTeams, filterTeam, teamDefaultSet]);
 
   const { orgId } = useOrg();
   const { data: workerOrders } = useQuery({
@@ -891,18 +903,17 @@ export default function Timesheet() {
       handleRefresh();
       return;
     }
-    if (type === 'GROUPSHIFT') {
-      // droppableId format: groupshift__{label}__{dayStr}
-      const destParts = destination.droppableId.split('__');
-      const newLabel = destParts[1];
-      const newDate = destParts[2];
+    if (type === 'GROUPSHIFT' || String(destination.droppableId || '').startsWith('groupshift__')) {
+      // Flytt til en annen vakt-rad: datoen følger cellen, og vakttype blir radens type.
       const shift = shifts.find(s => s.id === draggableId);
-      if (!shift || refuseLocked(shift.date) || refuseLocked(newDate)) return;
-      await base44.entities.Shift.update(draggableId, {
-        shift_label: newLabel,
-        date: newDate,
-      });
-      handleRefresh();
+      const fields = groupShiftDropFields(shift, destination.droppableId);
+      if (!shift || !fields || refuseLocked(shift.date) || refuseLocked(fields.date)) return;
+      try {
+        await base44.entities.Shift.update(draggableId, fields);
+        handleRefresh();
+      } catch (error) {
+        toast({ title: 'Kunne ikke flytte vakten', description: error.message || 'Prøv igjen.', variant: 'destructive' });
+      }
       return;
     }
   };
@@ -1178,7 +1189,7 @@ export default function Timesheet() {
             {GROUPS.map(group => {
               const stats = getGroupStats(group.label);
               return (
-                <div key={group.label} className="rounded-xl border border-slate-200 overflow-hidden">
+                <div key={group.label || 'untagged'} className="rounded-xl border border-slate-200 overflow-hidden">
                   {/* Group header */}
                   <div className={`flex items-center justify-between px-4 py-2.5 ${group.headerClass}`}>
                     <span className="font-bold text-sm">{group.icon} {group.name}</span>
@@ -1210,8 +1221,9 @@ export default function Timesheet() {
                           </td>
                           {days.map(day => {
                             const dayStr = format(day, 'yyyy-MM-dd');
-                            const cellDropId = `groupshift__${group.label}__${dayStr}`;
+                            const cellDropId = groupShiftDroppableId(group.label, dayStr);
                             const dayShifts = getGroupDayShifts(group.label, day);
+                            const cardClass = GROUP_CARD_CLASS[group.label] || 'bg-white border-slate-200';
                             return (
                               <td key={day.toISOString()} className={`px-2 py-2 align-top border-l border-white/60 ${isSameDay(day, new Date()) ? 'bg-blue-50/40' : ''}`}>
                                 <Droppable droppableId={cellDropId} type="GROUPSHIFT" isDropDisabled={group.label === 'sick'}>
@@ -1233,7 +1245,7 @@ export default function Timesheet() {
                                                   data-shift-id={s.id}
                                                   {...(w ? touchPressProps({ shift: s, worker: w, day }) : {})}
                                                   onClick={(e) => { if (w) activateShift(e, { shift: s, worker: w, day }, { dragging: shiftSnapshot.isDragging }); }}
-                                                  className={`bg-white rounded border border-slate-200 px-2 py-1.5 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow ${SHIFT_NO_CALLOUT}
+                                                  className={`${cardClass} rounded border px-2 py-1.5 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow ${SHIFT_NO_CALLOUT}
                                                     ${pressingId === s.id ? 'ring-2 ring-blue-300' : ''}
                                                     ${shiftSnapshot.isDragging ? 'shadow-lg ring-2 ring-blue-400 opacity-90' : ''}`}
                                                   style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}

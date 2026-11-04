@@ -259,7 +259,7 @@ function TaskCard({ task, workers, isAdmin, currentWorkerId, onToggle, onDelete 
 
 export default function Tasks() {
   const { orgId } = useOrg();
-  const { user, worker } = useCurrentWorker();
+  const { user, worker, myTeams, ready: workerReady } = useCurrentWorker();
   const isAdmin = user?.role === 'admin' || worker?.role === 'admin' || worker?.role === 'sub_admin' || worker?.role === 'butikksjef';
   const currentWorkerId = worker?.id;
   const queryClient = useQueryClient();
@@ -295,10 +295,11 @@ export default function Tasks() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
-  // Workers see only their own tasks or tasks assigned to all in their team
-  const myTeams = worker?.teams || ['team1'];
+  // Workers see only their own tasks or tasks assigned to all in their team.
+  // Until the worker row is ready, myTeams is empty so we do not pretend they are on team1.
   const filteredTasks = tasks.filter(t => {
     if (!isAdmin) {
+      if (!workerReady) return false;
       const taskTeam = t.team || 'team1';
       if (!myTeams.includes(taskTeam)) return false;
       const ids = t.assigned_worker_ids?.length ? t.assigned_worker_ids : (t.assigned_worker_id ? [t.assigned_worker_id] : []);
