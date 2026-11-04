@@ -22,3 +22,24 @@ export function groupShiftVisible({ shift, worker, filterTeam, isAdmin = true, m
   if (filterTeam !== 'all' && !memberTeams.includes(filterTeam)) return false;
   return shiftIsOnSelectedTeam(shift, worker, filterTeam);
 }
+
+/** Droppable id for one day-cell in «Sorter etter vakt». Empty label is «Uten vakttype». */
+export function groupShiftDroppableId(label, dayStr) {
+  return `groupshift__${label || ''}__${dayStr}`;
+}
+
+/**
+ * Fields written when a shift is dragged onto another shift-type row.
+ * The row's type becomes the shift's type. Null when the drop is the same cell.
+ */
+export function groupShiftDropFields(shift, droppableId) {
+  if (!shift || typeof droppableId !== 'string' || !droppableId.startsWith('groupshift__')) return null;
+  const rest = droppableId.slice('groupshift__'.length);
+  const splitAt = rest.lastIndexOf('__');
+  if (splitAt < 0) return null;
+  const shiftLabel = rest.slice(0, splitAt);
+  const date = rest.slice(splitAt + 2);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if ((shift.shift_label || '') === shiftLabel && shift.date === date) return null;
+  return { shift_label: shiftLabel, date };
+}

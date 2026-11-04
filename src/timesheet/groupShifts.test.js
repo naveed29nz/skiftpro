@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupShiftVisible, shiftIsOnSelectedTeam } from './groupShifts.js';
+import { groupShiftDropFields, groupShiftDroppableId, groupShiftVisible, shiftIsOnSelectedTeam } from './groupShifts.js';
 
 const ahmed = { id: 'ahmed', name: 'Ahmed Baker', teams: ['team-n500', 'team-n417'] };
 const morningAt417 = {
@@ -85,4 +85,28 @@ test('a missing worker is not placed in a shift group', () => {
     worker: null,
     filterTeam: 'team-n500',
   }), false);
+});
+
+test('dropping a shift on another shift-type row changes its type', () => {
+  const fields = groupShiftDropFields(
+    { shift_label: 'morning', date: '2026-11-02' },
+    groupShiftDroppableId('evening', '2026-11-03'),
+  );
+  assert.deepEqual(fields, { shift_label: 'evening', date: '2026-11-03' });
+});
+
+test('dropping on Uten vakttype clears the shift type', () => {
+  const fields = groupShiftDropFields(
+    { shift_label: 'morning', date: '2026-11-02' },
+    groupShiftDroppableId('', '2026-11-02'),
+  );
+  assert.deepEqual(fields, { shift_label: '', date: '2026-11-02' });
+  assert.equal(groupShiftDroppableId('', '2026-11-02'), 'groupshift____2026-11-02');
+});
+
+test('dropping a shift back on its own cell does not rewrite it', () => {
+  assert.equal(groupShiftDropFields(
+    { shift_label: 'evening', date: '2026-11-02' },
+    groupShiftDroppableId('evening', '2026-11-02'),
+  ), null);
 });

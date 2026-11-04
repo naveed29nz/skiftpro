@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SignedUploadImage } from '@/components/uploads/SignedUploadImage';
+import { resolveMyTeams } from '@/lib/myTeams';
 
 const PRIORITY_STYLES = {
   high:   'bg-red-100 text-red-700',
@@ -24,7 +25,10 @@ export default function WorkerTasksTab({ worker, workers: allWorkers = [], teamN
   const [showImage, setShowImage] = useState(null);
   const [showNewTask, setShowNewTask] = useState(false);
   const [newTask, setNewTask] = useState({ ...EMPTY_TASK_FORM });
-  const myTeams = worker?.teams || ['team1'];
+  const myTeams = resolveMyTeams(worker, {
+    ready: !!worker,
+    seesAllTeams: worker?.role === 'admin' || worker?.role === 'sub_admin',
+  });
   const today = format(new Date(), 'yyyy-MM-dd');
 
   const canCreateTasks = ['admin', 'sub_admin', 'butikksjef'].includes(worker?.role);
@@ -45,7 +49,7 @@ export default function WorkerTasksTab({ worker, workers: allWorkers = [], teamN
     });
   };
 
-  const activeTeam = newTask.team || myTeams[0] || 'team1';
+  const activeTeam = newTask.team || myTeams[0] || '';
   const teamWorkers = allWorkers.filter(w =>
     w.status !== 'inactive' && (w.teams || ['team1']).includes(activeTeam)
   );
@@ -75,7 +79,7 @@ export default function WorkerTasksTab({ worker, workers: allWorkers = [], teamN
         due_date: d.due_date,
         priority: d.priority,
         org_id: orgId,
-        team: d.team || myTeams[0] || 'team1',
+        team: d.team || myTeams[0] || '',
         assigned_worker_ids: ids,
         assigned_worker_id: ids.includes('all') ? 'all' : (ids[0] || 'all'),
         assigned_worker_names: names,
@@ -119,7 +123,7 @@ export default function WorkerTasksTab({ worker, workers: allWorkers = [], teamN
     <div className="space-y-4">
       {canCreateTasks && (
         <div className="flex justify-end">
-          <Button size="sm" className="gap-2" onClick={() => { setNewTask({ ...EMPTY_TASK_FORM, team: myTeams[0] || 'team1' }); setShowNewTask(true); }}>
+          <Button size="sm" className="gap-2" onClick={() => { setNewTask({ ...EMPTY_TASK_FORM, team: myTeams[0] || '' }); setShowNewTask(true); }}>
             <Plus className="w-4 h-4" /> Ny oppgave
           </Button>
         </div>

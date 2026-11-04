@@ -1,15 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { format, startOfWeek, addDays, addWeeks, subWeeks } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { shiftLabelName } from '@/utils/shiftLabels';
+import { resolveMyTeams } from '@/lib/myTeams';
 
 export default function TeamSchedule({ shifts, workers, currentWorker, wpSettings = [] }) {
-  const myTeams = currentWorker?.teams || ['team1'];
+  const seesAllTeams = currentWorker?.role === 'admin';
+  const myTeams = useMemo(
+    () => resolveMyTeams(currentWorker, { ready: currentWorker != null, seesAllTeams }),
+    [currentWorker, seesAllTeams],
+  );
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [selectedTeam, setSelectedTeam] = useState(myTeams[0] || 'team1');
+  const [selectedTeam, setSelectedTeam] = useState(() => (
+    Array.isArray(currentWorker?.teams) ? (currentWorker.teams.find(Boolean) || '') : ''
+  ));
+
+  useEffect(() => {
+    if (!currentWorker || !myTeams.length) return;
+    if (!myTeams.includes(selectedTeam)) setSelectedTeam(myTeams[0]);
+  }, [currentWorker, myTeams, selectedTeam]);
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 

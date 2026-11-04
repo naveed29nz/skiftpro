@@ -8,12 +8,12 @@ import { shiftLabelName } from '@/utils/shiftLabels';
 const SHIFT_ROWS = [
   { key: 'morning', name: 'Morgen',        headerClass: 'bg-green-600 text-white',  rowClass: 'bg-green-50/40',  blockClass: 'bg-green-200 text-green-900 border border-green-300' },
   { key: 'middle',  name: 'Mellomvakt',    headerClass: 'bg-sky-600 text-white',     rowClass: 'bg-sky-50/40',    blockClass: 'bg-sky-200 text-sky-900 border border-sky-300' },
-  { key: 'evening', name: 'Kveldsvakt',    headerClass: 'bg-slate-600 text-white',   rowClass: 'bg-slate-100/40', blockClass: 'bg-slate-300 text-slate-900 border border-slate-400' },
+  { key: 'evening', name: 'Kveldsvakt',    headerClass: 'bg-blue-500 text-white',    rowClass: 'bg-blue-50/40',   blockClass: 'bg-blue-100 text-blue-900 border border-blue-200' },
   { key: 'sick',        name: 'Syk',         headerClass: 'bg-red-600 text-white',  rowClass: 'bg-red-50/40',  blockClass: 'bg-red-200 text-red-900 border border-red-300' },
   { key: 'sick_self',   name: 'Egenmelding', headerClass: 'bg-red-600 text-white',  rowClass: 'bg-red-50/40',  blockClass: 'bg-red-200 text-red-900 border border-red-300' },
   { key: 'sick_doctor', name: 'Sykmelding',  headerClass: 'bg-rose-600 text-white', rowClass: 'bg-rose-50/40', blockClass: 'bg-rose-200 text-rose-900 border border-rose-300' },
   { key: 'ferie',       name: 'Ferie',       headerClass: 'bg-sky-600 text-white',  rowClass: 'bg-sky-50/40',  blockClass: 'bg-sky-200 text-sky-900 border border-sky-300' },
-  { key: '',        name: 'Ing. kategori', headerClass: 'bg-gray-500 text-white',   rowClass: 'bg-gray-50/40',   blockClass: 'bg-gray-200 text-gray-900 border border-gray-300' },
+  { key: '',        name: 'Uten vakttype', headerClass: 'bg-gray-500 text-white',   rowClass: 'bg-gray-50/40',   blockClass: 'bg-gray-200 text-gray-900 border border-gray-300' },
 ];
 
 const TIME_WIDTH = 784; // px
@@ -135,7 +135,7 @@ export default function DayGantt({ day, workers, shifts, availability, filterTea
             const { lanesByShift, maxLanes } = assignLanes(groupShifts);
             const rowHeight = maxLanes * 40 + 14;
             return (
-              <div key={row.key} className="flex border-b border-slate-100">
+              <div key={row.key || 'untagged'} className="flex border-b border-slate-100">
                 <div className={`shrink-0 sticky left-0 z-10 border-r border-slate-200 flex flex-col justify-center px-3 py-2 ${row.rowClass}`} style={{ width: LEFT_W }}>
                   <div className={`inline-flex items-center gap-1.5 self-start px-2 py-0.5 rounded text-xs font-semibold ${row.headerClass}`}>{row.name}</div>
                   <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">

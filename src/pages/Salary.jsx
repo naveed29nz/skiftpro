@@ -11,6 +11,7 @@ import { getActiveTeams } from '@/utils/teams';
 import { canSeeWageCosts, effectiveAppRole } from '@/utils/wageAccess';
 import { useOrg } from '@/hooks/useOrg';
 import { sameEmail } from '@/lib/emails';
+import { nextTeamFilter, resolveMyTeams } from '@/lib/myTeams';
 import { toast } from '@/components/ui/use-toast';
 import PayrollExportColumns from '@/components/payroll/PayrollExportColumns';
 import PayrollLockCard from '@/components/payroll/PayrollLockCard';
@@ -77,15 +78,28 @@ export default function Salary() {
   });
 
   const myWorker = workers.find((w) => sameEmail(w.email, currentUser?.email));
-  const myTeams = myWorker?.teams || ['team1'];
+  const seesAllTeams = currentUser?.role === 'admin';
+  const workerReady = Boolean(currentUser) && !workersPending;
+  const myTeams = useMemo(
+    () => resolveMyTeams(myWorker, { ready: workerReady, seesAllTeams }),
+    [myWorker, workerReady, seesAllTeams],
+  );
   const canLock = effectiveAppRole(currentUser, myWorker) === 'admin';
 
   useEffect(() => {
-    if (!teamDefaultSet && myWorker) {
-      setFilterTeam(currentUser?.role === 'admin' ? 'all' : (myWorker.teams?.[0] || 'all'));
-      setTeamDefaultSet(true);
-    }
-  }, [myWorker, teamDefaultSet, currentUser?.role]);
+    const next = nextTeamFilter({
+      ready: workerReady,
+      seesAllTeams,
+      myTeams,
+      filterTeam,
+      teamDefaultSet,
+      adminDefault: 'all',
+      allowAll: true,
+    });
+    if (next == null) return;
+    if (next !== filterTeam) setFilterTeam(next);
+    if (!teamDefaultSet) setTeamDefaultSet(true);
+  }, [workerReady, seesAllTeams, myTeams, filterTeam, teamDefaultSet]);
 
   const wp = orgId ? wpSettings.find(s => s.org_id === orgId) : wpSettings[0];
   useEffect(() => {
