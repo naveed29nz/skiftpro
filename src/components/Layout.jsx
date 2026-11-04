@@ -17,6 +17,7 @@ import { claimOrgId, resolveSignupGate, resolveSignupKind } from '@/lib/signupGa
 import { findWorkerByEmail } from '@/lib/workerLookup';
 import { defaultPageForRole, isPageEnabled, visibleNavItems } from '@/lib/featureFlags';
 import { needsCompanyDetails } from '@/lib/orgNumber';
+import { APP_CHROME_Z } from '@/lib/layers';
 
 async function claimWorkerOrg() {
   const { data, error } = await supabase.rpc('claim_worker_card');
@@ -338,7 +339,7 @@ export default function Layout() {
       <ImpersonationBanner />
 
       {/* Top navbar - two rows */}
-      <header className="sticky top-0 demo-sticky-header" style={{zIndex: 100}}>
+      <header className="sticky top-0 demo-sticky-header" style={{ zIndex: APP_CHROME_Z.header }}>
         {/* Row 1: deeper blue — logo + top-level links */}
         <div className="bg-blue-950 flex items-center gap-4 px-4 h-10">
           <div className="flex items-center gap-2 shrink-0">
@@ -381,7 +382,7 @@ export default function Layout() {
             onClick={() => base44.auth.logout()}
             title="Logg ut"
             className="md:hidden fixed top-2 right-16 w-10 h-10 flex items-center justify-center rounded-md bg-blue-950 touch-manipulation pwa-safe-logout"
-            style={{ zIndex: 9999 }}
+            style={{ zIndex: APP_CHROME_Z.mobileControls }}
           >
             <LogOut className="w-5 h-5 text-white" />
           </button>
@@ -408,10 +409,10 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Fixed hamburger button — always on top, never blocked */}
+      {/* Fixed hamburger — above page content. Open dialogs use a higher layer. */}
       <button
         className="md:hidden fixed top-2 right-3 w-10 h-10 flex items-center justify-center rounded-md bg-blue-950 touch-manipulation pwa-safe-menu"
-        style={{zIndex: 9999}}
+        style={{ zIndex: APP_CHROME_Z.mobileControls }}
         onClick={() => setMobileOpen(v => !v)}
       >
         <Menu className="w-5 h-5 text-white" />

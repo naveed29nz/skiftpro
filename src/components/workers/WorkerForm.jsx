@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,6 +56,24 @@ export default function WorkerForm({
   const [failure, setFailure] = useState('');
   const [saving, setSaving] = useState(false);
   const footerRef = useRef(null);
+  const bodyRef = useRef(null);
+  useLayoutEffect(() => {
+    const node = bodyRef.current;
+    if (!node) return undefined;
+    const pin = () => {
+      node.scrollTop = 0;
+    };
+    pin();
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      pin();
+      second = requestAnimationFrame(pin);
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      if (second) cancelAnimationFrame(second);
+    };
+  }, [worker?.id]);
   const [form, setForm] = useState({
     name: worker?.name || '',
     email: worker?.email || '',
@@ -179,11 +197,11 @@ export default function WorkerForm({
 
   return (
     <form noValidate onSubmit={(event) => handleSubmit(event, false)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+      <div ref={bodyRef} data-testid="worker-form-body" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label>Navn *</Label>
-          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Fullt navn" />
+          <Label htmlFor="ansatt-navn">Navn *</Label>
+          <Input id="ansatt-navn" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Fullt navn" />
         </div>
         <div className="space-y-1.5">
           <Label>Stilling</Label>
