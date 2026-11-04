@@ -33,6 +33,10 @@ const PayrollRound1Preview = import.meta.env.DEV
 const EkstrahjelpPreview = import.meta.env.DEV
   ? lazy(() => import('@/pages/EkstrahjelpPreview'))
   : null;
+const showCancellationPreview = import.meta.env.DEV || import.meta.env.VITE_VERCEL_ENV === 'preview';
+const CancellationPreview = showCancellationPreview
+  ? lazy(() => import('@/pages/CancellationPreview'))
+  : null;
 
 function storedSessionPresent() {
   try {
@@ -150,6 +154,16 @@ function App() {
                 element={(
                   <Suspense fallback={<OpeningSplash />}>
                     <EkstrahjelpPreview />
+                  </Suspense>
+                )}
+              />
+            )}
+            {showCancellationPreview && CancellationPreview && (
+              <Route
+                path="/forhandsvisning/oppsigelse"
+                element={(
+                  <Suspense fallback={<OpeningSplash />}>
+                    <CancellationPreview />
                   </Suspense>
                 )}
               />

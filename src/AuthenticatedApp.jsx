@@ -15,6 +15,7 @@ import Innskudd from '@/pages/Innskudd';
 import Loddtelling from '@/pages/Loddtelling';
 import Ukeplan from '@/pages/Ukeplan';
 import Settings from '@/pages/Settings';
+import Cancellation from '@/pages/Cancellation';
 import SuperAdmin from '@/pages/SuperAdmin';
 import SuperAdminAnalytics from '@/pages/SuperAdminAnalytics';
 import SuperAdminBilling from '@/pages/SuperAdminBilling';
@@ -65,6 +66,7 @@ export default function AuthenticatedApp() {
           <Route path="/Loddtelling" element={<Loddtelling />} />
           <Route path="/Ukeplan" element={<Ukeplan />} />
           <Route path="/Settings" element={<Settings />} />
+          <Route path="/Settings/oppsigelse" element={<Cancellation />} />
           <Route path="/SuperAdmin" element={<SuperAdmin />} />
           <Route path="/SuperAdmin/Analytics" element={<SuperAdminAnalytics />} />
           <Route path="/SuperAdmin/Billing" element={<SuperAdminBilling />} />

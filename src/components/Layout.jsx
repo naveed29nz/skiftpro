@@ -390,7 +390,7 @@ export default function Layout() {
         {/* Row 2: nav links */}
         <div className="bg-blue-900 hidden md:flex items-center gap-1 px-4 h-10 overflow-x-auto">
           {navItems.filter(n => n.path !== '/Dashboard' && n.path !== '/WorkerPortal').map(item => {
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path || (item.path === '/Settings' && location.pathname.startsWith('/Settings/'));
             return (
               <Link
                 key={item.path}
@@ -431,7 +431,7 @@ export default function Layout() {
             </div>
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               {navItems.map(item => {
-                const isActive = location.pathname === item.path;
+                const isActive = location.pathname === item.path || (item.path === '/Settings' && location.pathname.startsWith('/Settings/'));
                 return (
                   <Link key={item.path} to={item.path} onClick={() => setMobileOpen(false)}
                     className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",

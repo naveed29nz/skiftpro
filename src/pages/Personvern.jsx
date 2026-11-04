@@ -10,6 +10,8 @@ export default function Personvern() {
       <p>Du kan be arbeidsgiveren eller Zastek AS om innsyn, retting eller sletting der reglene tillater det. Klage kan sendes til Datatilsynet.</p>
       <h2 className="font-semibold text-base">Elektronisk signering</h2>
       <p>Når en arbeidsavtale signeres i SkiftPro, lagrer vi avtaleteksten, tidspunkt, hvilken metode som ble brukt, IP-adresse og nettleserinformasjon. Det er dokumentasjon på at avtalen ble signert. Vi ber ikke om fødselsnummer. Opplysningene slettes ikke automatisk. Arbeidsgiver må bekrefte sletting etter at oppbevaringstiden er ute.</p>
+      <h2 className="font-semibold text-base">Når kunden sier opp</h2>
+      <p>Etter at abonnementet er avsluttet, oppbevares kundedata i 60 dager. SkiftPro sletter ikke disse opplysningene automatisk. En superadministrator hos Zastek AS sletter dem manuelt på eller etter den registrerte slettedatoen. Opplysninger som må oppbevares etter bokføringsreglene, slettes ikke ved den datoen.</p>
       <h2 className="font-semibold text-base">Databehandlere</h2>
       <ul className="list-disc pl-5 space-y-1">
         <li>Supabase, database og innlogging, EU-region Frankfurt</li>
