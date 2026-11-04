@@ -323,7 +323,7 @@ const DEFAULTS = generateDefaults();
 
 export default function Settings() {
   const queryClient = useQueryClient();
-  const { myOrg, orgId, orgs } = useOrg();
+  const { myOrg, orgId, orgs, isOrgAdmin } = useOrg();
   const { user, worker } = useCurrentWorker();
   const showWages = canSeeWageCosts(user, worker);
   const [globalAddressInput, setGlobalAddressInput] = useState('');
@@ -636,7 +636,7 @@ export default function Settings() {
         {saveMut.isSuccess && <p className="text-sm text-emerald-600 text-center">Innstillinger lagret!</p>}
       </form>
       {showWages && <EmployerSettingsCard orgId={orgId} />}
-      {showWages && <BillingCard orgId={orgId} />}
+      {showWages && <BillingCard orgId={orgId} canCancel={isOrgAdmin} />}
     </div>
   );
 }

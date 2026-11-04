@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { CreditCard, TrendingUp, Clock, CheckCircle2 } from 'lucide-react';
 import { useCurrentWorker } from '@/hooks/useCurrentWorker';
+import CancellationAdminList from '@/components/billing/CancellationAdminList';
 
 const PLAN_PRICES = { // estimert mndpris i kr
   basic: 499,
@@ -128,6 +129,7 @@ export default function SuperAdminBilling() {
           </table>
         </div>
       </div>
+      <CancellationAdminList organizations={orgs} />
       <p className="text-xs text-slate-400 italic">Priser er estimater. Koble til Stripe for faktisk betalingshåndtering.</p>
     </div>
   );
