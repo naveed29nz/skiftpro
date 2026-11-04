@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { clearPasswordSetup, supabase } from '@/api/supabaseClient';
 import { queryClientInstance } from '@/lib/query-client';
 import { cn } from '@/lib/utils';
+import { APP_CHROME_Z } from '@/lib/layers';
 import {
   activeDemoRole,
   DEMO_ORG_ID,
@@ -102,7 +103,8 @@ function DemoModeBarView({ email, impersonating }) {
   return (
     <div
       ref={barRef}
-      className="fixed inset-x-0 top-0 z-[120] border-b border-emerald-950/30 bg-emerald-800 text-white shadow-md"
+      className="fixed inset-x-0 top-0 border-b border-emerald-950/30 bg-emerald-800 text-white shadow-md"
+      style={{ zIndex: APP_CHROME_Z.demoBar }}
       role="region"
       aria-label="Demo-modus"
     >

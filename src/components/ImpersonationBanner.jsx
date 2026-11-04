@@ -1,4 +1,5 @@
 import { Shield, X } from 'lucide-react';
+import { APP_CHROME_Z } from '@/lib/layers';
 import { useNavigate } from 'react-router-dom';
 import { useOrg } from '@/hooks/useOrg';
 
@@ -19,7 +20,7 @@ export default function ImpersonationBanner() {
   };
 
   return (
-    <div className="bg-amber-500 text-white px-4 py-1.5 flex items-center justify-between text-sm shadow-md sticky top-0 z-[110]">
+    <div className="bg-amber-500 text-white px-4 py-1.5 flex items-center justify-between text-sm shadow-md sticky top-0" style={{ zIndex: APP_CHROME_Z.impersonation }}>
       <div className="flex items-center gap-2 min-w-0">
         <Shield className="w-4 h-4 shrink-0" />
         <span className="font-semibold shrink-0">SuperAdmin-støtte:</span>

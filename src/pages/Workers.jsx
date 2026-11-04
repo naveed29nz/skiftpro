@@ -439,7 +439,14 @@ export default function Workers() {
       )}
 
       <Dialog open={showForm || !!editing} onOpenChange={v => { if (!v) { setShowForm(false); setEditing(null); setFormError(''); } }}>
-        <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
+        <DialogContent
+          data-testid="ansattkort-dialog"
+          className="flex h-[min(90dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem))] w-[calc(100%-2rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] flex-col overflow-hidden sm:max-w-2xl"
+          onOpenAutoFocus={(event) => {
+            const body = event.currentTarget?.querySelector?.('[data-testid="worker-form-body"]');
+            if (body) body.scrollTop = 0;
+          }}
+        >
           <DialogHeader className="shrink-0">
             <DialogTitle>{editing ? 'Rediger ansatt' : 'Ny ansatt'}</DialogTitle>
           </DialogHeader>
@@ -466,11 +473,11 @@ export default function Workers() {
       </Dialog>
 
       <Dialog open={!!preview} onOpenChange={v => { if (!v) setPreview(null); }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogContent className="flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] w-[calc(100%-2rem)] flex-col overflow-hidden sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Forhåndsvisning for {preview?.name}</DialogTitle>
           </DialogHeader>
-          <pre className="overflow-y-auto flex-1 whitespace-pre-wrap text-sm text-slate-800 bg-slate-50 rounded-lg p-4">{preview?.body}</pre>
+          <pre className="max-h-[min(60dvh,calc(100dvh-12rem))] overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-800">{preview?.body}</pre>
           <div className="flex justify-end gap-2 pt-3">
             <Button variant="outline" onClick={() => setPreview(null)}>Behold som utkast</Button>
             <Button onClick={sendPreview}>Send til signering</Button>

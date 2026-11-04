@@ -5,10 +5,10 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { SELECT_Z } from "@/lib/layers"
 
-// Sticky bars at the top of the app (support banner, SkiftPro header) paint above
-// the select (z-50 vs z-100/110). Popper also flips a tall menu upward, so the
-// first options end up underneath those bars. Keep the menu below the stack.
+// Page selects must not open underneath the sticky header or the demo bar.
+// Menus also portal to document.body, so they stay above an open dialog.
 function stickyTopInset() {
   if (typeof document === "undefined") return 12
   const bars = []
@@ -74,7 +74,7 @@ const SelectScrollDownButton = React.forwardRef(({ className, ...props }, ref) =
 SelectScrollDownButton.displayName =
   SelectPrimitive.ScrollDownButton.displayName
 
-const SelectContent = React.forwardRef(({ className, children, position = "popper", sideOffset = 4, ...props }, ref) => {
+const SelectContent = React.forwardRef(({ className, children, position = "popper", sideOffset = 4, style, ...props }, ref) => {
   const [collisionTop, setCollisionTop] = React.useState(stickyTopInset)
   React.useLayoutEffect(() => {
     setCollisionTop(stickyTopInset())
@@ -85,12 +85,13 @@ const SelectContent = React.forwardRef(({ className, children, position = "poppe
       <SelectPrimitive.Content
         ref={ref}
         className={cn(
-          "relative z-[130] max-h-[min(24rem,var(--radix-select-content-available-height))] min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+          "relative max-h-[min(24rem,var(--radix-select-content-available-height))] min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className
         )}
         {...props}
+        style={{ zIndex: SELECT_Z, ...style }}
         position={position}
         sideOffset={sideOffset}
         collisionPadding={{ top: collisionTop, right: 8, bottom: 8, left: 8 }}
