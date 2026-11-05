@@ -92,6 +92,7 @@ psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/202610251800
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261026200000_sick_label_split.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261028140000_private_uploads_revoke_anon.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261104120000_subscription_cancellation.sql"
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/migrations/20261105100000_demo_prognose_seed.sql"
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/rls_isolation.sql" | tee /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/contract_signing.sql" | tee -a /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/ekstrahjelp_monthly.sql" | tee -a /tmp/rls-test.out
@@ -104,6 +105,7 @@ psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/countersigner_ide
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/contract_text.sql" | tee -a /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/payroll_round1.sql" | tee -a /tmp/rls-test.out
 psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/subscription_cancellation.sql" | tee -a /tmp/rls-test.out
+psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -f "$ROOT/supabase/tests/demo_prognose_seed.sql" | tee -a /tmp/rls-test.out
 if grep -E 'FAIL|[[:space:]]+[1-9][0-9]* \|[[:space:]]+[0-9]+' /tmp/rls-test.out | head -n 1 | grep -q FAIL; then
   echo "RLS tests failed" >&2
   exit 1

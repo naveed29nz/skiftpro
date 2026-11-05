@@ -5,6 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Save, CheckCircle2 } from 'lucide-react';
 import { getISOWeek } from 'date-fns';
 import { useOrg } from '@/hooks/useOrg';
+import {
+  filterStaffingPlan,
+  staffingBudgetQuery,
+  staffingBudgetQueryKey,
+} from '@/lib/staffingBudget';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i); // 0..23
 const DAYS = [
@@ -49,20 +54,22 @@ export default function Ukeplan() {
   }, [wpSettings]);
 
   const { data: allBudgets = [] } = useQuery({
-    queryKey: ['staffing-budget'],
-    queryFn: () => base44.entities.StaffingBudget.list('-created_date', 500),
+    queryKey: staffingBudgetQueryKey(orgId),
+    queryFn: () => {
+      const request = staffingBudgetQuery(orgId);
+      if (!request) return [];
+      return base44.entities.StaffingBudget.filter(request.filters, request.sort, request.limit);
+    },
+    enabled: Boolean(orgId),
   });
 
-  // Filter to current team + plan type + org scope.
-  // Legacy budgets without org_id are included so pre-multi-tenant data still shows.
-  const relevantBudgets = useMemo(() => {
-    return allBudgets.filter(b => {
-      if (b.team !== team) return false;
-      if (orgId && b.org_id && b.org_id !== orgId) return false;
-      if (useWeekOverride) return b.week_override === weekNum && b.year_override === yearNum;
-      return !b.week_override && !b.year_override;
-    });
-  }, [allBudgets, team, useWeekOverride, weekNum, yearNum, orgId]);
+  const relevantBudgets = useMemo(() => filterStaffingPlan(allBudgets, {
+    orgId,
+    team,
+    useWeekOverride,
+    week: weekNum,
+    year: yearNum,
+  }), [allBudgets, team, useWeekOverride, weekNum, yearNum, orgId]);
 
   // Build grid from DB records
   useEffect(() => {

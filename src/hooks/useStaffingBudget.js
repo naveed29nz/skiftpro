@@ -2,55 +2,42 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useMemo } from 'react';
 import { getISOWeek } from 'date-fns';
+import { useOrg } from '@/hooks/useOrg';
+import {
+  resolveStaffingBudget,
+  staffingBudgetQuery,
+  staffingBudgetQueryKey,
+} from '@/lib/staffingBudget';
 
 /**
- * Returns staffing budget for a given team.
+ * Returns staffing budget for a given team in the current organization.
  * Resolves week-override first, falls back to default plan.
- * 
+ *
  * Returns: budgetByHourDay[hour][dayKey] = number
  * dayKey: 'mon','tue','wed','thu','fri','sat','sun'
  */
 export function useStaffingBudget(team) {
+  const { orgId } = useOrg();
   const { data: allBudgets = [] } = useQuery({
-    queryKey: ['staffing-budget'],
-    queryFn: () => base44.entities.StaffingBudget.list('-created_date', 500),
+    queryKey: staffingBudgetQueryKey(orgId),
+    queryFn: () => {
+      const request = staffingBudgetQuery(orgId);
+      if (!request) return [];
+      return base44.entities.StaffingBudget.filter(request.filters, request.sort, request.limit);
+    },
+    enabled: Boolean(orgId),
     staleTime: 60_000,
   });
 
   const budgetByHourDay = useMemo(() => {
-    if (!team || !allBudgets.length) return {};
     const now = new Date();
-    const currentWeek = getISOWeek(now);
-    const currentYear = now.getFullYear();
-
-    const teamRecords = allBudgets.filter(b => b.team === team);
-
-    // Week-specific override for current week
-    const overrideRecords = teamRecords.filter(
-      b => b.week_override === currentWeek && b.year_override === currentYear
-    );
-    // Default (no override)
-    const defaultRecords = teamRecords.filter(b => !b.week_override && !b.year_override);
-
-    // Merge: override wins per hour
-    const merged = {};
-    defaultRecords.forEach(b => { merged[b.hour] = b; });
-    overrideRecords.forEach(b => { merged[b.hour] = b; }); // override wins
-
-    const result = {};
-    Object.entries(merged).forEach(([hour, b]) => {
-      result[Number(hour)] = {
-        mon: b.mon || 0,
-        tue: b.tue || 0,
-        wed: b.wed || 0,
-        thu: b.thu || 0,
-        fri: b.fri || 0,
-        sat: b.sat || 0,
-        sun: b.sun || 0,
-      };
+    return resolveStaffingBudget(allBudgets, {
+      team,
+      orgId,
+      week: getISOWeek(now),
+      year: now.getFullYear(),
     });
-    return result;
-  }, [allBudgets, team]);
+  }, [allBudgets, team, orgId]);
 
   return budgetByHourDay;
 }
