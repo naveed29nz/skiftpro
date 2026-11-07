@@ -1,9 +1,21 @@
+import { selectColleaguesToday } from '@/lib/portalShifts';
 
-export default function ColleaguesToday({ shifts, workers, currentWorkerId, today, currentWorkerTeam }) {
-  const todayColleagues = shifts
-    .filter(s => s.date === today && s.worker_id !== currentWorkerId && s.status !== 'cancelled')
-    .map(s => ({ ...s, worker: workers.find(w => w.id === s.worker_id) }))
-    .filter(s => s.worker && (!currentWorkerTeam || (s.worker.teams || (s.worker.team ? [s.worker.team] : ['team1'])).includes(currentWorkerTeam)));
+export default function ColleaguesToday({
+  shifts,
+  workers,
+  viewerShifts,
+  currentWorkerId,
+  currentWorkerOrgId,
+  today,
+}) {
+  const todayColleagues = selectColleaguesToday({
+    shifts,
+    workers,
+    viewerShifts,
+    currentWorkerId,
+    currentWorkerOrgId,
+    today,
+  });
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
