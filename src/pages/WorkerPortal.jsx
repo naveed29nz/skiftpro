@@ -22,6 +22,7 @@ import WorkerContractsTab from '@/components/worker/WorkerContractsTab';
 import WorkerSalaryTab from '@/components/worker/WorkerSalaryTab';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import { sameEmail } from '@/lib/emails';
+import { filterOwnPortalShifts, ownShiftQuery, rosterShiftQuery } from '@/lib/portalShifts';
 
 const TABS = [
   { id: 'dashboard', label: 'Min side', icon: LayoutDashboard },
@@ -46,12 +47,20 @@ export default function WorkerPortal() {
   });
   const worker = workers.find((w) => sameEmail(w.email, currentUser?.email));
   const orgId = worker?.org_id || null;
-  const shiftQuery = useQuery(withShiftQuery({
-    queryKey: ['shifts', orgId, 'portal'],
-    enabled: isAuthenticated && !!orgId,
-    queryFn: () => base44.entities.Shift.filter({ org_id: orgId }, '-date', 5000),
+  const userId = currentUser?.id ?? null;
+  const workerId = worker?.id ?? null;
+  const myShiftQuery = useQuery(withShiftQuery({
+    queryKey: ownShiftQuery(userId, orgId, workerId).queryKey,
+    enabled: isAuthenticated && !!orgId && !!workerId,
+    queryFn: () => base44.entities.Shift.filter(ownShiftQuery(userId, orgId, workerId).filter, '-date', 5000),
   }));
-  const shifts = Array.isArray(shiftQuery.data) ? shiftQuery.data : [];
+  const rosterQuery = useQuery(withShiftQuery({
+    queryKey: rosterShiftQuery(userId, orgId).queryKey,
+    enabled: isAuthenticated && !!orgId,
+    queryFn: () => base44.entities.Shift.filter(rosterShiftQuery(userId, orgId).filter, '-date', 5000),
+  }));
+  const myShiftRows = Array.isArray(myShiftQuery.data) ? myShiftQuery.data : [];
+  const rosterShifts = Array.isArray(rosterQuery.data) ? rosterQuery.data : [];
   const { data: holidays = [] } = useQuery({ queryKey: ['holidays'], queryFn: () => base44.entities.Holiday.list() });
   const { data: wpSettings = [] } = useQuery({ queryKey: ['workplace-settings'], queryFn: () => base44.entities.WorkplaceSetting.list() });
   const { data: stamps = [] } = useQuery({ queryKey: ['stamps'], queryFn: () => base44.entities.Stamp.list('-date', 100) });
@@ -98,27 +107,29 @@ export default function WorkerPortal() {
     );
   }
 
-  if (shiftQuery.isPending && !shiftQuery.data) return (
+  const shiftsLoading = (myShiftQuery.isPending && !myShiftQuery.data)
+    || (rosterQuery.isPending && !rosterQuery.data);
+  if (shiftsLoading) return (
     <div className="flex justify-center py-20">
       <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
     </div>
   );
 
-  if (shiftQuery.isError && !shiftQuery.data) return (
+  const shiftsFailed = (myShiftQuery.isError && !myShiftQuery.data)
+    || (rosterQuery.isError && !rosterQuery.data);
+  if (shiftsFailed) return (
     <div className="text-center py-20">
       <Clock className="w-12 h-12 text-slate-300 mx-auto mb-4" />
       <h2 className="text-lg font-semibold text-slate-700">Kunne ikke hente vakter</h2>
       <p className="text-sm text-slate-400 mt-2">Økten var ikke klar. Prøv igjen.</p>
-      <Button className="mt-4" onClick={() => shiftQuery.refetch()}>Prøv igjen</Button>
+      <Button className="mt-4" onClick={() => { myShiftQuery.refetch(); rosterQuery.refetch(); }}>Prøv igjen</Button>
     </div>
   );
 
   const isAdmin = currentUser?.role === 'admin';
 
-  // Non-admins only see published shifts
-  const myShifts = shifts
-    .filter(s => s.worker_id === worker.id && s.status !== 'cancelled')
-    .filter(s => isAdmin || s.published !== false);
+  // Hours and pay use the viewer's own shifts only, checked again by org and worker.
+  const myShifts = filterOwnPortalShifts(myShiftRows, { workerId: worker.id, orgId, isAdmin });
   const monthShifts = myShifts.filter(s => s.date >= monthStart && s.date <= monthEnd);
   const weekShifts = myShifts.filter(s => s.date >= weekStart && s.date <= weekEnd);
   // Vis de NESTE 8 vaktene (ikke de lengst frem i tid). Shifts hentes sortert
@@ -205,7 +216,7 @@ export default function WorkerPortal() {
 
       {/* Team tab */}
       {!ekstrahjelpOnly && activeTab === 'team' && (
-        <TeamSchedule shifts={isAdmin ? shifts : shifts.filter(s => s.published !== false)} workers={workers} currentWorker={worker} wpSettings={wpSettings} />
+        <TeamSchedule shifts={isAdmin ? rosterShifts : rosterShifts.filter(s => s.published !== false)} workers={workers} currentWorker={worker} wpSettings={wpSettings} />
       )}
 
       {/* Tasks tab */}
@@ -232,7 +243,7 @@ export default function WorkerPortal() {
           myShifts={myShifts}
           workers={workers}
           isAdmin={isAdmin}
-          allShifts={shifts}
+          allShifts={rosterShifts}
         />
       )}
 
@@ -323,7 +334,16 @@ export default function WorkerPortal() {
                 </div>
               )}
             </div>
-            {!ekstrahjelpOnly && <ColleaguesToday shifts={shifts} workers={workers} currentWorkerId={worker.id} today={today} currentWorkerTeam={(worker.teams || [worker.team || 'team1'])[0]} />}
+            {!ekstrahjelpOnly && (
+              <ColleaguesToday
+                shifts={rosterShifts}
+                viewerShifts={myShiftRows}
+                workers={workers}
+                currentWorkerId={worker.id}
+                currentWorkerOrgId={orgId}
+                today={today}
+              />
+            )}
           </div>
         </>
       )}
