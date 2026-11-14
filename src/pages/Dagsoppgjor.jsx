@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,9 @@ import { useOrg } from '@/hooks/useOrg';
 import { useScopedWorkplaceSetting } from '@/hooks/useScopedWorkplaceSetting';
 import { effectiveAppRole } from '@/utils/wageAccess';
 import { findWorkerByEmail } from '@/lib/workerLookup';
+import { useTodayShiftStore } from '@/hooks/useTodayShiftStore';
+import { isEkstraOnlyAccount, visibleSettlements } from '@/lib/ekstraAccess';
+import { assignedTeamKeys, chooseDefaultStore } from '@/lib/storeDefault';
 
 const STATUS_COLORS = {
   Registrert: 'bg-slate-100 text-slate-700',
@@ -76,10 +79,7 @@ export default function Dagsoppgjor() {
       if (u?.email) {
         const w = await findWorkerByEmail(u.email, u.role);
         setMyWorker(w);
-        const team = w?.teams?.[0] || '';
-        setMyTeam(team);
-        if (!isAdmin) setFilterButikk(team);
-        setForm(f => ({ ...f, ansatt_navn: w?.name || '', ansatt_id: w?.id || '', butikk: team }));
+        setForm(f => ({ ...f, ansatt_navn: w?.name || '', ansatt_id: w?.id || '' }));
       }
     }).catch(() => {});
   }, []);
@@ -115,6 +115,28 @@ export default function Dagsoppgjor() {
     // butikksjef/sub_admin/user: only own teams
     return teamOptions.filter(t => (myWorker?.teams || []).includes(t.key));
   }, [teamOptions, isAdmin, myWorker]);
+
+  const membership = useMemo(() => assignedTeamKeys(myWorker), [myWorker]);
+  const ekstraOnly = isEkstraOnlyAccount(currentUser, myWorker);
+  const { store: todayStore, ready: todayStoreReady } = useTodayShiftStore({
+    userId: currentUser?.id,
+    workerId: myWorker?.id,
+    orgId,
+    teams: membership,
+  });
+  const appliedStore = useRef(false);
+  useEffect(() => {
+    if (!myWorker || !todayStoreReady || appliedStore.current) return;
+    appliedStore.current = true;
+    const next = chooseDefaultStore({
+      options: membership,
+      preferred: todayStore,
+      fallback: membership[0] || '',
+    });
+    setMyTeam(next);
+    setFilterButikk(next);
+    setForm((current) => ({ ...current, butikk: current.butikk || next }));
+  }, [myWorker, todayStoreReady, todayStore, membership]);
 
   const saveMut = useMutation({
     mutationFn: async (data) => {
@@ -200,15 +222,25 @@ export default function Dagsoppgjor() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Only show records from own team (or all if admin with no filter)
-  const filtered = useMemo(() => records.filter(r => {
+  const visibleRecords = useMemo(
+    () => visibleSettlements(records, {
+      ekstraOnly,
+      workerId: myWorker?.id,
+      userId: currentUser?.id,
+    }),
+    [records, ekstraOnly, myWorker, currentUser],
+  );
+
+  // Only show records from own team (or all if admin with no filter).
+  // Ekstrahjelp also drops other employees' rows, so their names stay off this screen.
+  const filtered = useMemo(() => visibleRecords.filter(r => {
     // Non-admin: only see own team
     if (!isAdmin && myTeam && r.butikk !== myTeam) return false;
     if (filterButikk && r.butikk !== filterButikk) return false;
     if (r.dato < filterDateFrom || r.dato > filterDateTo) return false;
     if (search && !`${r.pose_nummer} ${r.ansatt_navn} ${r.butikk}`.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }), [records, filterButikk, filterDateFrom, filterDateTo, search, isAdmin, myTeam]);
+  }), [visibleRecords, filterButikk, filterDateFrom, filterDateTo, search, isAdmin, myTeam]);
 
   const summary = useMemo(() => {
     const s = { kasse: 0, droppet: 0, kontrollert: 0, bank: 0, diff_kasse_droppet: 0, endelig_differanse: 0, avvik: 0, matched: 0 };

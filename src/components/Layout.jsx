@@ -1,4 +1,5 @@
 import { isEkstrahjelp } from '@/contracts/employment';
+import { ekstraMenuItems, userPageAllowList } from '@/lib/ekstraAccess';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, Clock, CalendarDays, DollarSign, Menu, X, Settings, UserCircle, Smartphone, Monitor, Banknote, Ticket, ClipboardList, Building2, CheckSquare, FileText, LogOut, BarChart, CreditCard, ScrollText, Package } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -217,7 +218,8 @@ export default function Layout() {
       }
 
       setUserRole(role);
-      // Ekstrahjelp (tilkalling) ser kun Min side: egne vakter og egen lønn.
+      // Ekstrahjelp (tilkalling) får Min side, loddtelling, dagsoppgjør og innskudd.
+      // Teamplan, andre ansattes vakter og andres lønn forblir stengt.
       const isEkstraOnly = role === 'user' && isEkstrahjelp(myWorker?.ansettelsestype);
       setEkstrahjelpOnly(isEkstraOnly);
       const canSeeResultatFlag = myWorker?.can_see_resultat || role === 'admin' || role === 'sub_admin' || role === 'butikksjef';
@@ -269,7 +271,11 @@ export default function Layout() {
       if (showOnboarding || showEmployee) return;
 
       const allowed = role === 'user'
-        ? isEkstraOnly ? ['/WorkerPortal'] : [...workerAllowed, ...(myWorker?.can_see_resultat ? ['/Resultat'] : [])]
+        ? userPageAllowList({
+          ekstraOnly: isEkstraOnly,
+          workerAllowed,
+          canSeeResultat: myWorker?.can_see_resultat,
+        })
         : null;
       const isImpersonatingNow = !!localStorage.getItem('impersonate_org_id');
       const isSuperAdminPage = location.pathname === '/SuperAdmin' || location.pathname.startsWith('/SuperAdmin/');
@@ -300,7 +306,7 @@ export default function Layout() {
     : userRole === 'admin' ? adminNav
     : userRole === 'sub_admin' ? subAdminNav
     : userRole === 'butikksjef' ? butikksjeflNav
-    : userRole === 'user' ? (ekstrahjelpOnly ? workerNav.filter(item => item.path === '/WorkerPortal') : workerNavDynamic)
+    : userRole === 'user' ? (ekstrahjelpOnly ? ekstraMenuItems(workerNav) : workerNavDynamic)
     : [];
   const navItems = visibleNavItems(roleNav);
 

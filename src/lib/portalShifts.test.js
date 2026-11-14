@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  defaultStoreFromTodayShift,
   filterOwnPortalShifts,
   ownShiftQuery,
   rosterShiftQuery,
   selectColleaguesToday,
+  todayOwnShiftQuery,
   viewerStoreTeams,
 } from './portalShifts.js';
 
@@ -343,4 +345,117 @@ test('own shifts stay isolated when the roster includes other workers’ pay', (
 
   assert.deepEqual(filterOwnPortalShifts(roster, { workerId: '', orgId: ORG }), []);
   assert.deepEqual(filterOwnPortalShifts(roster, { workerId: ALINA, orgId: '' }), []);
+});
+
+test('today’s store query reads only that worker’s shifts and no pay fields', () => {
+  const query = todayOwnShiftQuery('user-alina', ORG, ALINA, TODAY);
+  assert.deepEqual(query.filter, { org_id: ORG, worker_id: ALINA, date: TODAY });
+  assert.equal(Object.hasOwn(query.filter, 'hourly_rate'), false);
+  assert.equal(Object.hasOwn(query.filter, 'pay'), false);
+  assert.deepEqual(query.queryKey, ['shifts', 'user-alina', ORG, ALINA, 'today-store', TODAY]);
+  assert.notDeepEqual(query.queryKey, todayOwnShiftQuery('user-ahmed', ORG, ALINA, TODAY).queryKey);
+  assert.notDeepEqual(query.queryKey, ownShiftQuery('user-alina', ORG, ALINA).queryKey);
+});
+
+test('today’s published shift picks that store when it is one of their teams', () => {
+  const shifts = [
+    shift('alina-417', ALINA, 'team2', { start_time: '10:00' }),
+    shift('ahmed-500', AHMED, 'team1', { start_time: '08:00' }),
+    shift('alina-other-org', ALINA, 'team4', { org_id: OTHER_ORG }),
+  ];
+  assert.equal(defaultStoreFromTodayShift(shifts, {
+    workerId: ALINA,
+    orgId: ORG,
+    today: TODAY,
+    teams: ['team4', 'team2'],
+  }), 'team2');
+});
+
+test('a shift at a store they are not on does not change the default', () => {
+  assert.equal(defaultStoreFromTodayShift([
+    shift('alina-500', ALINA, 'team1'),
+  ], {
+    workerId: ALINA,
+    orgId: ORG,
+    today: TODAY,
+    teams: ['team2'],
+  }), null);
+});
+
+test('missing membership does not fall back to team1', () => {
+  const atTeam1 = [shift('alina-500', ALINA, 'team1')];
+  assert.equal(defaultStoreFromTodayShift(atTeam1, {
+    workerId: ALINA,
+    orgId: ORG,
+    today: TODAY,
+    teams: [],
+  }), null);
+  assert.equal(defaultStoreFromTodayShift(atTeam1, {
+    workerId: ALINA,
+    orgId: ORG,
+    today: TODAY,
+  }), null);
+  assert.equal(defaultStoreFromTodayShift([
+    shift('blank', ALINA, '   '),
+    shift('missing', ALINA, null),
+  ], {
+    workerId: ALINA,
+    orgId: ORG,
+    today: TODAY,
+    teams: ['team1', 'team2'],
+  }), null);
+});
+
+test('cancelled, unpublished, other-day and other-worker shifts are not a default store', () => {
+  const teams = ['team2', 'team1'];
+  const base = { workerId: ALINA, orgId: ORG, today: TODAY, teams };
+  assert.equal(defaultStoreFromTodayShift([
+    shift('cancelled', ALINA, 'team2', { status: 'cancelled' }),
+  ], base), null);
+  assert.equal(defaultStoreFromTodayShift([
+    shift('draft', ALINA, 'team2', { published: false }),
+  ], base), null);
+  assert.equal(defaultStoreFromTodayShift([
+    shift('missing-flag', ALINA, 'team2', { published: undefined }),
+  ], base), null);
+  assert.equal(defaultStoreFromTodayShift([
+    shift('yesterday', ALINA, 'team2', { date: '2026-11-06' }),
+  ], base), null);
+  assert.equal(defaultStoreFromTodayShift([
+    shift('ahmed', AHMED, 'team2'),
+  ], base), null);
+  assert.equal(defaultStoreFromTodayShift(null, base), null);
+});
+
+test('two stores today use the earliest shift, and a missing clock time does not beat a real one', () => {
+  assert.equal(defaultStoreFromTodayShift([
+    shift('late', ALINA, 'team2', { start_time: '15:00' }),
+    shift('early', ALINA, 'team4', { start_time: '08:00' }),
+    shift('colleague-earlier', AHMED, 'team1', { start_time: '06:00' }),
+  ], {
+    workerId: ALINA,
+    orgId: ORG,
+    today: TODAY,
+    teams: ['team2', 'team4'],
+  }), 'team4');
+
+  assert.equal(defaultStoreFromTodayShift([
+    shift('untimed', ALINA, 'team2', { start_time: '' }),
+    shift('timed', ALINA, 'team4', { start_time: '12:00' }),
+  ], {
+    workerId: ALINA,
+    orgId: ORG,
+    today: TODAY,
+    teams: ['team2', 'team4'],
+  }), 'team4');
+
+  assert.equal(defaultStoreFromTodayShift([
+    shift('same-a', ALINA, 'team4', { start_time: '09:00' }),
+    shift('same-b', ALINA, 'team2', { start_time: '09:00' }),
+  ], {
+    workerId: ALINA,
+    orgId: ORG,
+    today: TODAY,
+    teams: ['team4', 'team2'],
+  }), 'team2');
 });

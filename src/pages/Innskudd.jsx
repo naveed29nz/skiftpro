@@ -18,6 +18,15 @@ import {
 import { parseLoomisWorkbook } from '@/innskudd/parseLoomisExport';
 import { humanInnskuddError, upsertLoomisDeposits } from '@/innskudd/upsertDeposits';
 import { findWorkerByEmail } from '@/lib/workerLookup';
+import { useTodayShiftStore } from '@/hooks/useTodayShiftStore';
+import {
+  isEkstraOnlyAccount,
+  mergeOwnRows,
+  ownInnskuddFilters,
+  redactInnskuddForEkstra,
+  teamsOnlyWorkers,
+} from '@/lib/ekstraAccess';
+import { assignedTeamKeys, chooseDefaultStore } from '@/lib/storeDefault';
 
 export default function Innskudd() {
   const queryClient = useQueryClient();
@@ -26,6 +35,7 @@ export default function Innskudd() {
   const [worker, setWorker] = useState(null);
   const [ready, setReady] = useState(false);
   const [storeKey, setStoreKey] = useState('all');
+  const [storeChosen, setStoreChosen] = useState(false);
   const [periodId, setPeriodId] = useState('30');
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -51,11 +61,35 @@ export default function Innskudd() {
     return () => { cancelled = true; };
   }, []);
 
+  const ekstraOnly = isEkstraOnlyAccount(user, worker);
+  const membership = useMemo(() => assignedTeamKeys(worker), [worker]);
+  const { store: todayStore, ready: todayStoreReady } = useTodayShiftStore({
+    userId: user?.id,
+    workerId: worker?.id,
+    orgId,
+    teams: membership,
+  });
+
   const bagsQuery = useQuery({
-    queryKey: ['loomis-innskudd', orgId],
-    queryFn: () => (orgId
-      ? base44.entities.LoomisInnskudd.filter({ org_id: orgId }, '-dato', 1000)
-      : base44.entities.LoomisInnskudd.list('-dato', 1000)),
+    queryKey: ['loomis-innskudd', orgId, ekstraOnly ? 'own' : 'org', worker?.id ?? null, user?.id ?? null],
+    enabled: ready,
+    queryFn: async () => {
+      if (ekstraOnly) {
+        const filters = ownInnskuddFilters(orgId, worker?.id, user?.id);
+        if (filters.length === 0) return [];
+        const groups = await Promise.all(filters.map((filter) => (
+          base44.entities.LoomisInnskudd.filter(filter, '-dato', 1000)
+        )));
+        return redactInnskuddForEkstra(mergeOwnRows(groups), {
+          ekstraOnly: true,
+          workerId: worker?.id,
+          userId: user?.id,
+        });
+      }
+      return orgId
+        ? base44.entities.LoomisInnskudd.filter({ org_id: orgId }, '-dato', 1000)
+        : base44.entities.LoomisInnskudd.list('-dato', 1000);
+    },
   });
   const depositsQuery = useQuery({
     queryKey: ['loomis-deposits', orgId],
@@ -63,7 +97,11 @@ export default function Innskudd() {
       ? base44.entities.LoomisDeposit.filter({ org_id: orgId }, '-telledato', 2000)
       : base44.entities.LoomisDeposit.list('-telledato', 2000)),
   });
-  const registrations = bagsQuery.data || [];
+  const registrations = useMemo(() => redactInnskuddForEkstra(bagsQuery.data || [], {
+    ekstraOnly,
+    workerId: worker?.id,
+    userId: user?.id,
+  }), [bagsQuery.data, ekstraOnly, worker, user]);
   const deposits = depositsQuery.data || [];
 
   const { data: settings = [] } = useQuery({
@@ -78,17 +116,36 @@ export default function Innskudd() {
     queryFn: () => (orgId
       ? base44.entities.Worker.filter({ org_id: orgId })
       : base44.entities.Worker.list()),
-    enabled: ready,
+    enabled: ready && !ekstraOnly,
   });
 
   const wp = (orgId ? settings.filter((row) => row.org_id === orgId) : settings)[0] || null;
   const appRole = effectiveAppRole(user, worker);
   const isManager = appRole === 'admin' || appRole === 'sub_admin' || appRole === 'butikksjef';
   const seesAllStores = appRole === 'admin' || appRole === 'sub_admin';
-  const allTeams = useMemo(() => teamsFromWorkplace(wp, workers), [wp, workers]);
+  const teamWorkers = useMemo(
+    () => (ekstraOnly ? teamsOnlyWorkers(worker ? [worker] : []) : workers),
+    [ekstraOnly, worker, workers],
+  );
+  const allTeams = useMemo(() => teamsFromWorkplace(wp, teamWorkers), [wp, teamWorkers]);
   const assigned = worker?.teams?.length ? worker.teams : (worker ? ['team1'] : []);
   const visibleTeams = seesAllStores ? allTeams : allTeams.filter((team) => assigned.includes(team.key));
-  const defaultTeam = visibleTeams[0]?.key || '';
+  const optionKeys = visibleTeams.map((team) => team.key);
+  const defaultTeam = todayStoreReady
+    ? chooseDefaultStore({
+      options: optionKeys,
+      preferred: todayStore,
+      fallback: optionKeys[0] || '',
+    })
+    : '';
+  const autoStore = todayStoreReady
+    ? chooseDefaultStore({
+      options: optionKeys,
+      preferred: todayStore,
+      fallback: 'all',
+    })
+    : 'all';
+  const selectedStore = storeChosen ? storeKey : autoStore;
 
   useEffect(() => {
     const draft = {};
@@ -103,9 +160,9 @@ export default function Innskudd() {
     deposits,
     teams: allTeams,
     today,
-    storeKey: seesAllStores ? storeKey : (storeKey === 'all' ? 'all' : storeKey),
+    storeKey: seesAllStores ? selectedStore : (selectedStore === 'all' ? 'all' : selectedStore),
     periodDays,
-  }).filter((row) => seesAllStores || visibleTeams.some((team) => team.key === row.team || team.label === row.butikk)), [registrations, deposits, allTeams, today, storeKey, periodDays, seesAllStores, visibleTeams]);
+  }).filter((row) => seesAllStores || visibleTeams.some((team) => team.key === row.team || team.label === row.butikk)), [registrations, deposits, allTeams, today, selectedStore, periodDays, seesAllStores, visibleTeams]);
 
   const summary = useMemo(() => summarizeRows(rows), [rows]);
 
@@ -200,7 +257,7 @@ export default function Innskudd() {
 
   const loadError = bagsQuery.error || depositsQuery.error;
 
-  if (!ready || bagsQuery.isLoading || depositsQuery.isLoading) {
+  if (!ready || !todayStoreReady || bagsQuery.isPending || depositsQuery.isLoading) {
     return (
       <div className="flex justify-center py-20">
         <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
@@ -249,8 +306,8 @@ export default function Innskudd() {
         teams={visibleTeams}
         rows={rows}
         summary={summary}
-        storeKey={storeKey}
-        onStore={setStoreKey}
+        storeKey={selectedStore}
+        onStore={(value) => { setStoreChosen(true); setStoreKey(value); }}
         periodId={periodId}
         onPeriod={setPeriodId}
         canImport

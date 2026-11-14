@@ -39,6 +39,21 @@ export function ownShiftQuery(userId, orgId, workerId) {
 }
 
 /**
+ * The signed-in worker's shifts on one date. Used to pick a store, not to
+ * read colleagues. Pay fields are not part of the filter.
+ */
+export function todayOwnShiftQuery(userId, orgId, workerId, today) {
+  return {
+    queryKey: ['shifts', userId ?? null, orgId ?? null, workerId ?? null, 'today-store', today ?? null],
+    filter: {
+      org_id: orgId ?? null,
+      worker_id: workerId ?? null,
+      date: today ?? null,
+    },
+  };
+}
+
+/**
  * Colleague roster for the team plan, swaps, and colleagues today.
  * It is not filtered by worker and it does not ask for pay fields.
  */
@@ -161,4 +176,40 @@ export function selectColleaguesToday({
     || String(a.id).localeCompare(String(b.id))
   ));
   return rows;
+}
+
+function startSortKey(start) {
+  return typeof start === 'string' && start.trim() ? start.trim() : '99:99';
+}
+
+/**
+ * Store (shift.team) of the worker's own published, non-cancelled shift today.
+ * The team has to be one of `teams`. An empty list does not become team1,
+ * and a shift at a store they are not on does not count. When several of
+ * their stores match, the earliest start time wins.
+ * @param {any[] | null | undefined} shifts
+ * @param {{ workerId?: string, orgId?: string, today?: string, teams?: string[] }} [options]
+ * @returns {string | null}
+ */
+export function defaultStoreFromTodayShift(shifts, { workerId, orgId, today, teams } = {}) {
+  const allowed = new Set();
+  for (const team of asArray(teams)) {
+    const key = nonemptyTeam(team);
+    if (key) allowed.add(key);
+  }
+  if (!workerId || !orgId || !today || allowed.size === 0) return null;
+
+  const matches = [];
+  for (const shift of asArray(shifts)) {
+    if (shift?.worker_id !== workerId) continue;
+    if (shift?.date !== today) continue;
+    if (!sameOrg(shift, orgId)) continue;
+    if (!isPublished(shift) || isCancelled(shift)) continue;
+    const team = nonemptyTeam(shift.team);
+    if (!team || !allowed.has(team)) continue;
+    matches.push({ team, start: startSortKey(shift.start_time) });
+  }
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => a.start.localeCompare(b.start) || a.team.localeCompare(b.team));
+  return matches[0].team;
 }

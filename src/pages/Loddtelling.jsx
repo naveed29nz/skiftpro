@@ -8,8 +8,16 @@ import { nb } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Save, CheckCircle2, Download, AlertTriangle } from 'lucide-react';
 import { getActiveTeams } from '@/utils/teams';
 import { useOrg } from '@/hooks/useOrg';
+import { useTodayShiftStore } from '@/hooks/useTodayShiftStore';
 import { findWorkerByEmail } from '@/lib/workerLookup';
 import { resolveMyTeams } from '@/lib/myTeams';
+import {
+  isEkstraOnlyAccount,
+  loddtellingLockerLabel,
+  stripLoddtellingAttribution,
+  teamsOnlyWorkers,
+} from '@/lib/ekstraAccess';
+import { assignedTeamKeys, nextLoddtellingStore } from '@/lib/storeDefault';
 
 const FIXED_LODDTYPER = ['Flax Million', 'Pengedryss', 'Flax for livet', 'Kryssord', 'Grise Flax', 'Mega'];
 const CUSTOM_KEYS = ['custom_1', 'custom_2', 'custom_3'];
@@ -134,6 +142,7 @@ export default function Loddtelling() {
   const [myWorker, setMyWorker] = useState(null);
   const [weekRef, setWeekRef] = useState(startOfISOWeek(new Date()));
   const [butikk, setButikk] = useState('');
+  const [storeChosen, setStoreChosen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
   const [localData, setLocalData] = useState({});
@@ -146,6 +155,7 @@ export default function Loddtelling() {
   const [customNames, setCustomNames] = useState({ custom_1: '', custom_2: '', custom_3: '' });
   const [wpSettings, setWpSettings] = useState(null);
   const [allWorkers, setAllWorkers] = useState([]);
+  const [viewerReady, setViewerReady] = useState(false);
 
   const weekNum = getISOWeek(weekRef);
   const year = weekRef.getFullYear();
@@ -165,6 +175,15 @@ export default function Loddtelling() {
     return allTeams.filter(t => myTeams.includes(t.key));
   }, [wpSettings, canSeeAllButikker, myWorker, allWorkers]);
 
+  const membership = useMemo(() => assignedTeamKeys(myWorker), [myWorker]);
+  const ekstraOnly = isEkstraOnlyAccount(currentUser, myWorker);
+  const { store: todayStore, ready: todayStoreReady } = useTodayShiftStore({
+    userId: currentUser?.id,
+    workerId: myWorker?.id,
+    orgId,
+    teams: membership,
+  });
+
   useEffect(() => {
     if (!orgId) return;
     let cancelled = false;
@@ -173,47 +192,56 @@ export default function Loddtelling() {
         const u = await base44.auth.me();
         if (cancelled) return;
         setCurrentUser(u);
-        const [ws, settings, workers] = await Promise.all([
-          u?.email ? findWorkerByEmail(u.email, u.role).then((worker) => (worker ? [worker] : [])) : Promise.resolve([]),
+        const w = u?.email ? await findWorkerByEmail(u.email, u.role) : null;
+        if (cancelled) return;
+        const ekstra = isEkstraOnlyAccount(u, w);
+        const [settings, workers] = await Promise.all([
           base44.entities.WorkplaceSetting.filter({ org_id: orgId }),
-          base44.entities.Worker.filter({ org_id: orgId }),
+          ekstra ? Promise.resolve([]) : base44.entities.Worker.filter({ org_id: orgId }),
         ]);
         if (cancelled) return;
-        const w = ws[0] || null;
-        const wpRecord = settings[0] || null;
         setMyWorker(w);
-        setWpSettings(wpRecord);
-        setAllWorkers(workers);
-        const seesAll = u?.role === 'admin' || w?.role === 'admin' || w?.role === 'sub_admin';
-        const teams = resolveMyTeams(w, { ready: true, seesAllTeams: seesAll });
-        setButikk((current) => (current && (seesAll || teams.includes(current)) ? current : (teams[0] || '')));
-      } catch {}
+        setWpSettings(settings[0] || null);
+        setAllWorkers(ekstra ? teamsOnlyWorkers(w ? [w] : []) : workers);
+        setViewerReady(true);
+      } catch {
+        if (!cancelled) setViewerReady(true);
+      }
     })();
     return () => { cancelled = true; };
   }, [orgId]);
 
   useEffect(() => {
     if (!myWorker && !canSeeAllButikker) return;
+    if (!todayStoreReady) return;
     const teams = resolveMyTeams(myWorker, { ready: true, seesAllTeams: canSeeAllButikker });
-    if (canSeeAllButikker) {
-      if (!butikk) setButikk(teams[0] || 'team1');
-      return;
-    }
-    if (!teams.length || teams.includes(butikk)) return;
-    setButikk(teams[0]);
-  }, [myWorker, canSeeAllButikker, butikk]);
+    const preferred = todayStore && membership.includes(todayStore) ? todayStore : null;
+    setButikk((current) => nextLoddtellingStore({
+      current,
+      chosen: storeChosen,
+      seesAll: canSeeAllButikker,
+      myTeams: teams,
+      pickerKeys: teamOptions.map((option) => option.key),
+      preferred,
+    }));
+  }, [myWorker, canSeeAllButikker, todayStoreReady, todayStore, membership, storeChosen, teamOptions]);
 
-  const { data: allRecords = [] } = useQuery({
+  const { data: fetchedRecords = [] } = useQuery({
     queryKey: ['loddtelling', orgId],
     queryFn: () => orgId
       ? base44.entities.Loddtelling.filter({ org_id: orgId }, '-updated_date', 5000)
       : base44.entities.Loddtelling.list('-updated_date', 5000),
   });
+  const allRecords = useMemo(
+    () => stripLoddtellingAttribution(fetchedRecords, { ekstraOnly: !viewerReady || ekstraOnly }),
+    [fetchedRecords, ekstraOnly, viewerReady],
+  );
 
   const draftKey = butikk ? `loddtelling-draft:${orgId || ''}:${butikk}:${year}:${weekNum}` : null;
   const weekRows = allRecords.filter(r => r.uke_nummer === weekNum && r.year === year && (r.team || r.butikk) === butikk);
   const lockedRow = weekRows.find(r => r.locked || r.status === 'innsendt');
   const isLocked = !!lockedRow && !canSeeAllButikker;
+  const lockerLabel = loddtellingLockerLabel(lockedRow?.updated_by, { ekstraOnly: !viewerReady || ekstraOnly });
 
   // Build local state from DB records for this week+butikk
   useEffect(() => {
@@ -408,7 +436,7 @@ export default function Loddtelling() {
           {teamOptions.length > 1 ? (
             <select
               value={butikk}
-              onChange={e => setButikk(e.target.value)}
+              onChange={e => { setStoreChosen(true); setButikk(e.target.value); }}
               className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white h-8"
             >
               {teamOptions.map(t => (
@@ -431,7 +459,7 @@ export default function Loddtelling() {
 
       {lockedRow && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Uke {weekNum} er sendt inn{lockedRow.submitted_at ? ` ${format(new Date(lockedRow.submitted_at), 'd. MMM HH:mm', { locale: nb })}` : ''}{lockedRow.updated_by ? ` av ${lockedRow.updated_by}` : ''} og er låst.
+          Uke {weekNum} er sendt inn{lockedRow.submitted_at ? ` ${format(new Date(lockedRow.submitted_at), 'd. MMM HH:mm', { locale: nb })}` : ''}{lockerLabel ? ` av ${lockerLabel}` : ''} og er låst.
           {canSeeAllButikker ? ' Som administrator kan du fortsatt endre.' : ' Du kan ikke legge inn flere tall denne uka – kontakt administrator.'}
         </div>
       )}
