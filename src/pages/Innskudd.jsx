@@ -74,12 +74,11 @@ export default function Innskudd() {
     queryKey: ['loomis-innskudd', orgId, ekstraOnly ? 'own' : 'org', worker?.id ?? null, user?.id ?? null],
     enabled: ready,
     queryFn: async () => {
+      const innskudd = base44.entities.LoomisInnskudd;
       if (ekstraOnly) {
         const filters = ownInnskuddFilters(orgId, worker?.id, user?.id);
         if (filters.length === 0) return [];
-        const groups = await Promise.all(filters.map((filter) => (
-          base44.entities.LoomisInnskudd.filter(filter, '-dato', 1000)
-        )));
+        const groups = await Promise.all(filters.map((filter) => innskudd.filter(filter, '-dato', 1000)));
         return redactInnskuddForEkstra(mergeOwnRows(groups), {
           ekstraOnly: true,
           workerId: worker?.id,
@@ -87,8 +86,8 @@ export default function Innskudd() {
         });
       }
       return orgId
-        ? base44.entities.LoomisInnskudd.filter({ org_id: orgId }, '-dato', 1000)
-        : base44.entities.LoomisInnskudd.list('-dato', 1000);
+        ? innskudd.filter({ org_id: orgId }, '-dato', 1000)
+        : innskudd.list('-dato', 1000);
     },
   });
   const depositsQuery = useQuery({

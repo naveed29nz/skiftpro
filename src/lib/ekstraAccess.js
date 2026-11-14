@@ -36,6 +36,8 @@ function sameId(left, right) {
 /**
  * A settlement row belongs to this person when the employee id matches,
  * or when that id is empty and they created the row.
+ * @param {any} row
+ * @param {{ workerId?: string, userId?: string }} [actor]
  */
 export function ownsSettlement(row, { workerId, userId } = {}) {
   if (!row) return false;
@@ -43,13 +45,21 @@ export function ownsSettlement(row, { workerId, userId } = {}) {
   return sameId(row.created_by, userId);
 }
 
-/** Ekstrahjelp lists and exports only their own dagsoppgjør. */
+/**
+ * Ekstrahjelp lists and exports only their own dagsoppgjør.
+ * @param {any[] | null | undefined} records
+ * @param {{ ekstraOnly?: boolean, workerId?: string, userId?: string }} [actor]
+ */
 export function visibleSettlements(records, { ekstraOnly = false, workerId, userId } = {}) {
   const rows = Array.isArray(records) ? records : [];
   if (!ekstraOnly) return rows;
   return rows.filter((row) => ownsSettlement(row, { workerId, userId }));
 }
 
+/**
+ * @param {any} row
+ * @param {{ workerId?: string, userId?: string }} actor
+ */
 function ownsInnskudd(row, { workerId, userId }) {
   if (!row) return false;
   return sameId(row.ansatt_id, workerId) || sameId(row.created_by, userId);
@@ -82,6 +92,8 @@ const OTHER_PERSON_FIELDS = ['email', 'phone', 'address', 'hourly_rate'];
 /**
  * Drop other people's names and pay before an ekstrahjelp screen keeps the rows.
  * Own rows stay intact. Cash amounts are store data and are kept.
+ * @param {any[] | null | undefined} rows
+ * @param {{ ekstraOnly?: boolean, workerId?: string, userId?: string }} [actor]
  */
 export function redactInnskuddForEkstra(rows, { ekstraOnly = false, workerId, userId } = {}) {
   const list = Array.isArray(rows) ? rows : [];

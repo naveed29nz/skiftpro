@@ -14,12 +14,13 @@ export function useTodayShiftStore({ userId, workerId, orgId, teams }) {
   const today = format(new Date(), 'yyyy-MM-dd');
   const query = todayOwnShiftQuery(userId, orgId, workerId, today);
   const enabled = Boolean(workerId && orgId && today);
+  const shifts = /** @type {any} */ (base44).entities.Shift;
   const result = useQuery(withShiftQuery({
     queryKey: query.queryKey,
     enabled,
-    queryFn: () => base44.entities.Shift.filter(query.filter, 'start_time', 50),
+    queryFn: () => shifts.filter(query.filter, 'start_time', 50),
   }));
-  const store = defaultStoreFromTodayShift(result.data, {
+  const store = defaultStoreFromTodayShift(/** @type {any} */ (result.data), {
     workerId,
     orgId,
     today,
