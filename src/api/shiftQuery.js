@@ -39,6 +39,19 @@ export function isShiftRestUrl(url) {
   }
 }
 
+export function isWorkerOrderRestUrl(url) {
+  try {
+    const parsed = new URL(String(url), 'https://placeholder.local');
+    return /\/rest\/v1\/timesheet_worker_orders\/?$/.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function isSessionGatedRestUrl(url) {
+  return isShiftRestUrl(url) || isWorkerOrderRestUrl(url);
+}
+
 export function bearerFromHeaders(headers) {
   if (!headers) return '';
   const value = typeof headers.get === 'function'
@@ -57,15 +70,16 @@ export function requestUrl(input) {
 }
 
 /**
- * Shift reads and writes must carry a live user JWT. Without one, PostgREST
- * answers 200 [] because the anon role fails `in_org`, and that empty list
- * is indistinguishable from "this person has no shifts". Colleague reads use
- * `shifts_visible` and need the same gate.
+ * Shift and Timelister-order reads and writes must carry a live user JWT.
+ * Without one, PostgREST answers 200 [] because the anon role fails `in_org`,
+ * and that empty list is indistinguishable from "there is no row". Colleague
+ * shift reads use `shifts_visible` and need the same gate. An empty order
+ * list would otherwise be saved as the store's employee order.
  * Returns a 401 response instead of calling the network.
  */
 export async function guardedSupabaseFetch(input, init, { anonKey, fetchImpl = fetch } = {}) {
   const headers = new Headers(init?.headers || (typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined));
-  if (isShiftRestUrl(requestUrl(input)) && !isAuthenticatedAccessToken(bearerFromHeaders(headers), anonKey)) {
+  if (isSessionGatedRestUrl(requestUrl(input)) && !isAuthenticatedAccessToken(bearerFromHeaders(headers), anonKey)) {
     return new Response(JSON.stringify({ message: AUTH_NOT_READY_MESSAGE, code: '401' }), {
       status: 401,
       headers: { 'content-type': 'application/json' },
