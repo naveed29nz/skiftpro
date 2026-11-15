@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import LegalFooter from '@/components/LegalFooter';
+import { LEGAL_UPDATED } from '@/legal/publicCopy';
 
 export default function LegalPage({ title, children }) {
   return (
@@ -11,6 +12,7 @@ export default function LegalPage({ title, children }) {
           <p className="mt-1">Denne teksten er et arbeidsutkast for SkiftPro og er ikke en endelig juridisk vurdering.</p>
         </div>
         <h1 className="text-2xl font-bold">{title}</h1>
+        <p className="text-sm text-slate-500">Sist oppdatert: {LEGAL_UPDATED}</p>
         <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-sm leading-6">
           {children}
         </div>

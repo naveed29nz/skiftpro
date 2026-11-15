@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { DATA_LOCATION_ANSWER } from '@/legal/publicCopy';
 import {
   ArrowLeftRight,
   CalendarDays,
@@ -119,7 +120,7 @@ const faqs = [
   },
   {
     q: 'Hvor ligger dataene?',
-    a: 'Alle data lagres sikkert i EU',
+    a: DATA_LOCATION_ANSWER,
   },
 ];
 
@@ -470,6 +471,7 @@ export default function Landing() {
             <Link className="underline" to="/personvern">Personvernerklæring</Link>
             <Link className="underline" to="/vilkar">Vilkår</Link>
             <Link className="underline" to="/databehandleravtale">Databehandleravtale</Link>
+            <Link className="underline" to="/sikkerhet">Sikkerhet</Link>
           </nav>
         </div>
       </footer>

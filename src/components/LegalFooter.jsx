@@ -6,6 +6,7 @@ export default function LegalFooter({ className = '' }) {
       <Link to="/personvern" className="hover:text-slate-800 hover:underline">Personvernerklæring</Link>
       <Link to="/vilkar" className="hover:text-slate-800 hover:underline">Vilkår</Link>
       <Link to="/databehandleravtale" className="hover:text-slate-800 hover:underline">Databehandleravtale</Link>
+      <Link to="/sikkerhet" className="hover:text-slate-800 hover:underline">Sikkerhet</Link>
     </footer>
   );
 }

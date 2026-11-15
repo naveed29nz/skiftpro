@@ -10,6 +10,7 @@ import InstallPrompt from '@/components/InstallPrompt';
 import Personvern from '@/pages/Personvern';
 import Vilkar from '@/pages/Vilkar';
 import Databehandleravtale from '@/pages/Databehandleravtale';
+import Sikkerhet from '@/pages/Sikkerhet';
 import Landing from '@/pages/Landing';
 
 const AuthenticatedApp = lazy(() => import('./AuthenticatedApp'));
@@ -88,6 +89,7 @@ function App() {
             <Route path="/personvern" element={<Personvern />} />
             <Route path="/vilkar" element={<Vilkar />} />
             <Route path="/databehandleravtale" element={<Databehandleravtale />} />
+            <Route path="/sikkerhet" element={<Sikkerhet />} />
             <Route path="/signer/:contractId/takk" element={(
               <Suspense fallback={<OpeningSplash />}>
                 <EmployeeSignedThanks />
