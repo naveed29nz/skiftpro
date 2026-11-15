@@ -129,6 +129,8 @@ export default function OrgOnboarding({ userId, userEmail }) {
           <Link to="/personvern" className="underline">Personvern</Link>
           {' · '}
           <Link to="/vilkar" className="underline">Vilkår</Link>
+          {' · '}
+          <Link to="/sikkerhet" className="underline">Sikkerhet</Link>
         </p>
       </div>
     </div>
