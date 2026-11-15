@@ -4,7 +4,7 @@ import { useCurrentWorker } from '@/hooks/useCurrentWorker';
 import { DragDropContext, Droppable, Draggable, useMouseSensor, useKeyboardSensor } from '@hello-pangea/dnd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { withShiftQuery } from '@/api/shiftQuery';
+import { shiftQueryRetry, shiftQueryRetryDelay, withShiftQuery } from '@/api/shiftQuery';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, Plus, Copy, GripVertical, ArrowUpDown, Trash2, CheckSquare, Send, Eye, EyeOff, Clock } from 'lucide-react';
@@ -24,14 +24,18 @@ import ShiftTouchSheet from '@/components/timesheet/ShiftTouchSheet';
 import { isShiftDropTarget, sameShiftCell, shiftCopyRecord, shiftMoveFields } from '@/timesheet/placeShift';
 import {
   applyWorkerOrder,
+  createOrderSaver,
   isMissingOrderTable,
-  isUniqueViolation,
+  keepOrderSnapshot,
   mergeWorkerOrder,
   moveRowIds,
-  normalizeIdList,
+  parseWorkerIdList,
   persistedWorkerIds,
   readLocalWorkerOrder,
-  seedOrderFromLocal,
+  resolveDisplayedOrder,
+  sameIds,
+  shouldSeedServerOrder,
+  stableWorkerIds,
   teamOrderKey,
   writeLocalWorkerOrder,
 } from '@/timesheet/workerOrder';
@@ -204,6 +208,7 @@ export default function Timesheet() {
   const [localOrder, setLocalOrder] = useState(() => readLocalWorkerOrder(typeof localStorage === 'undefined' ? null : localStorage));
   const [draftOrders, setDraftOrders] = useState({});
   const seedAttempted = useRef(new Set());
+  const shownOrderRef = useRef({});
   const [sortByLabel, setSortByLabel] = useState(false);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [selectedCols, setSelectedCols] = useState(new Set());
@@ -249,9 +254,62 @@ export default function Timesheet() {
   }, [workerReady, seesAllTeams, myTeams, filterTeam, teamDefaultSet]);
 
   const { orgId } = useOrg();
+  const orgRef = useRef(orgId);
+  orgRef.current = orgId;
+  const orderSaverRef = useRef(null);
+  if (!orderSaverRef.current) {
+    orderSaverRef.current = createOrderSaver({
+      readRow: async (key) => {
+        const currentOrg = orgRef.current;
+        if (!currentOrg) return null;
+        const fresh = await base44.entities.TimesheetWorkerOrder.filter({ org_id: currentOrg, team_key: key });
+        return fresh?.[0] || null;
+      },
+      createRow: async (key, ids) => base44.entities.TimesheetWorkerOrder.create({
+        org_id: orgRef.current,
+        team_key: key,
+        worker_ids: ids,
+      }),
+      updateRow: async (id, ids) => base44.entities.TimesheetWorkerOrder.update(id, { worker_ids: ids }),
+      publish: (key, ids, row) => {
+        const currentOrg = orgRef.current;
+        queryClient.setQueryData(['timesheet-worker-order', currentOrg], (current) => {
+          if (current && current.available === false) return current;
+          const rows = (current?.rows || []).filter((item) => item.team_key !== key);
+          rows.push({ ...(row || {}), org_id: currentOrg, team_key: key, worker_ids: ids });
+          return { available: true, rows };
+        });
+        setDraftOrders((prev) => {
+          if (!sameIds(prev[key], ids)) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      },
+      onError: (key, ids, error) => {
+        setDraftOrders((prev) => {
+          if (!sameIds(prev[key], ids)) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        toast({ title: 'Kunne ikke lagre rekkefølgen', description: error?.message || 'Prøv igjen.', variant: 'destructive' });
+      },
+    });
+  }
   const { data: workerOrders } = useQuery({
     queryKey: ['timesheet-worker-order', orgId],
     enabled: !!orgId,
+    retry: shiftQueryRetry,
+    retryDelay: shiftQueryRetryDelay,
+    // A drag stays pinned for this page view. setQueryData and a refetch that
+    // started before the write both arrive here; the pin keeps the older
+    // payload from putting the previous order back. Reload reads the server.
+    structuralSharing: (previous, next) => keepOrderSnapshot(
+      previous,
+      next,
+      () => orderSaverRef.current?.authoritativeIds() || [],
+    ),
     queryFn: async () => {
       try {
         const rows = await base44.entities.TimesheetWorkerOrder.filter({ org_id: orgId });
@@ -365,47 +423,64 @@ export default function Timesheet() {
   }, [workers, workerOrders]);
 
   const orderKey = teamOrderKey(filterTeam);
-  const manualOrderIds = useMemo(() => {
-    const ids = activeWorkers.map((worker) => worker.id);
-    if (draftOrders[orderKey]) return mergeWorkerOrder(ids, draftOrders[orderKey]);
-    if (workerOrders?.available) {
-      const row = (workerOrders.rows || []).find((item) => item.team_key === orderKey);
-      if (row) return mergeWorkerOrder(ids, normalizeIdList(row.worker_ids));
-      return seedOrderFromLocal(ids, localOrder) || ids;
-    }
-    return localOrder.length > 0 ? mergeWorkerOrder(ids, localOrder) : ids;
-  }, [activeWorkers, draftOrders, orderKey, workerOrders, localOrder]);
+  const orderStatus = !workerOrders ? 'loading' : (workerOrders.available ? 'ready' : 'unavailable');
+  const stableActiveIds = stableWorkerIds(activeWorkers);
+  const draftIds = draftOrders[orderKey];
+  const resolvedOrder = resolveDisplayedOrder({
+    status: orderStatus,
+    rows: workerOrders?.rows,
+    orderKey,
+    workerIds: stableActiveIds,
+    draftIds,
+    localIds: localOrder,
+  });
+  if (resolvedOrder) shownOrderRef.current[orderKey] = resolvedOrder;
+  // While the shared order is still loading, keep the last list for this store.
+  // Do not paint localStorage, and do not paint the worker-query order: both
+  // were replacing the saved list when the server response arrived.
+  const waitingForOrder = orderStatus === 'loading'
+    && !shownOrderRef.current[orderKey]
+    && !(draftIds && draftIds.length);
+  const manualOrderIds = waitingForOrder ? null : (shownOrderRef.current[orderKey] || stableActiveIds);
 
   const orderedActiveWorkers = useMemo(
-    () => applyWorkerOrder(activeWorkers, manualOrderIds),
+    () => (manualOrderIds ? applyWorkerOrder(activeWorkers, manualOrderIds) : []),
     [activeWorkers, manualOrderIds],
   );
 
-  const activeWorkerKey = activeWorkers.map((worker) => worker.id).join('\0');
+  const stableActiveKey = stableActiveIds.join('\0');
   useEffect(() => {
-    if (!orgId || !canManageShifts || !workerOrders?.available) return;
+    if (!orgId || !canManageShifts || workerOrders?.available !== true) return;
+    const saver = orderSaverRef.current;
+    if (!saver) return;
+    const draft = draftOrders[orderKey];
+    if (draft && draft.length) {
+      const row = (workerOrders.rows || []).find((item) => item.team_key === orderKey);
+      const saved = parseWorkerIdList(row?.worker_ids);
+      if (sameIds(saved, draft)) return;
+      if (saver.isPending(orderKey) && sameIds(saver.pendingIds(orderKey), draft)) return;
+      saver.push(orderKey, draft, 'drag');
+      return;
+    }
+    if (saver.isPending(orderKey)) return;
     if ((workerOrders.rows || []).some((row) => row.team_key === orderKey)) return;
-    const ids = activeWorkerKey ? activeWorkerKey.split('\0') : [];
-    if (ids.length === 0 || !ids[0]) return;
-    const seeded = seedOrderFromLocal(ids, localOrder);
-    if (!seeded) return;
     const attempt = `${orgId}:${orderKey}`;
     if (seedAttempted.current.has(attempt)) return;
-    seedAttempted.current.add(attempt);
-    base44.entities.TimesheetWorkerOrder.create({
-      org_id: orgId,
-      team_key: orderKey,
-      worker_ids: seeded,
-    }).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['timesheet-worker-order', orgId] });
-    }).catch((error) => {
-      if (isUniqueViolation(error)) {
-        queryClient.invalidateQueries({ queryKey: ['timesheet-worker-order', orgId] });
-      }
+    const seeded = shouldSeedServerOrder({
+      status: 'ready',
+      rows: workerOrders.rows,
+      orderKey,
+      draftIds: null,
+      localIds: localOrder,
+      workerIds: stableActiveKey ? stableActiveKey.split('\0') : [],
     });
-  }, [orgId, canManageShifts, workerOrders, orderKey, activeWorkerKey, localOrder, queryClient]);
+    if (!seeded) return;
+    seedAttempted.current.add(attempt);
+    saver.push(orderKey, seeded, 'seed');
+  }, [orgId, canManageShifts, workerOrders, orderKey, draftOrders, localOrder, stableActiveKey]);
 
   const displayWorkers = useMemo(() => {
+    if (!manualOrderIds) return [];
     const base = filterWorker === 'all' ? activeWorkers : activeWorkers.filter(w => w.id === filterWorker);
     let sortedBase;
     if (sortByLabel) {
@@ -841,54 +916,13 @@ export default function Timesheet() {
       if (source.index === destination.index) return;
       const visibleIds = moveRowIds(displayWorkers.map(w => w.id), source.index, destination.index);
       const ids = persistedWorkerIds(visibleIds, displayWorkers.filter(w => w.isVirtual).map(w => w.id));
-      if (!workerOrders?.available || !orgId) {
-        const stored = moveRowIds(displayWorkers.map(w => w.id), source.index, destination.index);
-        setLocalOrder(stored);
-        writeLocalWorkerOrder(typeof localStorage === 'undefined' ? null : localStorage, stored);
+      if (workerOrders && workerOrders.available === false) {
+        setLocalOrder(ids);
+        writeLocalWorkerOrder(typeof localStorage === 'undefined' ? null : localStorage, ids);
         return;
       }
       setDraftOrders((prev) => ({ ...prev, [orderKey]: ids }));
-      const existing = (workerOrders.rows || []).find((row) => row.team_key === orderKey);
-      const write = existing?.id
-        ? base44.entities.TimesheetWorkerOrder.update(existing.id, { worker_ids: ids })
-        : base44.entities.TimesheetWorkerOrder.create({ org_id: orgId, team_key: orderKey, worker_ids: ids });
-      write.then((saved) => {
-        queryClient.setQueryData(['timesheet-worker-order', orgId], (current) => {
-          if (!current?.available) return current;
-          const rows = (current.rows || []).filter((row) => row.team_key !== orderKey);
-          rows.push({ ...(existing || {}), ...(saved || {}), org_id: orgId, team_key: orderKey, worker_ids: ids });
-          return { available: true, rows };
-        });
-        setDraftOrders((prev) => {
-          const next = { ...prev };
-          delete next[orderKey];
-          return next;
-        });
-      }).catch(async (error) => {
-        const clearDraft = () => setDraftOrders((prev) => {
-          const next = { ...prev };
-          delete next[orderKey];
-          return next;
-        });
-        try {
-          if (isUniqueViolation(error)) {
-            const fresh = await base44.entities.TimesheetWorkerOrder.filter({ org_id: orgId, team_key: orderKey });
-            const row = fresh?.[0];
-            if (row?.id) {
-              await base44.entities.TimesheetWorkerOrder.update(row.id, { worker_ids: ids });
-              queryClient.invalidateQueries({ queryKey: ['timesheet-worker-order', orgId] });
-              clearDraft();
-              return;
-            }
-          }
-        } catch (retryError) {
-          clearDraft();
-          toast({ title: 'Kunne ikke lagre rekkefølgen', description: retryError.message || 'Prøv igjen.', variant: 'destructive' });
-          return;
-        }
-        clearDraft();
-        toast({ title: 'Kunne ikke lagre rekkefølgen', description: error.message || 'Prøv igjen.', variant: 'destructive' });
-      });
+      if (workerOrders?.available && orgId) orderSaverRef.current?.push(orderKey, ids, 'drag');
       return;
     }
     if (type === 'SHIFT') {
@@ -1637,7 +1671,7 @@ export default function Timesheet() {
               </table>
             </DragDropContext>
           </div>
-          {displayWorkers.length === 0 && (
+          {displayWorkers.length === 0 && !waitingForOrder && (
             <div className="py-16 text-center text-sm text-slate-400">Ingen ansatte å vise</div>
           )}
         </div>

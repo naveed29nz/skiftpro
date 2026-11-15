@@ -2,13 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyWorkerOrder,
+  createOrderSaver,
   isMissingOrderTable,
   isUniqueViolation,
+  keepOrderSnapshot,
   mergeWorkerOrder,
   moveRowIds,
+  parseWorkerIdList,
   persistedWorkerIds,
   readLocalWorkerOrder,
+  resolveDisplayedOrder,
   seedOrderFromLocal,
+  shouldSeedServerOrder,
+  stableWorkerIds,
   teamOrderKey,
   writeLocalWorkerOrder,
 } from './workerOrder.js';
@@ -65,4 +71,161 @@ test('a missing order table is not a unique-key clash', () => {
   assert.equal(isMissingOrderTable({ code: '42P01', message: 'relation "public.timesheet_worker_orders" does not exist' }), true);
   assert.equal(isUniqueViolation({ code: '23505', message: 'duplicate key value violates unique constraint' }), true);
   assert.equal(isUniqueViolation({ code: 'PGRST205', message: 'schema cache' }), false);
+});
+
+test('a loaded store order beats this browser and a drag beats the loaded row', () => {
+  const rows = [
+    { team_key: 'team1', worker_ids: '{c,a,b}' },
+    { team_key: 'team2', worker_ids: ['d', 'c'] },
+  ];
+  assert.deepEqual(parseWorkerIdList('{c,a,b}'), ['c', 'a', 'b']);
+  assert.deepEqual(parseWorkerIdList('["d","c"]'), ['d', 'c']);
+  assert.deepEqual(resolveDisplayedOrder({
+    status: 'ready',
+    rows,
+    orderKey: 'team1',
+    workerIds: ['a', 'b', 'c'],
+    localIds: ['a', 'b', 'c'],
+  }), ['c', 'a', 'b']);
+  assert.deepEqual(resolveDisplayedOrder({
+    status: 'ready',
+    rows,
+    orderKey: 'team2',
+    workerIds: ['c', 'd'],
+    localIds: ['c', 'd'],
+  }), ['d', 'c']);
+  assert.deepEqual(resolveDisplayedOrder({
+    status: 'ready',
+    rows,
+    orderKey: 'team1',
+    workerIds: ['a', 'b', 'c'],
+    draftIds: ['b', 'c', 'a'],
+    localIds: ['a', 'b', 'c'],
+  }), ['b', 'c', 'a']);
+  assert.equal(resolveDisplayedOrder({
+    status: 'loading',
+    rows: [],
+    orderKey: 'team1',
+    workerIds: ['a', 'b', 'c'],
+    localIds: ['c', 'b', 'a'],
+  }), null);
+});
+
+test('the order does not follow the week or the other store, and new people stay after the saved list', () => {
+  const saved = ['c', 'a'];
+  const workers = [
+    { id: 'b', name: 'Bo' },
+    { id: 'd', name: 'Dina' },
+    { id: 'a', name: 'Ada' },
+    { id: 'c', name: 'Cia' },
+  ];
+  const flipped = [workers[3], workers[1], workers[0], workers[2]];
+  const asc = stableWorkerIds(workers);
+  const desc = stableWorkerIds(flipped);
+  assert.deepEqual(mergeWorkerOrder(asc, saved), mergeWorkerOrder(desc, saved));
+  assert.deepEqual(mergeWorkerOrder(asc, saved), ['c', 'a', 'b', 'd']);
+  assert.equal(shouldSeedServerOrder({
+    status: 'ready',
+    rows: [{ team_key: 'team1', worker_ids: ['c', 'a'] }],
+    orderKey: 'team1',
+    localIds: ['a', 'b', 'c'],
+    workerIds: asc,
+  }), null);
+  assert.equal(shouldSeedServerOrder({
+    status: 'loading',
+    rows: [],
+    orderKey: 'team2',
+    localIds: ['d', 'c'],
+    workerIds: ['c', 'd'],
+  }), null);
+  assert.deepEqual(shouldSeedServerOrder({
+    status: 'ready',
+    rows: [],
+    orderKey: 'team2',
+    draftIds: ['d', 'c'],
+    localIds: ['c', 'd'],
+    workerIds: ['c', 'd'],
+  }), null);
+});
+
+test('an empty read does not wipe a saved order, and a stale read does not undo a drag', () => {
+  const previous = { available: true, rows: [{ team_key: 'team1', worker_ids: ['b', 'a'] }] };
+  assert.equal(keepOrderSnapshot(previous, { available: true, rows: [] }), previous);
+  assert.deepEqual(keepOrderSnapshot(undefined, { available: true, rows: [] }).rows, []);
+  const kept = keepOrderSnapshot(previous, {
+    available: true,
+    rows: [{ team_key: 'team1', worker_ids: ['a', 'b'] }],
+  }, () => [['team1', ['b', 'a']]]);
+  assert.deepEqual(kept.rows[0].worker_ids, ['b', 'a']);
+  assert.deepEqual(keepOrderSnapshot(previous, {
+    available: true,
+    rows: [{ team_key: 'team1', worker_ids: ['b', 'a'] }],
+  }, () => [['team1', ['b', 'a']]]).rows[0].worker_ids, ['b', 'a']);
+});
+
+test('a slower save cannot publish over a newer drag, and a seed cannot replace the server row', async () => {
+  const published = [];
+  let release = () => {};
+  const gate = new Promise((resolve) => { release = resolve; });
+  let reads = 0;
+  const updates = [];
+  const saver = createOrderSaver({
+    readRow: async () => {
+      reads += 1;
+      if (reads === 1) await gate;
+      return null;
+    },
+    createRow: async (_key, ids) => ({ id: 'row-1', worker_ids: ids }),
+    updateRow: async (id, ids) => {
+      updates.push(ids);
+      return { id, worker_ids: ids };
+    },
+    publish: (_key, ids) => { published.push(ids); },
+  });
+  const first = saver.push('team1', ['a', 'b'], 'drag');
+  await Promise.resolve();
+  const second = saver.push('team1', ['b', 'a'], 'drag');
+  release();
+  await first;
+  await second;
+  assert.deepEqual(published, [['b', 'a']]);
+  assert.deepEqual(updates, []);
+
+  const adopted = [];
+  const seedSaver = createOrderSaver({
+    readRow: async () => ({ id: 'row-2', worker_ids: '{server,order}' }),
+    createRow: async () => { throw new Error('seed must not insert over a row'); },
+    updateRow: async () => { throw new Error('seed must not update a row'); },
+    publish: (_key, ids) => { adopted.push(ids); },
+  });
+  await seedSaver.push('team2', ['local', 'order'], 'seed');
+  assert.deepEqual(adopted, [['server', 'order']]);
+
+  let looked = false;
+  const raced = createOrderSaver({
+    readRow: async () => {
+      if (!looked) {
+        looked = true;
+        return null;
+      }
+      return { id: 'row-3', worker_ids: ['old'] };
+    },
+    createRow: async () => {
+      const error = new Error('duplicate key value violates unique constraint');
+      error.code = '23505';
+      throw error;
+    },
+    updateRow: async (id, ids) => ({ id, worker_ids: ids }),
+    publish: (_key, ids) => { published.push(ids); },
+  });
+  await raced.push('team1', ['b', 'a'], 'drag');
+  assert.deepEqual(raced.authoritativeIds(), [['team1', ['b', 'a']]]);
+  const stale = keepOrderSnapshot(
+    { available: true, rows: [{ team_key: 'team1', worker_ids: ['b', 'a'] }] },
+    { available: true, rows: [{ team_key: 'team1', worker_ids: ['a', 'b'] }] },
+    () => raced.authoritativeIds(),
+  );
+  assert.deepEqual(stale.rows[0].worker_ids, ['b', 'a']);
+  raced.reconcile([{ team_key: 'team1', worker_ids: ['b', 'a'] }]);
+  assert.deepEqual(raced.authoritativeIds(), []);
 });

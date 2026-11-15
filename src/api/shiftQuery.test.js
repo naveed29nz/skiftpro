@@ -6,7 +6,9 @@ import {
   guardedSupabaseFetch,
   isAuthenticatedAccessToken,
   isAuthNotReadyError,
+  isSessionGatedRestUrl,
   isShiftRestUrl,
+  isWorkerOrderRestUrl,
   shiftQueryRetry,
   withShiftQuery,
 } from './shiftQuery.js';
@@ -37,7 +39,7 @@ test('an expired user token is not sent to PostgREST', () => {
   assert.equal(isAuthenticatedAccessToken(expired, 'anon-key'), false);
 });
 
-test('only shift reads and writes are gated', () => {
+test('shift and timesheet order requests are gated and other tables are not', () => {
   assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/shifts?select=*'), true);
   assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/shifts'), true);
   assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/shifts_visible?select=*'), true);
@@ -46,6 +48,10 @@ test('only shift reads and writes are gated', () => {
   assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/workers?select=*'), false);
   assert.equal(isShiftRestUrl('https://example.supabase.co/rest/v1/workers_visible?select=*'), false);
   assert.equal(isShiftRestUrl('https://example.supabase.co/auth/v1/token'), false);
+  assert.equal(isWorkerOrderRestUrl('https://example.supabase.co/rest/v1/timesheet_worker_orders?org_id=eq.1'), true);
+  assert.equal(isWorkerOrderRestUrl('https://example.supabase.co/rest/v1/timesheet_worker_orders'), true);
+  assert.equal(isSessionGatedRestUrl('https://example.supabase.co/rest/v1/timesheet_worker_orders?select=*'), true);
+  assert.equal(isSessionGatedRestUrl('https://example.supabase.co/rest/v1/workers?select=*'), false);
 });
 
 test('a shift request without a user session never reaches the network', async () => {
@@ -80,6 +86,21 @@ test('an authenticated shift request bypasses the HTTP cache', async () => {
   assert.equal(response.status, 200);
   assert.equal(seen.cache, 'no-store');
   assert.equal(bearerFromHeaders(seen.headers), liveUser);
+});
+
+test('an order request without a user session never reaches the network', async () => {
+  let called = false;
+  const response = await guardedSupabaseFetch('https://example.supabase.co/rest/v1/timesheet_worker_orders?select=*', {
+    headers: { Authorization: 'Bearer sb_publishable_test', apikey: 'sb_publishable_test' },
+  }, {
+    anonKey: 'sb_publishable_test',
+    fetchImpl: async () => {
+      called = true;
+      return new Response('[]', { status: 200 });
+    },
+  });
+  assert.equal(called, false);
+  assert.equal(response.status, 401);
 });
 
 test('other tables still fetch when the session is missing', async () => {
