@@ -103,4 +103,9 @@ test('the public pages share the list and drop the old claims', () => {
   const legalPage = source('components/legal/LegalPage.jsx');
   assert.match(legalPage, /Sist oppdatert/);
   assert.doesNotMatch(legalPage, /utkast|arbeidsutkast|jurist|juridisk/i);
+  const login = source('pages/Login.jsx');
+  assert.match(login, /to="\/vilkar"/);
+  assert.match(login, /to="\/personvern"/);
+  assert.match(login, /to="\/databehandleravtale"/);
+  assert.doesNotMatch(login, /Tekstene er utkast|gjennomgås juridisk/);
 });
