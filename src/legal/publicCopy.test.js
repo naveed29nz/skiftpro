@@ -69,10 +69,14 @@ test('security claims stay inside what the product does', () => {
   assert.doesNotMatch(text, /ISO|SOC|Narvesen/i);
 });
 
-test('the DPA stays a draft and the legal date is 15 November 2026', () => {
+test('the DPA is final and the legal date is 15 November 2026', () => {
   assert.equal(LEGAL_UPDATED, '15. november 2026');
-  assert.match(DPA_INTRO, /utkast/);
-  assert.match(DPA_CLOSING, /jurist har godkjent/);
+  assert.equal(
+    DPA_INTRO,
+    'Denne avtalen er mellom kunden (behandlingsansvarlig) og Zastek AS, org.nr. 938 291 144, post@zastek.no (databehandler), for bruk av SkiftPro.',
+  );
+  assert.equal(DPA_CLOSING, 'Kunden kan be om en signert versjon på post@zastek.no.');
+  assert.doesNotMatch(`${DPA_INTRO}\n${DPA_CLOSING}`, /utkast|jurist|bindende avtale|juridisk/i);
 });
 
 test('the public pages share the list and drop the old claims', () => {
@@ -96,5 +100,7 @@ test('the public pages share the list and drop the old claims', () => {
   assert.match(footer, /to="\/sikkerhet"/);
   assert.match(app, /path="\/sikkerhet"/);
   assert.match(source('pages/Sikkerhet.jsx'), /SECURITY_POINTS/);
-  assert.match(source('components/legal/LegalPage.jsx'), /Sist oppdatert/);
+  const legalPage = source('components/legal/LegalPage.jsx');
+  assert.match(legalPage, /Sist oppdatert/);
+  assert.doesNotMatch(legalPage, /utkast|arbeidsutkast|jurist|juridisk/i);
 });
