@@ -8,9 +8,9 @@ export const LEGAL_UPDATED = '15. november 2026';
 
 export const RETENTION_PARAGRAPH = 'Kundedata oppbevares i 60 dager etter at abonnementet er avsluttet, og slettes deretter manuelt. Data slettes ikke automatisk. Zastek AS registrerer slettedatoen, og en superadministrator sletter kundedata manuelt. Kunden kan før den tid be om eksport av dataene og om tidligere sletting. Skriftlig bekreftelse på sletting gis på forespørsel. Opplysninger som må oppbevares etter bokføringsreglene, slettes ikke ved den datoen.';
 
-export const DPA_INTRO = 'Denne avtalen er et utkast mellom kunden (behandlingsansvarlig) og Zastek AS, org.nr. 938 291 144, post@zastek.no (databehandler), for bruk av SkiftPro.';
+export const DPA_INTRO = 'Denne avtalen er mellom kunden (behandlingsansvarlig) og Zastek AS, org.nr. 938 291 144, post@zastek.no (databehandler), for bruk av SkiftPro.';
 
-export const DPA_CLOSING = 'Kunden kan be om en signert versjon på post@zastek.no. Ikke ta denne teksten i bruk som bindende avtale før jurist har godkjent den.';
+export const DPA_CLOSING = 'Kunden kan be om en signert versjon på post@zastek.no.';
 
 export const DATA_LOCATION_ANSWER = 'Databasen ligger i EU (Frankfurt). Noen underleverandører kan behandle opplysninger utenfor EU på grunnlag av EUs standardkontraktsklausuler (SCC).';
 
