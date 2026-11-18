@@ -1,10 +1,11 @@
 import { isEkstrahjelp } from '@/contracts/employment';
 import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { withShiftQuery } from '@/api/shiftQuery';
 import { useAuth } from '@/lib/AuthContext';
-import { Link } from 'react-router-dom';
+import EmployeeChecklist from '@/components/onboarding/EmployeeChecklist';
 import { Clock, CalendarDays, Coins, Users, ArrowLeftRight, LayoutDashboard, LogOut, CheckSquare, FileText, ArrowLeft } from 'lucide-react';
 import AvailabilityCalendar from '@/components/worker/AvailabilityCalendar';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ export default function WorkerPortal() {
   const { user: currentUser, isAuthenticated } = useAuth();
   const [todayStamp, setTodayStamp] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [searchParams] = useSearchParams();
 
   const { data: workers = [], isPending: workersPending } = useQuery({
     queryKey: ['workers'],
@@ -46,6 +48,12 @@ export default function WorkerPortal() {
     enabled: isAuthenticated,
   });
   const worker = workers.find((w) => sameEmail(w.email, currentUser?.email));
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (!tab || !TABS.some((item) => item.id === tab)) return;
+    if (tab === 'availability' && isEkstrahjelp(worker?.ansettelsestype)) return;
+    setActiveTab(tab);
+  }, [searchParams, worker?.ansettelsestype]);
   const orgId = worker?.org_id || null;
   const userId = currentUser?.id ?? null;
   const workerId = worker?.id ?? null;
@@ -189,6 +197,13 @@ export default function WorkerPortal() {
           </Button>
         </div>
       </div>
+
+      <EmployeeChecklist
+        worker={worker}
+        userId={currentUser?.id}
+        orgId={orgId}
+        highlight={searchParams.get('sjekk') || ''}
+      />
 
       {/* Tab navigation */}
       <div className="flex gap-2 overflow-x-auto">

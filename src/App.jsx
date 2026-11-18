@@ -37,6 +37,9 @@ const EkstrahjelpPreview = import.meta.env.DEV
 const AutoPlanPreview = import.meta.env.DEV
   ? lazy(() => import('@/pages/AutoPlanPreview'))
   : null;
+const FeaturePreview = import.meta.env.DEV
+  ? lazy(() => import('@/pages/FeaturePreview'))
+  : null;
 const showCancellationPreview = import.meta.env.DEV || import.meta.env.VITE_VERCEL_ENV === 'preview';
 const CancellationPreview = showCancellationPreview
   ? lazy(() => import('@/pages/CancellationPreview'))
@@ -159,6 +162,16 @@ function App() {
                 element={(
                   <Suspense fallback={<OpeningSplash />}>
                     <AutoPlanPreview />
+                  </Suspense>
+                )}
+              />
+            )}
+            {import.meta.env.DEV && FeaturePreview && (
+              <Route
+                path="/dev/varsler-sjekkliste"
+                element={(
+                  <Suspense fallback={<OpeningSplash />}>
+                    <FeaturePreview />
                   </Suspense>
                 )}
               />

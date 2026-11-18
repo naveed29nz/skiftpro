@@ -7,7 +7,7 @@ import { canSeeWageCosts } from '@/utils/wageAccess';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Download, Send, Trash2, Eye, Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from '@/components/ui/use-toast';
 import { contractStatus, contractType } from '@/contracts/labels';
 import { postenStatusText } from '@/contracts/postenSigning';
@@ -26,7 +26,8 @@ export default function Contracts({ fixture = null, wagesVisible = null, loadPdf
   const { orgId } = useOrg();
   const { user, worker } = useCurrentWorker();
   const showWages = preview && wagesVisible != null ? wagesVisible : canSeeWageCosts(user, worker);
-  const [search, setSearch] = useState('');
+  const [params] = useSearchParams();
+  const [search, setSearch] = useState(() => params.get('q') || '');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [viewingContract, setViewingContract] = useState(null);
@@ -36,6 +37,11 @@ export default function Contracts({ fixture = null, wagesVisible = null, loadPdf
   useEffect(() => {
     if (preview) setPreviewRows(fixture);
   }, [preview, fixture]);
+
+  useEffect(() => {
+    const q = params.get('q');
+    if (q) setSearch(q);
+  }, [params]);
 
   const { data: loadedContracts = [], isLoading } = useQuery({
     queryKey: ['contracts', orgId],

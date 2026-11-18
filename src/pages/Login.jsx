@@ -221,7 +221,7 @@ export default function Login() {
             <label className="flex items-start gap-2 text-xs text-slate-600">
               <input type="checkbox" className="mt-0.5" checked={consent} onChange={(event) => setConsent(event.target.checked)} required />
               <span>
-                Jeg godtar <Link to="/vilkar" className="underline">vilkårene</Link>, <Link to="/personvern" className="underline">personvernerklæringen</Link> og <Link to="/databehandleravtale" className="underline">databehandleravtalen</Link>. Tekstene er utkast og skal gjennomgås juridisk.
+                Jeg godtar <Link to="/vilkar" className="underline">vilkårene</Link>, <Link to="/personvern" className="underline">personvernerklæringen</Link> og <Link to="/databehandleravtale" className="underline">databehandleravtalen</Link>.
               </span>
             </label>
           )}
