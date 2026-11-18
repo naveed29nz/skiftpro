@@ -13,10 +13,13 @@ import BulkAddWorkers from '@/components/workers/BulkAddWorkers';
 import { useOrg } from '@/hooks/useOrg';
 import { useTeamNames } from '@/hooks/useTeamNames';
 import { releaseUpcomingShifts } from '@/utils/workerLifecycle';
-import { canSeeWageCosts } from '@/utils/wageAccess';
+import { canSeeWageCosts, effectiveAppRole } from '@/utils/wageAccess';
 import { resolveEmployerSignerName, stillingsprosentText } from '@/contracts/employment';
 import { sameEmail } from '@/lib/emails';
 import { toast } from '@/components/ui/use-toast';
+import OnboardingBadge from '@/components/onboarding/OnboardingBadge';
+import { isMissingRelation } from '@/lib/managerAlerts';
+import { statusFromOverview } from '@/lib/onboardingChecklist';
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', color: 'bg-purple-100 text-purple-700' },
@@ -65,6 +68,7 @@ function InviteButton({ worker }) {
 export default function Workers() {
   const { user, worker: me, myTeams, ready: workerReady, seesAllTeams } = useCurrentWorker();
   const showWages = canSeeWageCosts(user, me);
+  const viewerRole = effectiveAppRole(user, me);
   const { orgId, myOrg, isSuperAdmin: superAdmin } = useOrg();
   const isAdmin = user?.role === 'admin';
   const [showForm, setShowForm] = useState(false);
@@ -92,6 +96,15 @@ export default function Workers() {
   });
 
   const teamNames = useTeamNames();
+  const { data: onboardingOverview } = useQuery({
+    queryKey: ['onboarding-overview', orgId],
+    enabled: Boolean(orgId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('onboarding_overview', { p_org_id: orgId });
+      if (error || isMissingRelation(error)) return { available: false, rows: [] };
+      return { available: true, rows: data || [] };
+    },
+  });
 
   useEffect(() => {
     const next = nextTeamFilter({
@@ -398,12 +411,18 @@ export default function Workers() {
                   </span>
                 )}
               </div>
+              {onboardingOverview?.available && (
+                <OnboardingBadge status={statusFromOverview(
+                  (onboardingOverview.rows || []).find((row) => row.worker_id === worker.id),
+                  worker,
+                )} />
+              )}
 
               <div className="flex gap-2 mt-4 pt-3 border-t border-slate-100">
                 <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => setEditing(worker)}>
                   <Pencil className="w-3.5 h-3.5" /> Edit
                 </Button>
-                <InviteButton worker={worker} />
+                {viewerRole !== 'butikksjef' && <InviteButton worker={worker} />}
                 <Button variant="outline" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50"
                   onClick={() => { if (confirm('Slette denne ansatte? Tidligere vakter beholdes med navn, og kommende vakter gjøres ledige.')) deleteMut.mutate(worker.id); }}>
                   <Trash2 className="w-3.5 h-3.5" />

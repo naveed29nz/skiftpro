@@ -17,7 +17,17 @@ import { useOrg } from '@/hooks/useOrg';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { canSeeWageCosts } from '@/utils/wageAccess';
 import DayGantt from '@/components/timesheet/DayGantt';
+import ToleranceBar from '@/components/timesheet/ToleranceBar';
 import { LEDIG_WORKER_ID, LEDIG_WORKER_NAME } from '@/utils/workerLifecycle';
+import { readTimesheetLocation } from '@/timesheet/timesheetQuery';
+import {
+  readToleranceMinutes,
+  shiftMatchesTeam,
+  summarizeTolerance,
+  toleranceVerdict,
+  workersWithOutsideShifts,
+  writeToleranceMinutes,
+} from '@/timesheet/tolerance';
 import { flushNotifications } from '@/utils/notify';
 import { toast } from '@/components/ui/use-toast';
 import ShiftTouchSheet from '@/components/timesheet/ShiftTouchSheet';
@@ -193,18 +203,21 @@ export default function Timesheet() {
   // Rollene som får redigere vaktplan (legge til / slette / endre / kopiere / publisere)
   const canManageShifts = user?.role === 'admin' || user?.role === 'sub_admin' || user?.role === 'butikksjef';
   const canApproveHours = ['admin', 'sub_admin'].includes(effectiveAppRole(user, currentWorker));
-  const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const initialTimesheetQuery = readTimesheetLocation(typeof window === 'undefined' ? '' : window.location.search);
+  const [weekStart, setWeekStart] = useState(() => initialTimesheetQuery.weekStart || startOfWeek(new Date(), { weekStartsOn: 1 }));
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
   const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
   const [filterWorker, setFilterWorker] = useState('all');
-  const [filterTeam, setFilterTeam] = useState('all');
-  const [teamDefaultSet, setTeamDefaultSet] = useState(false);
+  const [filterTeam, setFilterTeam] = useState(initialTimesheetQuery.team || 'all');
+  const [teamDefaultSet, setTeamDefaultSet] = useState(Boolean(initialTimesheetQuery.team));
   const [editingTeamKey, setEditingTeamKey] = useState(null);
   const [editingTeamValue, setEditingTeamValue] = useState('');
   const [modalCell, setModalCell] = useState(null);
   const [showCopy, setShowCopy] = useState(false);
   const [viewMode, setViewMode] = useState('uke'); // 'uke' | 'dag'
-  const [selectedDay, setSelectedDay] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [selectedDay, setSelectedDay] = useState(() => initialTimesheetQuery.selectedDay || startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [toleranceMinutes, setToleranceMinutes] = useState(() => readToleranceMinutes(typeof localStorage === 'undefined' ? null : localStorage));
+  const [onlyOutside, setOnlyOutside] = useState(false);
   const [localOrder, setLocalOrder] = useState(() => readLocalWorkerOrder(typeof localStorage === 'undefined' ? null : localStorage));
   const [draftOrders, setDraftOrders] = useState({});
   const seedAttempted = useRef(new Set());
@@ -912,7 +925,7 @@ export default function Timesheet() {
     if (!destination) return;
 
     if (type === 'ROW') {
-      if (!canManageShifts || sortByLabel) return;
+      if (!canManageShifts || sortByLabel || onlyOutside) return;
       if (source.index === destination.index) return;
       const visibleIds = moveRowIds(displayWorkers.map(w => w.id), source.index, destination.index);
       const ids = persistedWorkerIds(visibleIds, displayWorkers.filter(w => w.isVirtual).map(w => w.id));
@@ -1041,6 +1054,20 @@ export default function Timesheet() {
     const mins = Math.round((h - hrs) * 60);
     return `${hrs}t ${mins}m`;
   };
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const stampForShift = (shift) => stampByWorkerDate.get(`${shift.worker_id}__${shift.date}`);
+  const toleranceScope = { filterTeam, filterWorker, workers };
+  const toleranceSummary = summarizeTolerance(weekShifts, stampForShift, toleranceMinutes, todayStr, toleranceScope);
+  const approvalFocus = canApproveHours && onlyOutside && viewMode === 'uke';
+  const scopedShifts = weekShifts.filter((shift) => {
+    const worker = workers.find((item) => item.id === shift.worker_id);
+    return shiftMatchesTeam(shift, filterTeam, worker) && (filterWorker === 'all' || shift.worker_id === filterWorker);
+  });
+  const shownWorkers = approvalFocus
+    ? workersWithOutsideShifts(displayWorkers, scopedShifts, stampForShift, toleranceMinutes, todayStr)
+    : displayWorkers;
+  const shiftOutside = (shift) => toleranceVerdict(shift, stampForShift(shift), toleranceMinutes, todayStr).outside;
 
   const placeBanner = touchPlace?.mode === 'kopier'
     ? 'Trykk på rutene vakten skal kopieres til'
@@ -1191,6 +1218,21 @@ export default function Timesheet() {
         </div>
       )}
 
+      {canApproveHours && viewMode === 'uke' && (
+        <ToleranceBar
+          minutes={toleranceMinutes}
+          onMinutes={(value) => {
+            setToleranceMinutes(value);
+            writeToleranceMinutes(typeof localStorage === 'undefined' ? null : localStorage, value);
+          }}
+          onlyOutside={onlyOutside}
+          onOnlyOutside={setOnlyOutside}
+          withinCount={toleranceSummary.within}
+          outsideCount={toleranceSummary.outside}
+          onApprove={() => setHoursApproved(toleranceSummary.withinShifts, true)}
+        />
+      )}
+
       {/* Legend */}
       <div className="flex flex-wrap gap-2">
         {LABEL_LEGEND.map(l => (
@@ -1256,7 +1298,7 @@ export default function Timesheet() {
                           {days.map(day => {
                             const dayStr = format(day, 'yyyy-MM-dd');
                             const cellDropId = groupShiftDroppableId(group.label, dayStr);
-                            const dayShifts = getGroupDayShifts(group.label, day);
+                            const dayShifts = getGroupDayShifts(group.label, day).filter((shift) => !approvalFocus || shiftOutside(shift));
                             const cardClass = GROUP_CARD_CLASS[group.label] || 'bg-white border-slate-200';
                             return (
                               <td key={day.toISOString()} className={`px-2 py-2 align-top border-l border-white/60 ${isSameDay(day, new Date()) ? 'bg-blue-50/40' : ''}`}>
@@ -1365,9 +1407,9 @@ export default function Timesheet() {
                       <div className="flex items-center gap-2 max-md:gap-1 min-w-0">
                         <input type="checkbox"
                           className={`rounded border-slate-300 cursor-pointer shrink-0 ${mobileControlsClass}`}
-                          checked={displayWorkers.length > 0 && displayWorkers.filter(w => !w.isVirtual).every(w => selectedRows.has(w.id))}
+                          checked={shownWorkers.length > 0 && shownWorkers.filter(w => !w.isVirtual).every(w => selectedRows.has(w.id))}
                           onChange={e => {
-                            if (e.target.checked) setSelectedRows(new Set(displayWorkers.filter(w => !w.isVirtual).map(w => w.id)));
+                            if (e.target.checked) setSelectedRows(new Set(shownWorkers.filter(w => !w.isVirtual).map(w => w.id)));
                             else setSelectedRows(new Set());
                           }}
                         />
@@ -1398,7 +1440,7 @@ export default function Timesheet() {
                 <Droppable droppableId="rows" type="ROW">
                  {(rowProvided) => (
                    <tbody className="divide-y divide-slate-100" ref={rowProvided.innerRef} {...rowProvided.droppableProps}>
-                     {displayWorkers.map((worker, index) => {
+                     {shownWorkers.map((worker, index) => {
                        const weekTotal = getWorkerWeekTotal(worker.id);
                        // Max hours based on employment percentage and workplace setting
                        const fullTimeHours = wp?.full_time_hours_per_week || 37.5;
@@ -1407,7 +1449,7 @@ export default function Timesheet() {
                        const isReadOnly = worker.isInactive || worker.isFormer;
                        const isLedigRow = worker.isLedig;
                        return (
-                         <Draggable key={worker.id} draggableId={worker.id} index={index} isDragDisabled={!canManageShifts || !!worker.isVirtual || (isMobile && !mobileSelectMode)}>
+                          <Draggable key={worker.id} draggableId={worker.id} index={index} isDragDisabled={!canManageShifts || !!worker.isVirtual || (isMobile && !mobileSelectMode) || approvalFocus}>
                            {(rowDrag, rowSnapshot) => (
                              <tr ref={rowDrag.innerRef} {...rowDrag.draggableProps}
                                style={{ ...rowDrag.draggableProps.style, display: 'table-row' }}
@@ -1442,7 +1484,7 @@ export default function Timesheet() {
                                 {days.map(day => {
                                   const dayStr = format(day, 'yyyy-MM-dd');
                                   const cellId = `${worker.id}__${dayStr}`;
-                                  const cellShifts = getShiftsForCell(worker.id, day);
+                                  const cellShifts = getShiftsForCell(worker.id, day).filter((shift) => !approvalFocus || shiftOutside(shift));
                                   const otherShifts = getOtherTeamShifts(worker.id, day);
                                   // Ghost: worker has shifts on other teams but none on this team today
                                   const isGhostCell = otherShifts.length > 0 && cellShifts.length === 0;
@@ -1671,6 +1713,9 @@ export default function Timesheet() {
               </table>
             </DragDropContext>
           </div>
+          {approvalFocus && shownWorkers.length === 0 && displayWorkers.length > 0 && (
+            <div className="py-10 text-center text-sm text-slate-500">Ingen avvik utenfor toleransen i denne visningen.</div>
+          )}
           {displayWorkers.length === 0 && !waitingForOrder && (
             <div className="py-16 text-center text-sm text-slate-400">Ingen ansatte å vise</div>
           )}

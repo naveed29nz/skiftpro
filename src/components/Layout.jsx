@@ -12,6 +12,7 @@ import EmployeeNoInvite from '@/components/EmployeeNoInvite';
 import ImpersonationBanner from '@/components/ImpersonationBanner';
 import DemoModeBar from '@/components/DemoModeBar';
 import LegalFooter from '@/components/LegalFooter';
+import AlertBell from '@/components/alerts/AlertBell';
 import { useOrg } from '@/hooks/useOrg';
 import { queryClientInstance } from '@/lib/query-client';
 import { claimOrgId, resolveSignupGate, resolveSignupKind } from '@/lib/signupGate';
@@ -65,6 +66,7 @@ const subAdminNav = [
 
 const butikksjeflNav = [
   { path: '/WorkerPortal', label: 'Min side', icon: UserCircle },
+  { path: '/Workers', label: 'Ansatte', icon: Users },
   { path: '/Timesheet', label: 'Timelister', icon: CalendarDays },
   { path: '/Resultat', label: 'Resultat', icon: BarChart },
   { path: '/Dagsoppgjor', label: 'Dagsoppgjør', icon: Banknote },
@@ -140,7 +142,7 @@ function allowedPaths(paths) {
 }
 
 const subAdminAllowed = allowedPaths(['/WorkerPortal', '/Workers', '/Timesheet', '/Tasks', '/Salary', '/Settings', '/Dagsoppgjor', '/Loddtelling', '/Innskudd', '/Contracts', '/Resultat']);
-const butikksjefAllowed = allowedPaths(['/WorkerPortal', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Innskudd', '/Settings', '/Resultat', '/Contracts']);
+const butikksjefAllowed = allowedPaths(['/WorkerPortal', '/Workers', '/Timesheet', '/Dagsoppgjor', '/Loddtelling', '/Innskudd', '/Settings', '/Resultat', '/Contracts']);
 const workerAllowed = allowedPaths(['/WorkerPortal', '/Dagsoppgjor', '/Loddtelling', '/Innskudd']);
 
 export default function Layout() {
@@ -369,7 +371,9 @@ export default function Layout() {
             </Link>
           </div>
           )}
-          <div className="hidden md:flex items-center gap-2 ml-auto shrink-0">
+          <div className="ml-auto flex items-center gap-2 max-md:mr-28 shrink-0">
+            <AlertBell enabled={userRole === 'admin' || userRole === 'sub_admin' || userRole === 'butikksjef' || (userRole === 'superadmin' && isImpersonating)} />
+            <div className="hidden md:flex items-center gap-2">
             {(location.pathname === '/Dashboard' || location.pathname === '/WorkerPortal') && (
               <MobileViewToggle />
             )}
@@ -381,9 +385,8 @@ export default function Layout() {
               <LogOut className="w-3.5 h-3.5" />
               <span className="text-sm font-medium">Logg ut</span>
             </button>
+            </div>
           </div>
-          {/* spacer on mobile so logo stays left */}
-          <div className="md:hidden ml-auto" />
           <button
             onClick={() => base44.auth.logout()}
             title="Logg ut"
