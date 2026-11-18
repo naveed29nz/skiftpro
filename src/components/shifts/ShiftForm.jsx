@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { isFullDayAbsence, shiftLabelChoices } from '@/utils/shiftLabels';
+import ShiftSuggestions from '@/components/shifts/ShiftSuggestions';
 
 export default function ShiftForm({ shift, workers, onSubmit, onCancel }) {
   const initialLabel = shift?.shift_label || 'none';
@@ -63,6 +64,19 @@ export default function ShiftForm({ shift, workers, onSubmit, onCancel }) {
               ))}
             </SelectContent>
           </Select>
+          <ShiftSuggestions
+            workers={workers}
+            team={(selectedWorker?.teams || ['team1'])[0]}
+            date={form.date}
+            startTime={form.start_time}
+            endTime={form.end_time}
+            shiftLabel={form.shift_label}
+            breakMinutes={form.break_minutes}
+            allDay={wholeDay}
+            excludeShiftId={shift?.id}
+            selectedWorkerId={form.worker_id}
+            onPick={(id) => setForm((current) => ({ ...current, worker_id: id }))}
+          />
         </div>
         <div className="space-y-1.5">
           <Label>Dato *</Label>

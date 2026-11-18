@@ -7,10 +7,11 @@ import { base44 } from '@/api/base44Client';
 import { shiftQueryRetry, shiftQueryRetryDelay, withShiftQuery } from '@/api/shiftQuery';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Plus, Copy, GripVertical, ArrowUpDown, Trash2, CheckSquare, Send, Eye, EyeOff, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Copy, GripVertical, ArrowUpDown, Trash2, CheckSquare, Send, Eye, EyeOff, Clock, Sparkles } from 'lucide-react';
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay, getISOWeek } from 'date-fns';
 import ShiftCellModal from '@/components/shifts/ShiftCellModal';
 import CopyWeekModal from '@/components/timesheet/CopyWeekModal';
+import AutoPlanModal from '@/components/timesheet/AutoPlanModal';
 import { useStaffingBudget } from '@/hooks/useStaffingBudget';
 import { getActiveTeams } from '@/utils/teams';
 import { useOrg } from '@/hooks/useOrg';
@@ -192,6 +193,8 @@ export default function Timesheet() {
   const isAdmin = user?.role === 'admin';
   // Rollene som får redigere vaktplan (legge til / slette / endre / kopiere / publisere)
   const canManageShifts = user?.role === 'admin' || user?.role === 'sub_admin' || user?.role === 'butikksjef';
+  const plannerRole = effectiveAppRole(user, currentWorker);
+  const canAutoPlan = canManageShifts || plannerRole === 'admin' || plannerRole === 'sub_admin' || plannerRole === 'butikksjef';
   const canApproveHours = ['admin', 'sub_admin'].includes(effectiveAppRole(user, currentWorker));
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
@@ -203,6 +206,7 @@ export default function Timesheet() {
   const [editingTeamValue, setEditingTeamValue] = useState('');
   const [modalCell, setModalCell] = useState(null);
   const [showCopy, setShowCopy] = useState(false);
+  const [showAuto, setShowAuto] = useState(false);
   const [viewMode, setViewMode] = useState('uke'); // 'uke' | 'dag'
   const [selectedDay, setSelectedDay] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [localOrder, setLocalOrder] = useState(() => readLocalWorkerOrder(typeof localStorage === 'undefined' ? null : localStorage));
@@ -1087,6 +1091,11 @@ export default function Timesheet() {
               <Button variant="outline" size="sm" className="gap-1.5 text-slate-600" onClick={() => setShowCopy(true)}>
                 <Copy className="w-3.5 h-3.5" /> Kopier uke
               </Button>
+              {canAutoPlan && (
+                <Button variant="outline" size="sm" className="gap-1.5 text-slate-700" data-testid="auto-plan-button" onClick={() => setShowAuto(true)}>
+                  <Sparkles className="w-3.5 h-3.5" /> Lag utkast
+                </Button>
+              )}
               <Button
                 variant={sortByLabel ? 'default' : 'outline'}
                 size="sm"
@@ -1117,6 +1126,11 @@ export default function Timesheet() {
               }}>
                 I dag
               </Button>
+              {canAutoPlan && (
+                <Button variant="outline" size="sm" className="gap-1.5 text-slate-700" data-testid="auto-plan-button" onClick={() => setShowAuto(true)}>
+                  <Sparkles className="w-3.5 h-3.5" /> Lag utkast
+                </Button>
+              )}
             </>
           )}
           {canApproveHours && viewMode === 'uke' && (
@@ -1284,8 +1298,10 @@ export default function Timesheet() {
                                                     ${shiftSnapshot.isDragging ? 'shadow-lg ring-2 ring-blue-400 opacity-90' : ''}`}
                                                   style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
                                                 >
-                                                  <div className="font-semibold text-slate-800 leading-tight truncate">{s.worker_name}</div>
-                                                  <div className="text-slate-500 mt-0.5">{s.start_time} – {s.end_time}</div>
+                                                  <div className="font-semibold text-slate-800 leading-tight truncate">{s.worker_id === LEDIG_WORKER_ID ? 'Ledig vakt' : s.worker_name}</div>
+                                                  <div className="text-slate-500 mt-0.5">{s.all_day ? 'Hele dagen' : `${s.start_time} – ${s.end_time}`}</div>
+                                                  {s.worker_id === LEDIG_WORKER_ID && <div className="text-[10px] font-semibold text-emerald-700">Åpen</div>}
+                                                  {!s.published && <div className="text-[10px] font-medium text-amber-700">Utkast</div>}
                                                 </div>
                                               )}
                                             </Draggable>
@@ -1529,6 +1545,11 @@ export default function Timesheet() {
                                                                  <span aria-hidden="true">👎</span><span className="max-md:hidden">Utilgjengelig</span>
                                                                </span>
                                                              )}
+                                                             {s.worker_id === LEDIG_WORKER_ID && (
+                                                               <span data-testid="open-shift-marker" className="flex items-center gap-0.5 text-[10px] max-md:text-[8px] px-1 max-md:px-0.5 py-0.5 max-md:py-0 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold max-md:whitespace-nowrap">
+                                                                 Åpen
+                                                               </span>
+                                                             )}
                                                              {!s.published && (
                                                                <span className="flex items-center gap-0.5 text-xs max-md:text-[8px] px-1.5 py-0.5 max-md:px-0.5 max-md:py-0 rounded bg-amber-100 text-amber-700 border border-amber-200 font-medium max-md:whitespace-nowrap">
                                                                  <EyeOff className="w-2.5 h-2.5 max-md:hidden" /> Utkast
@@ -1724,6 +1745,24 @@ export default function Timesheet() {
           defaultShiftLabel={modalCell.defaultLabel}
           wp={wp}
           locked={dateLocked(format(modalCell.day, 'yyyy-MM-dd'))}
+          knownShifts={weekShifts}
+          knownAvailability={availability}
+          fullTimeHours={Number(wp?.full_time_hours_per_week) || 37.5}
+        />
+      )}
+
+      {showAuto && canAutoPlan && (
+        <AutoPlanModal
+          orgId={orgId}
+          teams={teamList}
+          initialTeam={filterTeam}
+          weekStart={weekStart}
+          workers={workers}
+          fullTimeHours={Number(wp?.full_time_hours_per_week) || 37.5}
+          showWages={showWages}
+          dateLocked={dateLocked}
+          onClose={() => setShowAuto(false)}
+          onRefresh={handleRefresh}
         />
       )}
 
