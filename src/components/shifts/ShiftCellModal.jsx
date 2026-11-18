@@ -11,6 +11,7 @@ import { base44 } from '@/api/base44Client';
 import { flushNotifications } from '@/utils/notify';
 import { breakRulesForTeam, effectiveBreakMinutes } from '@/utils/payCalc';
 import { isFullDayAbsence, shiftLabelChoices, shiftLabelName } from '@/utils/shiftLabels';
+import ShiftSuggestions from '@/components/shifts/ShiftSuggestions';
 
 const LABEL_STYLES = {
   morning: 'bg-amber-100 text-amber-700 border border-amber-200',
@@ -25,7 +26,10 @@ const LABEL_STYLES = {
 const emptyShift = { worker_id: '', start_time: '08:00', end_time: '16:00', break_minutes: 30, break_manual: true, all_day: false, notes: '', shift_label: 'none', team: '' };
 
 // Defined OUTSIDE the parent component to avoid remounting on every render
-function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, workers, worker, teamNames, wp, defaultTeam }) {
+function ShiftForm({
+  data, setData, onSave, onCancel, saveLabel, loading, workers, worker, teamNames, wp, defaultTeam,
+  date, excludeShiftId = null, knownShifts, knownAvailability, fullTimeHours, suggestForce = false,
+}) {
   const selectedWorkerId = data.worker_id || worker.id;
   const w = workers.find(x => x.id === selectedWorkerId) || worker;
   const workerTeams = w?.teams || ['team1'];
@@ -47,6 +51,23 @@ function ShiftForm({ data, setData, onSave, onCancel, saveLabel, loading, worker
               {workers.map(wk => <SelectItem key={wk.id} value={wk.id}>{wk.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          <ShiftSuggestions
+            workers={workers}
+            team={team}
+            date={date}
+            startTime={data.start_time}
+            endTime={data.end_time}
+            shiftLabel={data.shift_label}
+            breakMinutes={data.break_minutes}
+            allDay={wholeDay}
+            excludeShiftId={excludeShiftId}
+            selectedWorkerId={selectedWorkerId}
+            onPick={(id) => setData((current) => ({ ...current, worker_id: id, team: '' }))}
+            knownShifts={knownShifts}
+            knownAvailability={knownAvailability}
+            fullTimeHours={fullTimeHours}
+            forceShow={suggestForce}
+          />
         </div>
       )}
       {showTeamSelector && (
@@ -170,13 +191,16 @@ function shiftPayload(data, workerRecord, dayStr, team, wp) {
   };
 }
 
-export default function ShiftCellModal({ worker, day, shifts, workers = [], onClose, onRefresh, currentTeam, teamNames = {}, defaultShiftLabel, wp, locked = false }) {
+export default function ShiftCellModal({
+  worker, day, shifts, workers = [], onClose, onRefresh, currentTeam, teamNames = {}, defaultShiftLabel, wp, locked = false,
+  knownShifts = null, knownAvailability = null, fullTimeHours = 37.5, suggestForce = false, initialAdding = false,
+}) {
   const dayStr = format(day, 'yyyy-MM-dd');
   const dayLabel = format(day, 'EEEE d. MMM', { locale: nb });
 
   const defaultTeam = currentTeam && currentTeam !== 'all' ? currentTeam : (worker.teams?.[0] || '');
 
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(initialAdding);
   const [newShift, setNewShift] = useState(() => {
     const team = defaultTeam || worker.teams?.[0] || 'team1';
     const label = defaultShiftLabel || emptyShift.shift_label;
@@ -284,7 +308,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base">
             <div className="flex items-center gap-2">
@@ -298,7 +322,7 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-2 max-h-80 overflow-y-auto">
+        <div className="max-h-[60vh] space-y-2 overflow-y-auto">
           {shifts.length === 0 && !adding && (
             <p className="text-sm text-slate-400 text-center py-3">Ingen vakter denne dagen</p>
           )}
@@ -318,6 +342,12 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                   teamNames={teamNames}
                   wp={wp}
                   defaultTeam={defaultTeam}
+                  date={dayStr}
+                  excludeShiftId={shift.id}
+                  knownShifts={knownShifts}
+                  knownAvailability={knownAvailability}
+                  fullTimeHours={fullTimeHours}
+                  suggestForce={suggestForce}
                 />
               ) : (
                 <div>
@@ -388,6 +418,11 @@ export default function ShiftCellModal({ worker, day, shifts, workers = [], onCl
                 teamNames={teamNames}
                 wp={wp}
                 defaultTeam={defaultTeam}
+                date={dayStr}
+                knownShifts={knownShifts}
+                knownAvailability={knownAvailability}
+                fullTimeHours={fullTimeHours}
+                suggestForce={suggestForce}
               />
             </div>
           )}
