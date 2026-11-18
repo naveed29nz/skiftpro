@@ -10,6 +10,7 @@ import {
   autoDraftIds,
   contractWeeklyHours,
   formatHours,
+  historicalWeeklyCap,
   isAutoDraft,
   planDraft,
   rankEmployees,
@@ -133,12 +134,24 @@ test('published shifts are kept and only the gap is filled', () => {
   assert.equal(plan.after.shiftCount, 5);
 });
 
-test('replace drafts deletes unpublished work drafts and never published shifts', () => {
+test('replace drafts deletes only auto-planner drafts', () => {
   const history = repeatHistory({ workerId: 'a' });
-  const draft = shift('draft-1', { date: WEEK, published: false, worker_id: 'b', worker_name: 'Bo' });
-  const published = shift('pub-1', { date: addDays(WEEK, 1), published: true, worker_id: 'a' });
+  const manual = shift('manual-1', {
+    date: WEEK,
+    published: false,
+    notes: 'Eget utkast',
+    worker_id: 'b',
+    worker_name: 'Bo',
+  });
+  const auto = shift('auto-1', {
+    date: addDays(WEEK, 1),
+    published: false,
+    notes: AUTO_DRAFT_NOTE,
+    worker_id: 'a',
+  });
+  const published = shift('pub-1', { date: addDays(WEEK, 2), published: true, worker_id: 'a' });
   const ferie = shift('ferie-1', {
-    date: addDays(WEEK, 2),
+    date: addDays(WEEK, 3),
     published: false,
     shift_label: 'ferie',
     all_day: true,
@@ -153,13 +166,15 @@ test('replace drafts deletes unpublished work drafts and never published shifts'
     toDate: addDays(WEEK, 6),
     replaceDrafts: true,
     workers: [worker('a', { name: 'Ada' }), worker('b', { name: 'Bo' })],
-    shifts: [...history, draft, published, ferie],
+    shifts: [...history, manual, auto, published, ferie],
   });
 
-  assert.deepEqual(plan.deleteIds, ['draft-1']);
-  assert.equal(plan.shifts.some((row) => row.date === WEEK), true);
-  assert.equal(plan.shifts.some((row) => row.date === addDays(WEEK, 1)), false);
-  assert.equal(plan.shifts.some((row) => row.worker_id === 'a' && row.date === addDays(WEEK, 2)), false);
+  assert.deepEqual(plan.deleteIds, ['auto-1']);
+  assert.equal(plan.shifts.some((row) => row.date === WEEK), false);
+  assert.equal(plan.shifts.some((row) => row.date === addDays(WEEK, 1)), true);
+  assert.equal(plan.shifts.some((row) => row.date === addDays(WEEK, 2)), false);
+  assert.equal(plan.shifts.some((row) => row.worker_id === 'a' && row.date === addDays(WEEK, 3)), false);
+  assert.match(plan.warnings.join(' '), /Manuelle utkast/);
 });
 
 test('unavailable, ferie, overlap, 40 hours and 11 hours rest stay unassigned', () => {
@@ -435,8 +450,10 @@ test('suggestions rank history and hours, and warn without hiding the person', (
     shifts: longWeek,
     candidate: { date: addDays(WEEK, 4), start_time: '08:00', end_time: '16:00', shift_label: 'morning', team: TEAM, break_minutes: 0 },
   });
-  assert.equal(over.suggestions.length, 0);
+  assert.equal(over.byWorkerId.noah.blocked, false);
+  assert.equal(over.suggestions.some((row) => row.workerId === 'noah'), true);
   assert.ok(over.byWorkerId.noah.warnings.some((text) => text.includes('over 40 t')));
+  assert.ok(over.byWorkerId.noah.warnings.some((text) => text.includes('likevel tildele')));
 
   const early = rankEmployees({
     orgId: ORG,
@@ -447,6 +464,49 @@ test('suggestions rank history and hours, and warn without hiding the person', (
   });
   assert.equal(early.suggestions.length, 0);
   assert.ok(early.byWorkerId.noah.warnings.some((text) => text.includes('hvile')));
+});
+
+function longWeek(workerId, monday) {
+  return [0, 1, 2, 3, 4].map((day) => shift(`${workerId}-${monday}-${day}`, {
+    worker_id: workerId,
+    date: addDays(monday, day),
+    start_time: '08:00',
+    end_time: '18:00',
+    break_minutes: 0,
+    shift_label: 'morning',
+    published: true,
+  }));
+}
+
+test('a consistent week over 40 hours becomes that person’s auto-plan cap', () => {
+  const history = [];
+  for (let week = 4; week >= 1; week -= 1) history.push(...longWeek('sjef', addDays(WEEK, -7 * week)));
+  assert.equal(historicalWeeklyCap('sjef', history, WEEK), 50);
+  assert.equal(historicalWeeklyCap('sjef', longWeek('sjef', addDays(WEEK, -7)), WEEK), null);
+
+  const mixed = [
+    ...longWeek('sjef', addDays(WEEK, -28)),
+    ...longWeek('sjef', addDays(WEEK, -21)),
+    ...longWeek('sjef', addDays(WEEK, -14)),
+    shift('short', { worker_id: 'sjef', date: addDays(WEEK, -7), start_time: '08:00', end_time: '16:00', break_minutes: 0 }),
+  ];
+  assert.equal(historicalWeeklyCap('sjef', mixed, WEEK), null);
+
+  const plan = planDraft({
+    orgId: ORG,
+    team: TEAM,
+    fromDate: WEEK,
+    toDate: addDays(WEEK, 4),
+    workers: [worker('sjef', { name: 'Eva Sjef', position: 'Butikksjef' })],
+    shifts: history,
+  });
+  assert.equal(plan.raisedCaps[0].cap, 50);
+  assert.equal(plan.openCount, 0);
+  assert.equal(plan.shifts.filter((row) => row.worker_id === 'sjef').length, 5);
+  assert.equal(plan.hoursByWorker[0].weekHours, 47.5);
+  assert.ok(plan.hoursByWorker[0].weekHours > 40);
+  assert.match(plan.warnings.join(' '), /Eva Sjef har vanligvis 50 t\/uke/);
+  assert.match(plan.warnings.join(' '), /47,5 t denne uka, over 40 t/);
 });
 
 test('auto drafts can be found again without touching published shifts', () => {

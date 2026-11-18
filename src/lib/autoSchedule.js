@@ -539,6 +539,31 @@ function weeklyHours(shifts, workerId, date, exceptId) {
     .reduce((sum, shift) => sum + scheduleHours(shift), 0);
 }
 
+/**
+ * When every recorded week in the history window is over 40 hours, and at
+ * least two weeks are recorded, auto-planning may follow that pattern.
+ * The cap is the median of those weeks. A single busy week does not qualify.
+ */
+export function historicalWeeklyCap(workerId, historyShifts, fromDate) {
+  if (!workerId || !fromDate) return null;
+  const start = addDays(fromDate, -7 * HISTORY_WEEKS);
+  const totals = new Map();
+  for (const shift of historyShifts || []) {
+    if (shift.worker_id !== workerId || !isWorkShift(shift)) continue;
+    if (shift.date < start || shift.date >= fromDate) continue;
+    const key = weekKey(shift.date);
+    totals.set(key, (totals.get(key) || 0) + scheduleHours(shift));
+  }
+  const weeks = [...totals.values()];
+  if (weeks.length < 2) return null;
+  if (weeks.some((hours) => hours <= MAX_WEEKLY_HOURS + 0.05)) return null;
+  const sorted = [...weeks].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  const cap = Math.round(median * 10) / 10;
+  return cap > MAX_WEEKLY_HOURS ? cap : null;
+}
+
 function restProblem(shifts, workerId, slot, exceptId) {
   const slotInterval = intervalOf(slot);
   let previous = null;
@@ -591,9 +616,14 @@ function evaluateWorker(worker, slot, ctx) {
   const already = weeklyHours(ctx.shifts, worker.id, slot.date, slot.id);
   const added = scheduleHours({ ...slot, status: 'scheduled' });
   const projected = already + added;
-  if (projected > MAX_WEEKLY_HOURS + 0.05) {
-    blocks.push({ code: 'hours', text: BLOCK_TEXT.hours });
-    warnings.push(`Blir ${formatHours(projected)} t denne uka (over 40 t)`);
+  const cap = ctx.manual ? MAX_WEEKLY_HOURS : (ctx.hourCapFor?.(worker.id) || MAX_WEEKLY_HOURS);
+  if (projected > cap + 0.05) {
+    if (ctx.manual) {
+      warnings.push(`Blir ${formatHours(projected)} t denne uka (over 40 t). Du kan likevel tildele vakten.`);
+    } else {
+      blocks.push({ code: 'hours', text: BLOCK_TEXT.hours });
+      warnings.push(`Blir ${formatHours(projected)} t denne uka (over ${formatHours(cap)} t)`);
+    }
   }
 
   const rest = restProblem(ctx.shifts, worker.id, slot, slot.id);
@@ -628,6 +658,7 @@ function evaluateWorker(worker, slot, ctx) {
       reasons.push('Har meldt seg tilgjengelig');
     }
     if (dayShift) score -= 8;
+    if (ctx.manual && projected > MAX_WEEKLY_HOURS + 0.05) score -= 40;
   }
 
   return {
@@ -678,6 +709,7 @@ export function rankEmployees({
     historyShifts: history,
     availability: (availability || []).filter((row) => sameOrg(row, orgId)),
     fullTimeHours,
+    manual: true,
   };
   const evaluated = scopedWorkers.map((worker) => evaluateWorker(worker, slot, ctx));
   const suggestions = evaluated
@@ -762,13 +794,14 @@ function emptyPlan(warning) {
     usedHistory: false,
     usedBudget: false,
     historyWeeksUsed: 0,
+    raisedCaps: [],
   };
 }
 
 /**
  * Build unpublished draft shifts for one store and date range.
  * Existing shifts are kept. Published shifts are never deleted.
- * With replaceDrafts, unpublished work drafts in the range are replaced.
+ * With replaceDrafts, only unpublished auto-planner drafts in the range are replaced.
  */
 export function planDraft({
   team,
@@ -802,7 +835,7 @@ export function planDraft({
     ? rangeShifts
       .filter((shift) => (
         shift.id
-        && shift.published === false
+        && isAutoDraft(shift)
         && isWorkShift(shift)
         && resolveTeam(shift, scopedWorkers) === team
         && !lockedSkipped.includes(shift.date)
@@ -833,6 +866,14 @@ export function planDraft({
   const created = [];
   const openReasons = [];
   const pool = activeWorkers(scopedWorkers).filter((worker) => onTeam(worker, team));
+  const raisedCaps = pool
+    .map((worker) => ({
+      workerId: worker.id,
+      name: worker.name || 'Ansatt',
+      cap: historicalWeeklyCap(worker.id, historyShifts, fromDate),
+    }))
+    .filter((row) => row.cap);
+  const capByWorker = new Map(raisedCaps.map((row) => [row.workerId, row.cap]));
 
   for (const slot of gaps) {
     const live = kept.concat(assigned);
@@ -842,6 +883,7 @@ export function planDraft({
       historyShifts,
       availability: scopedAvailability,
       fullTimeHours,
+      hourCapFor: (workerId) => capByWorker.get(workerId) || MAX_WEEKLY_HOURS,
     };
     const ranked = pool
       .map((worker) => evaluateWorker(worker, slot, ctx))
@@ -913,7 +955,10 @@ export function planDraft({
   if (lockedSkipped.length) warnings.push(`Hoppet over låst lønnsperiode: ${lockedSkipped.join(', ')}.`);
   if (observed === 0 && budget.hasBudget) warnings.push('Ingen historikk de siste 4 ukene. Utkastet følger prognosen.');
   if (observed === 0 && !budget.hasBudget) warnings.push('Fant ingen vaktmønster de siste 4 ukene og ingen prognose.');
-  if (replaceDrafts && deleteIds.length) warnings.push(`Erstatter ${deleteIds.length} eksisterende utkast. Publiserte vakter beholdes.`);
+  if (replaceDrafts && deleteIds.length) warnings.push(`Erstatter ${deleteIds.length} auto-utkast. Manuelle utkast og publiserte vakter beholdes.`);
+  for (const row of raisedCaps) {
+    warnings.push(`${row.name} har vanligvis ${formatHours(row.cap)} t/uke de siste 4 ukene. Auto-planlegging bruker det som tak i stedet for 40 t.`);
+  }
   if (!created.length && !deleteIds.length) warnings.push('Ingen hull å fylle. Eksisterende vakter dekker perioden.');
   if (!pool.length && created.length) warnings.push('Ingen aktive ansatte på butikken. Alle nye vakter står ledige.');
   const openCount = created.filter((shift) => shift.worker_id === OPEN_WORKER_ID).length;
@@ -933,7 +978,11 @@ export function planDraft({
     else if (diff < -1) warnings.push(`Planen ligger ${formatHours(Math.abs(diff))} t under prognosen.`);
   }
   for (const row of hoursByWorker) {
-    if (row.weekHours >= 38) warnings.push(`${row.name} er nær 40 t (${formatHours(row.weekHours)} t).`);
+    if (row.weekHours > MAX_WEEKLY_HOURS + 0.05) {
+      warnings.push(`${row.name} er planlagt til ${formatHours(row.weekHours)} t denne uka, over 40 t, fordi det følger mønstret fra de siste 4 ukene.`);
+    } else if (row.weekHours >= 38) {
+      warnings.push(`${row.name} er nær 40 t (${formatHours(row.weekHours)} t).`);
+    }
   }
 
   return {
@@ -956,6 +1005,7 @@ export function planDraft({
     usedHistory: observed > 0,
     usedBudget: budget.hasBudget,
     historyWeeksUsed: observed,
+    raisedCaps,
   };
 }
 

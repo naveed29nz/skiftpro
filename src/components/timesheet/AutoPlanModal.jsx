@@ -250,8 +250,8 @@ export default function AutoPlanModal({
               onChange={(event) => { setReplaceDrafts(event.target.checked); clearPreview(); }}
             />
             <span>
-              <span className="font-medium">Erstatt eksisterende utkast</span>
-              <span className="block text-xs text-slate-500">Bare upubliserte arbeidsvakter. Publiserte vakter, sykdom og ferie beholdes.</span>
+              <span className="font-medium">Erstatt tidligere auto-utkast</span>
+              <span className="block text-xs text-slate-500">Bare upubliserte vakter merket «Auto-planlagt utkast». Manuelle utkast, sykdom, ferie og publiserte vakter beholdes.</span>
             </span>
           </label>
 
