@@ -34,6 +34,9 @@ const PayrollRound1Preview = import.meta.env.DEV
 const EkstrahjelpPreview = import.meta.env.DEV
   ? lazy(() => import('@/pages/EkstrahjelpPreview'))
   : null;
+const FeaturePreview = import.meta.env.DEV
+  ? lazy(() => import('@/pages/FeaturePreview'))
+  : null;
 const showCancellationPreview = import.meta.env.DEV || import.meta.env.VITE_VERCEL_ENV === 'preview';
 const CancellationPreview = showCancellationPreview
   ? lazy(() => import('@/pages/CancellationPreview'))
@@ -146,6 +149,16 @@ function App() {
                 element={(
                   <Suspense fallback={<OpeningSplash />}>
                     <PayrollRound1Preview />
+                  </Suspense>
+                )}
+              />
+            )}
+            {import.meta.env.DEV && FeaturePreview && (
+              <Route
+                path="/dev/varsler-sjekkliste"
+                element={(
+                  <Suspense fallback={<OpeningSplash />}>
+                    <FeaturePreview />
                   </Suspense>
                 )}
               />
