@@ -51,6 +51,12 @@ import {
   writeLocalWorkerOrder,
 } from '@/timesheet/workerOrder';
 import { groupShiftDropFields, groupShiftDroppableId, groupShiftVisible } from '@/timesheet/groupShifts';
+import {
+  dropIdForDragEnd,
+  isGroupShiftDroppableId,
+  isShiftDroppableId,
+  resolvePointerDrop,
+} from '@/timesheet/dropTarget';
 import { nextTeamFilter } from '@/lib/myTeams';
 import { isCoarsePointer, isTouchLikePointer, pressMovedPast, SHIFT_LONG_PRESS_MS, shiftGestureIsTouch } from '@/timesheet/touchShift';
 import { calcHours } from '@/utils/payCalc';
@@ -253,7 +259,53 @@ export default function Timesheet() {
   const pressTimer = useRef(null);
   const pressOrigin = useRef(null);
   const pressListeners = useRef(null);
+  const pointerRef = useRef(null);
+  const shiftDragRef = useRef(null);
+  const pointerDropIdRef = useRef(null);
+  const refreshPointerDropRef = useRef(() => {});
+  const [pointerDropId, setPointerDropId] = useState(null);
+  const [pointerDragActive, setPointerDragActive] = useState(false);
   const queryClient = useQueryClient();
+
+  refreshPointerDropRef.current = () => {
+    const drag = shiftDragRef.current;
+    const pointer = pointerRef.current;
+    if (!drag || !pointer || typeof document === 'undefined') return;
+    const id = resolvePointerDrop(document, {
+      clientX: pointer.x,
+      clientY: pointer.y,
+      accept: drag.type === 'GROUPSHIFT' ? isGroupShiftDroppableId : isShiftDroppableId,
+    });
+    if (pointerDropIdRef.current === id) return;
+    pointerDropIdRef.current = id;
+    setPointerDropId(id);
+  };
+
+  useLayoutEffect(() => {
+    const remember = (event) => {
+      const point = event.changedTouches?.[0] || event.touches?.[0] || event;
+      if (typeof point?.clientX !== 'number') return;
+      pointerRef.current = { x: point.clientX, y: point.clientY };
+      if (shiftDragRef.current) refreshPointerDropRef.current();
+    };
+    const onScroll = () => {
+      if (shiftDragRef.current) refreshPointerDropRef.current();
+    };
+    window.addEventListener('pointerdown', remember, true);
+    window.addEventListener('pointermove', remember, true);
+    window.addEventListener('pointerup', remember, true);
+    window.addEventListener('touchstart', remember, { capture: true, passive: true });
+    window.addEventListener('touchmove', remember, { capture: true, passive: true });
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('pointerdown', remember, true);
+      window.removeEventListener('pointermove', remember, true);
+      window.removeEventListener('pointerup', remember, true);
+      window.removeEventListener('touchstart', remember, true);
+      window.removeEventListener('touchmove', remember, true);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, []);
 
   useEffect(() => {
     const next = nextTeamFilter({
@@ -925,10 +977,56 @@ export default function Timesheet() {
     ledigWorkerName: LEDIG_WORKER_NAME,
   });
 
-  const handleDragEnd = async ({ type, source, destination, draggableId }) => {
-    if (!destination) return;
+  const finishPointerDrag = () => {
+    const was = shiftDragRef.current;
+    shiftDragRef.current = null;
+    pointerDropIdRef.current = null;
+    if (!was) return;
+    setPointerDropId(null);
+    setPointerDragActive(false);
+    // The card is pointer-events: none, so the click after mouseup would
+    // land on whatever cell is underneath and open it.
+    const stop = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener('click', stop, true);
+    setTimeout(() => window.removeEventListener('click', stop, true), 0);
+  };
+
+  const handleDragStart = (start) => {
+    if (start.mode === 'SNAP' || (start.type !== 'SHIFT' && start.type !== 'GROUPSHIFT')) {
+      shiftDragRef.current = null;
+      return;
+    }
+    shiftDragRef.current = { type: start.type };
+    setPointerDragActive(true);
+    refreshPointerDropRef.current();
+  };
+
+  const handleDragEnd = async (result) => {
+    const { type, source, destination, draggableId, mode, reason } = result;
+    const pointer = pointerRef.current;
+    // The library's destination follows the card centre. Mouse and touch
+    // use the pointer instead, read again here so a scroll on the last
+    // frame is included. Keyboard drops keep destination.
+    const dropId = dropIdForDragEnd({
+      type,
+      mode,
+      reason,
+      destinationId: destination?.droppableId,
+      pointer,
+      resolve: (point) => resolvePointerDrop(document, {
+        clientX: point.x,
+        clientY: point.y,
+        accept: type === 'GROUPSHIFT' ? isGroupShiftDroppableId : isShiftDroppableId,
+      }),
+    });
+    finishPointerDrag();
+    if (reason === 'CANCEL') return;
 
     if (type === 'ROW') {
+      if (!destination) return;
       if (!canManageShifts || sortByLabel || onlyOutside) return;
       if (source.index === destination.index) return;
       const visibleIds = moveRowIds(displayWorkers.map(w => w.id), source.index, destination.index);
@@ -943,8 +1041,8 @@ export default function Timesheet() {
       return;
     }
     if (type === 'SHIFT') {
-      if (source.droppableId === destination.droppableId) return;
-      const [newWorkerId, newDate] = destination.droppableId.split('__');
+      if (!dropId || dropId === source.droppableId) return;
+      const [newWorkerId, newDate] = dropId.split('__');
       const shift = shifts.find(s => s.id === draggableId);
       if (!shift || refuseLocked(shift.date) || refuseLocked(newDate)) return;
       // Når en vakt flyttes i en spesifikk avdelingsvisning, behold avdelingen:
@@ -954,10 +1052,11 @@ export default function Timesheet() {
       handleRefresh();
       return;
     }
-    if (type === 'GROUPSHIFT' || String(destination.droppableId || '').startsWith('groupshift__')) {
+    if (type === 'GROUPSHIFT' || String(dropId || '').startsWith('groupshift__')) {
       // Flytt til en annen vakt-rad: datoen følger cellen, og vakttype blir radens type.
+      if (!dropId) return;
       const shift = shifts.find(s => s.id === draggableId);
-      const fields = groupShiftDropFields(shift, destination.droppableId);
+      const fields = groupShiftDropFields(shift, dropId);
       if (!shift || !fields || refuseLocked(shift.date) || refuseLocked(fields.date)) return;
       try {
         await base44.entities.Shift.update(draggableId, fields);
@@ -1274,7 +1373,7 @@ export default function Timesheet() {
           wp={wp}
         />
       ) : sortByLabel ? (
-        <DragDropContext onDragEnd={handleDragEnd} enableDefaultSensors={false} sensors={SHIFT_DRAG_SENSORS}>
+        <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} enableDefaultSensors={false} sensors={SHIFT_DRAG_SENSORS}>
           <div className="space-y-4">
             {GROUPS.map(group => {
               const stats = getGroupStats(group.label);
@@ -1314,42 +1413,53 @@ export default function Timesheet() {
                             const cellDropId = groupShiftDroppableId(group.label, dayStr);
                             const dayShifts = getGroupDayShifts(group.label, day).filter((shift) => !approvalFocus || shiftOutside(shift));
                             const cardClass = GROUP_CARD_CLASS[group.label] || 'bg-white border-slate-200';
+                            const groupHot = pointerDragActive ? pointerDropId === cellDropId : false;
                             return (
                               <td key={day.toISOString()} className={`px-2 py-2 align-top border-l border-white/60 ${isSameDay(day, new Date()) ? 'bg-blue-50/40' : ''}`}>
                                 <Droppable droppableId={cellDropId} type="GROUPSHIFT" isDropDisabled={group.label === 'sick'}>
                                   {(cellProvided, cellSnapshot) => (
                                     <div
                                       ref={cellProvided.innerRef} {...cellProvided.droppableProps}
-                                      className={`min-h-[48px] rounded transition-colors ${cellSnapshot.isDraggingOver ? 'ring-2 ring-inset ring-white/80 bg-white/40' : ''}`}
+                                      data-shift-drop-disabled={group.label === 'sick' ? 'true' : undefined}
+                                      className={`relative min-h-[48px] rounded transition-colors ${(groupHot || (!pointerDragActive && cellSnapshot.isDraggingOver)) ? 'ring-2 ring-inset ring-white/80 bg-white/40' : ''}`}
                                     >
                                       <div className="space-y-1.5">
                                         {dayShifts.map((s, si) => {
                                           const w = workers.find(x => x.id === s.worker_id);
                                           return (
                                             <Draggable key={s.id} draggableId={s.id} index={si} isDragDisabled={dateLocked(s.date)}>
-                                              {(shiftDrag, shiftSnapshot) => (
+                                              {(shiftDrag, shiftSnapshot) => {
+                                                const card = (
                                                 <div
                                                   ref={shiftDrag.innerRef} {...shiftDrag.draggableProps} {...(shiftDrag.dragHandleProps || {})}
                                                   draggable={false}
                                                   data-testid="shift-card"
                                                   data-shift-id={s.id}
+                                                  data-shift-drag-overlay={shiftSnapshot.isDragging ? 'true' : undefined}
                                                   {...(w ? touchPressProps({ shift: s, worker: w, day }) : {})}
                                                   onClick={(e) => { if (w) activateShift(e, { shift: s, worker: w, day }, { dragging: shiftSnapshot.isDragging }); }}
                                                   className={`${cardClass} rounded border px-2 py-1.5 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow ${SHIFT_NO_CALLOUT}
                                                     ${pressingId === s.id ? 'ring-2 ring-blue-300' : ''}
                                                     ${shiftSnapshot.isDragging ? 'shadow-lg ring-2 ring-blue-400 opacity-90' : ''}`}
-                                                  style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+                                                  style={{
+                                                    ...shiftDrag.draggableProps.style,
+                                                    ...(shiftSnapshot.isDragging ? { zIndex: 9999, pointerEvents: 'none' } : {}),
+                                                    WebkitTouchCallout: 'none',
+                                                    WebkitUserSelect: 'none',
+                                                    userSelect: 'none',
+                                                  }}
                                                 >
                                                   <div className="font-semibold text-slate-800 leading-tight truncate">{s.worker_id === LEDIG_WORKER_ID ? 'Ledig vakt' : s.worker_name}</div>
                                                   <div className="text-slate-500 mt-0.5">{s.all_day ? 'Hele dagen' : `${s.start_time} – ${s.end_time}`}</div>
                                                   {s.worker_id === LEDIG_WORKER_ID && <div className="text-[10px] font-semibold text-emerald-700">Åpen</div>}
                                                   {!s.published && <div className="text-[10px] font-medium text-amber-700">Utkast</div>}
                                                 </div>
-                                              )}
+                                                );
+                                                return shiftSnapshot.isDragging ? createPortal(card, document.body) : card;
+                                              }}
                                             </Draggable>
                                           );
                                         })}
-                                        {cellProvided.placeholder}
                                         <button
                                           className="w-full flex items-center justify-center h-7 rounded border border-dashed border-slate-300 text-slate-300 hover:text-blue-400 hover:border-blue-300 transition-colors"
                                           onClick={() => { const anyWorker = displayWorkers[0]; if (anyWorker) setModalCell({ worker: anyWorker, day }); }}
@@ -1357,6 +1467,7 @@ export default function Timesheet() {
                                           <Plus className="w-3.5 h-3.5" />
                                         </button>
                                       </div>
+                                      <span aria-hidden="true" style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }}>{cellProvided.placeholder}</span>
                                     </div>
                                   )}
                                 </Droppable>
@@ -1410,7 +1521,7 @@ export default function Timesheet() {
             </div>
           )}
           <div className="overflow-x-auto">
-            <DragDropContext onDragEnd={handleDragEnd} enableDefaultSensors={false} sensors={SHIFT_DRAG_SENSORS}>
+            <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} enableDefaultSensors={false} sensors={SHIFT_DRAG_SENSORS}>
               <table className={`text-xs border-collapse md:w-full max-md:table-fixed ${mobileSelectMode ? 'max-md:w-[582px]' : 'max-md:w-[514px]'}`}>
                 <colgroup>
                   <col className={nameColClass} />
@@ -1510,15 +1621,17 @@ export default function Timesheet() {
                                     && isShiftDropTarget(worker)
                                     && !sameShiftCell(sourceShift, worker.id, dayStr)
                                     && !alreadyPlaced;
+                                  const shiftHot = pointerDragActive ? pointerDropId === cellId : false;
                                   return (
                                      <td key={day.toISOString()} className={`px-1 py-1 max-md:px-0.5 max-md:py-0.5 align-top max-md:w-[54px] max-md:max-w-[54px] max-md:overflow-hidden ${getHoliday(day) ? 'bg-amber-50/40' : isSameDay(day, new Date()) ? 'bg-blue-50/20' : ''}`}>
                                        <Droppable droppableId={cellId} type="SHIFT" isDropDisabled={worker.isInactive || worker.isFormer}>
                                          {(cellProvided, cellSnapshot) => (
                                            <div ref={cellProvided.innerRef} {...cellProvided.droppableProps}
                                              data-cell-id={cellId}
+                                             data-shift-drop-disabled={(worker.isInactive || worker.isFormer) ? 'true' : undefined}
                                              data-testid={validTarget ? 'shift-place-target' : undefined}
                                              onClick={() => { if (validTarget) placeShiftAt(worker.id, dayStr); }}
-                                             className={`relative min-h-[40px] max-md:min-h-[28px] rounded transition-colors ${cellSnapshot.isDraggingOver ? 'bg-blue-100 ring-2 ring-blue-300 ring-inset' : ''} ${validTarget ? 'cursor-pointer bg-blue-100 shadow-[inset_0_0_0_2px_#2563eb]' : ''} ${alreadyPlaced ? 'bg-emerald-100 shadow-[inset_0_0_0_2px_#059669]' : ''}`}>
+                                             className={`relative min-h-[40px] max-md:min-h-[28px] rounded transition-colors ${(shiftHot || (!pointerDragActive && cellSnapshot.isDraggingOver)) ? 'bg-blue-100 ring-2 ring-blue-300 ring-inset' : ''} ${validTarget ? 'cursor-pointer bg-blue-100 shadow-[inset_0_0_0_2px_#2563eb]' : ''} ${alreadyPlaced ? 'bg-emerald-100 shadow-[inset_0_0_0_2px_#059669]' : ''}`}>
                                              {cellShifts.length > 0 ? (
                                                <div className="space-y-0.5">
                                                  {cellShifts.map((s, si) => {
@@ -1531,6 +1644,7 @@ export default function Timesheet() {
                                                            draggable={false}
                                                            data-testid="shift-card"
                                                            data-shift-id={s.id}
+                                                           data-shift-drag-overlay={shiftSnapshot.isDragging ? 'true' : undefined}
                                                            {...touchPressProps({ shift: s, worker, day }, { readOnly: isReadOnly })}
                                                            onClick={(e) => {
                                                              if (inlineEditId === s.id) return;
@@ -1543,7 +1657,7 @@ export default function Timesheet() {
                                                              ${pressingId === s.id ? 'ring-2 ring-blue-300' : ''}
                                                              ${touchPlace?.shiftId === s.id ? 'ring-2 ring-blue-600' : ''}
                                                              ${shiftSnapshot.isDragging ? 'shadow-2xl ring-2 ring-blue-400' : 'hover:shadow-sm'}`}
-                                                           style={shiftSnapshot.isDragging ? { ...shiftDrag.draggableProps.style, zIndex: 9999, pointerEvents: 'auto', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' } : { ...shiftDrag.draggableProps.style, WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}>
+                                                           style={shiftSnapshot.isDragging ? { ...shiftDrag.draggableProps.style, zIndex: 9999, pointerEvents: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' } : { ...shiftDrag.draggableProps.style, WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}>
                                                          {inlineEditId === s.id ? (
                                                            <div className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()}
                                                              onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) saveInlineEdit(s.id); }}>
