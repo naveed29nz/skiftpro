@@ -196,6 +196,15 @@ export function resolvePointerDrop(doc, { clientX, clientY, accept }) {
  * not a shift move, so it keeps destinationId.
  * A pointer that is not over a cell does not fall back to the centre-based
  * destination: that is the offset this exists to avoid.
+ *
+ * @param {{
+ *   type?: string,
+ *   mode?: string,
+ *   reason?: string,
+ *   destinationId?: string | null,
+ *   pointer?: { x: number, y: number } | null,
+ *   resolve?: (pointer: { x: number, y: number }) => (string | null | undefined),
+ * }} [drag]
  */
 export function dropIdForDragEnd({
   type,
