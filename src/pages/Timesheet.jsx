@@ -16,7 +16,8 @@ import { useStaffingBudget } from '@/hooks/useStaffingBudget';
 import { getActiveTeams } from '@/utils/teams';
 import { useOrg } from '@/hooks/useOrg';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { canSeeWageCosts } from '@/utils/wageAccess';
+import { canSeeWageCosts, effectiveAppRole } from '@/utils/wageAccess';
+import { canPublishShiftDrafts, publishableDraftShifts } from '@/timesheet/publishAccess';
 import DayGantt from '@/components/timesheet/DayGantt';
 import ToleranceBar from '@/components/timesheet/ToleranceBar';
 import { LEDIG_WORKER_ID, LEDIG_WORKER_NAME } from '@/utils/workerLifecycle';
@@ -62,7 +63,6 @@ import { isCoarsePointer, isTouchLikePointer, pressMovedPast, SHIFT_LONG_PRESS_M
 import { calcHours } from '@/utils/payCalc';
 import { isDateLocked } from '@/utils/payrollLock';
 import { shiftLabelName } from '@/utils/shiftLabels';
-import { effectiveAppRole } from '@/utils/wageAccess';
 
 const SHIFT_NO_CALLOUT = 'select-none [-webkit-touch-callout:none] [-webkit-user-select:none]';
 
@@ -207,10 +207,11 @@ export default function Timesheet() {
   const { user, worker: currentWorker, myTeams, ready: workerReady, seesAllTeams } = useCurrentWorker();
   const showWages = canSeeWageCosts(user, currentWorker);
   const isAdmin = user?.role === 'admin';
-  // Rollene som får redigere vaktplan (legge til / slette / endre / kopiere / publisere)
-  const canManageShifts = user?.role === 'admin' || user?.role === 'sub_admin' || user?.role === 'butikksjef';
-  const plannerRole = effectiveAppRole(user, currentWorker);
-  const canAutoPlan = canManageShifts || plannerRole === 'admin' || plannerRole === 'sub_admin' || plannerRole === 'butikksjef';
+  // Effective role, not profiles.role: a butikksjef is often still "user" on the
+  // profile and butikksjef on the worker row. Employees stay excluded.
+  // Wage costs stay behind canSeeWageCosts above.
+  const canManageShifts = canPublishShiftDrafts(user, currentWorker);
+  const canAutoPlan = canManageShifts;
   const canApproveHours = ['admin', 'sub_admin'].includes(effectiveAppRole(user, currentWorker));
   const initialTimesheetQuery = readTimesheetLocation(typeof window === 'undefined' ? '' : window.location.search);
   const [weekStart, setWeekStart] = useState(() => initialTimesheetQuery.weekStart || startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -809,19 +810,14 @@ export default function Timesheet() {
 
   // Draft/publish logic — begrenset til valgt avdeling (filterTeam).
   // Utkast fra andre avdelinger ("ghost"/andre team) holdes utenfor.
-  const draftShifts = weekShifts.filter(s => {
-    if (s.published) return false;
-    if (s.worker_id === LEDIG_WORKER_ID) return false;
-    const w = workers.find(x => x.id === s.worker_id);
-    if (filterTeam === 'all') {
-      if (!w) return true;
-      const workerTeams = w.teams || ['team1'];
-      if (s.team) return workerTeams.includes(s.team);
-      return true;
-    }
-    if (!w) return false;
-    if (s.team) return s.team === filterTeam;
-    return (w.teams?.[0] || 'team1') === filterTeam;
+  // A butikksjef only gets drafts for stores on their own worker row.
+  const draftShifts = publishableDraftShifts(weekShifts, {
+    profile: user,
+    manager: currentWorker,
+    workers,
+    filterTeam,
+    myTeams,
+    openWorkerId: LEDIG_WORKER_ID,
   });
   const hasDrafts = draftShifts.length > 0;
   const publishLabel = filterTeam !== 'all'
@@ -832,8 +828,16 @@ export default function Timesheet() {
     if (!hasDrafts) return;
     if (draftShifts.some((shift) => refuseLocked(shift.date))) return;
     const ids = draftShifts.map(s => s.id);
-    await base44.entities.Shift.updateMany({ id: { $in: ids } }, { $set: { published: true } });
-    handleRefresh();
+    try {
+      const updated = await base44.entities.Shift.updateMany({ id: { $in: ids } }, { $set: { published: true } });
+      if (!updated?.length) {
+        toast({ title: 'Kunne ikke publisere utkastene', variant: 'destructive' });
+        return;
+      }
+      handleRefresh();
+    } catch (error) {
+      toast({ title: 'Kunne ikke publisere utkastene', description: error.message, variant: 'destructive' });
+    }
   };
 
   const startInlineEdit = (e, shift) => {
