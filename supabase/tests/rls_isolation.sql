@@ -116,6 +116,67 @@ begin
     detail
   );
 
+  detail := public._rls_exec('44444444-4444-4444-4444-444444444444', $q$update public.shifts set published = true where id = 'shift-a1'$q$);
+  insert into rls_results values (
+    'butikksjef can publish own store draft',
+    detail = 'ok' and (select published from public.shifts where id = 'shift-a1'),
+    detail
+  );
+
+  detail := public._rls_exec('44444444-4444-4444-4444-444444444444', $q$update public.shifts set published = true where id = 'shift-a2'$q$);
+  insert into rls_results values (
+    'butikksjef cannot publish another store draft',
+    detail = 'ok' and (select published = false from public.shifts where id = 'shift-a2'),
+    detail
+  );
+
+  insert into public.shifts (id, org_id, worker_id, worker_name, date, start_time, end_time, team, published)
+  values
+    ('shift-a1-open', 'org-a', 'w-ansatt-a', 'Ansatt A', current_date, '09:00', '15:00', null, false),
+    ('shift-a2-open', 'org-a', 'w-other-a', 'Other A', current_date, '09:00', '15:00', null, false);
+
+  detail := public._rls_exec('44444444-4444-4444-4444-444444444444', $q$update public.shifts set published = true where id = 'shift-a1-open'$q$);
+  insert into rls_results values (
+    'butikksjef can publish untagged draft for own store employee',
+    detail = 'ok' and (select published from public.shifts where id = 'shift-a1-open'),
+    detail
+  );
+
+  detail := public._rls_exec('44444444-4444-4444-4444-444444444444', $q$update public.shifts set published = true where id = 'shift-a2-open'$q$);
+  insert into rls_results values (
+    'butikksjef cannot publish untagged draft for another store',
+    detail = 'ok' and (select published = false from public.shifts where id = 'shift-a2-open'),
+    detail
+  );
+
+  detail := public._rls_exec('55555555-5555-5555-5555-555555555555', $q$update public.shifts set published = true where id = 'shift-a2'$q$);
+  insert into rls_results values (
+    'employee cannot publish a draft',
+    detail = 'ok' and (select published = false from public.shifts where id = 'shift-a2'),
+    detail
+  );
+
+  detail := public._rls_exec('55555555-5555-5555-5555-555555555555', $q$update public.shifts set published = false where id = 'shift-a1'$q$);
+  insert into rls_results values (
+    'employee cannot unpublish a shift',
+    detail = 'ok' and (select published from public.shifts where id = 'shift-a1'),
+    detail
+  );
+
+  detail := public._rls_exec('44444444-4444-4444-4444-444444444444', $q$update public.shifts set published = true where id = 'shift-b1'$q$);
+  insert into rls_results values (
+    'butikksjef cannot publish another organization',
+    detail = 'ok' and (select published = false from public.shifts where id = 'shift-b1'),
+    detail
+  );
+
+  insert into rls_results values (
+    'publishing a shift does not change hourly wages',
+    (select hourly_rate = 200 from public.workers where id = 'w-ansatt-a')
+      and (select hourly_rate = 210 from public.workers where id = 'w-other-a'),
+    (select hourly_rate::text from public.workers where id = 'w-ansatt-a')
+  );
+
   detail := public._rls_exec('44444444-4444-4444-4444-444444444444', $q$update public.workers set role = 'admin' where id = 'w-sjef-a'$q$);
   insert into rls_results values ('butikksjef cannot self-promote', detail like '%role change not permitted%', detail);
 
